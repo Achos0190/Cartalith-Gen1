@@ -77,4 +77,4 @@ See `.claude/skills/verify-elevation/SKILL.md`. Stubs live in `tests/stub_head.j
 
 ## Roadmap
 
-See `docs/ROADMAP.md` (weather model v2, gravity parameter, optimization, unified tool) and `docs/UNIFIED_TOOL_PLAN.md` (merge plan). Research backing: `docs/research/`.
+See `docs/ROADMAP.md` (weather model v2, gravity parameter, optimization, unified tool) and `docs/UNIFIED_TOOL_PLAN.md` (merge plan). Research backing: `docs/research/`. Per-parameter generator reference: `docs/GENERATOR_PARAMETERS.md`.

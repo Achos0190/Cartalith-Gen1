@@ -45,6 +45,18 @@ Loading a legacy v1.914 ZIP → works, engine idle ("no generated terrain" state
 
 Menubar tabs: **Generate | Sculpt | Paint | Routes | Politics** (Planner opens as modal from settlements; Routes keeps measure mode). Always-on **Layers & Blend** panel (visibility/opacity per layer, Bake button) + shared **Project** panel (save/load/export). Regeneration-safety dialog when un-baked overlays exist: `[Bake & regenerate] [Regenerate, keep overlays] [Cancel]`. Unified CSS root on v1.914's `#b08d54` accent; engine keeps `.row`/`.seg` idioms inside Generate/Sculpt panels.
 
+## Generator as Cartalith source map (+ external loading)
+
+Non-negotiable: the generator is usable as Cartalith's base map **and** external heightmap loading stays possible. Both routes converge on the same `field`:
+- **Generated** → biome raster + paint grid + calibration flow into Cartalith (see `docs/BIOME_AND_VISUALS_PLAN.md`).
+- **External** → `loadImage()` imports a grayscale / 16-bit-packed PNG / `.f32`; a loaded map can also become the world constraint for regional tile-refinement (see `docs/WORLD_REGIONAL_TILING_PLAN.md`).
+Neither path is privileged; the editor consumes whichever produced the heightmap.
+
+## Related plans
+- `docs/BIOME_AND_VISUALS_PLAN.md` — dual raster+paint-grid biome handoff; hybrid realistic/stylized visuals.
+- `docs/WORLD_REGIONAL_TILING_PLAN.md` — world↔regional, 16k tiling, fflate compression.
+- `docs/GENERATOR_PARAMETERS.md` — exact per-modifier reference.
+
 ## Phases
 
 **P0 — Namespace the engine (in elevation_foundation repo file, prove with tests)**

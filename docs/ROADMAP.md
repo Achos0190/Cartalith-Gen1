@@ -21,6 +21,11 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 10. **G3 — Moons & tidal-range overlay** → coastal hazard zones.
 11. **Disturbance model completion** (handoff pending #2): wind-throw from W1 wind field, flood proxy from flowField/TWI.
 
+## Bigger workstreams (planned, post-merge)
+
+- **Biome handoff + visuals** (`docs/BIOME_AND_VISUALS_PLAN.md`): dual raster + 14-index paint grid with lock flags → procedural realistic base (parchment grain) → texture splatting (CC0 pack) → togglable Nortantis-style icon mountains.
+- **World/regional tiling to 16k** (`docs/WORLD_REGIONAL_TILING_PLAN.md`): coarse world → region select → world-space-seeded amplified tiles with skirts → per-tile OffscreenCanvas/worker → fflate-compressed tiled export + manifest; 16-bit height packing & external 16-bit/.f32 import.
+
 ## Research / spikes
 
 - Rust/WASM SIMD erosion kernel (inline base64) — only if profiling after #3/#8 still shows CPU-bound erosion. Verdict & sources: `docs/research/engine-optimization.md`.

@@ -4,8 +4,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.037.html` | ~2,400 | **Current** procedural heightmap/terrain/climate generator |
-| `elevation_foundation_v0.036.html` | ~2,400 | Previous version (kept; don't edit) |
+| `elevation_foundation_v0.038.html` | ~2,400 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036/37.html` | ~2,400 | Previous versions (kept; don't edit) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
 | `docs/` | — | Research reports, roadmap, unified-tool plan |
@@ -30,6 +30,8 @@ Global Float32Arrays (allocated in `allocate()`, line ~921): `field` (heightmap 
 Pipeline (`generate()`): continentality (if world_structure on) → warp → plates (Voronoi + Lloyd) → JFA assign → stress → flexure → base blur + age → heterogeneity → resistance → height formula → normalize → volcanism + craters → **flow(area) → climate → flow(discharge)** (`computeTemperature`, `simulateWeather` on a coarse 240×150 grid, correctors) → render (`renderNow`). The flow→climate→flow sandwich is deliberate (LEM-style coupling): rivers accumulate *runoff*, so `computeFlow(true)` seeds cells with mean-normalised `rainField` instead of 1. The natural-order rationale and formulas live in `docs/research/pipeline-order-audit.md` — keep new stages consistent with its canonical order (climate before water-driven processes, biomes last).
 
 Since v0.037, erosion ops (`erode`, `streamPowerErode`, `glacialErode`) also: spawn droplets ∝ precipitation, apply `isostaticRebound(pre)` (~80% of broad eroded column returns as uplift, England & Molnar 1990), and refresh with `computeFlow(true)`.
+
+Since v0.038 (`docs/research/gravity-influence.md` G1): `state.planet = {g, rotationHours, axialTiltDeg, radiusRel}`. Gravity hooks: stream-power K ×g, droplet acceleration ×g, glacial abrasion ×g, temperature lapse ×g (CPU **and** GPU `uLapse` uniform — keep in lockstep), crater radius ×g^−0.22, coastal waveStr ×1/g (via temporary `state.coastal` swap so GPU and CPU paths match). Talus is deliberately g-independent. **Invariant 10: Earth defaults (g=1) must reproduce the previous version bit-exactly** (asserted in tests via g-toggle round-trip). `rotationHours`/`axialTiltDeg` have no effect yet — reserved for weather v2 (cell count, seasons).
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

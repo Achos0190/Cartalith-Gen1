@@ -75,6 +75,23 @@ check('classifyBiome returns a value across T×M sweep', (() => {
   check('discharge flow in same magnitude regime as area flow (got ×' + ratio.toFixed(2) + ')', ratio > 0.33 && ratio < 3);
 }
 
+/* ---------- planet parameters (v0.038+, gravity-influence G1) ---------- */
+check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 && state.planet.rotationHours === 24);
+{
+  const earthField = field.slice(), earthTemp = tempField.slice();
+  state.planet.g = 2;
+  generate();
+  let fDiff = 0, tDiff = 0;
+  for (let i = 0; i < field.length; i++){ fDiff += Math.abs(field[i] - earthField[i]); tDiff += Math.abs(tempField[i] - earthTemp[i]); }
+  check('g=2 changes terrain (craters) and temperature (lapse)', fDiff > 0 && tDiff / field.length > 0.01);
+  check('g=2 field finite & in [0,1]', allFinite(field) && (([mn, mx]) => mn >= -1e-6 && mx <= 1 + 1e-6)(minMax(field)));
+  state.planet.g = 1;
+  generate();
+  let same = true;
+  for (let i = 0; i < field.length; i++) if (field[i] !== earthField[i]){ same = false; break; }
+  check('g restored to 1 reproduces Earth terrain bit-exactly', same);
+}
+
 /* ---------- erosion pipeline keeps field finite ---------- */
 const savedDroplets = state.erosion.droplets;
 state.erosion.droplets = 5000;

@@ -75,6 +75,44 @@ check('classifyBiome returns a value across T×M sweep', (() => {
   check('discharge flow in same magnitude regime as area flow (got ×' + ratio.toFixed(2) + ')', ratio > 0.33 && ratio < 3);
 }
 
+/* ---------- wind field (v0.039+, weather-model-v2 W1) ---------- */
+{
+  check('circulation cells: Earth = 3', circulationCells() === 3);
+  const r0 = state.planet.rotationHours;
+  state.planet.rotationHours = 96;
+  check('slow rotator collapses cells (96h → ' + circulationCells() + ')', circulationCells() < 3);
+  state.planet.rotationHours = 6;
+  check('fast rotator adds cells (6h → ' + circulationCells() + ')', circulationCells() > 3);
+  state.planet.rotationHours = r0;
+
+  const WW = 96, WH = 60, N = WW * WH, step = 3.0;
+  const tc = new Float32Array(N);
+  for (let y = 0; y < WH; y++) for (let x = 0; x < WW; x++) tc[y * WW + x] = 25 - (y / WH) * 40 + (x > WW / 2 ? 6 : 0);
+  const wx = new Float32Array(N), wy = new Float32Array(N);
+  buildWind(wx, wy, WW, WH, step, tc);
+  check('auto wind field finite', allFinite(wx) && allFinite(wy));
+  let varies = false;
+  for (let i = 1; i < N; i++) if (wx[i] !== wx[0] || wy[i] !== wy[0]){ varies = true; break; }
+  check('auto wind varies across the grid', varies);
+  let maxMag = 0;
+  for (let i = 0; i < N; i++) maxMag = Math.max(maxMag, Math.hypot(wx[i], wy[i]));
+  check('wind magnitude capped for advection stability (max ' + maxMag.toFixed(2) + ' ≤ ' + (step * 1.8).toFixed(1) + ')', maxMag <= step * 1.8 + 1e-6);
+
+  state.climate.windMode = 'manual'; state.climate.pressK = 0;
+  buildWind(wx, wy, WW, WH, step, tc);
+  let constant = true;
+  for (let i = 1; i < N; i++) if (wx[i] !== wx[0] || wy[i] !== wy[0]){ constant = false; break; }
+  check('manual wind with pressK=0 is uniform (legacy behavior)', constant);
+
+  const manualRain = (simulateWeather(state.climate.wIters), rainField.slice());
+  state.climate.windMode = 'auto'; state.climate.pressK = 0.6;
+  simulateWeather(state.climate.wIters);
+  let rDiff = 0;
+  for (let i = 0; i < rainField.length; i++) rDiff += Math.abs(rainField[i] - manualRain[i]);
+  check('planetary wind changes rainfall vs manual (mean Δ=' + (rDiff / rainField.length).toFixed(4) + ')', rDiff / rainField.length > 1e-4);
+  applyClimateMoistureCorrectors();
+}
+
 /* ---------- planet parameters (v0.038+, gravity-influence G1) ---------- */
 check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 && state.planet.rotationHours === 24);
 {

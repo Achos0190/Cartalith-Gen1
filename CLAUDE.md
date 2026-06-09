@@ -4,8 +4,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.038.html` | ~2,400 | **Current** procedural heightmap/terrain/climate generator |
-| `elevation_foundation_v0.036/37.html` | ~2,400 | Previous versions (kept; don't edit) |
+| `elevation_foundation_v0.039.html` | ~2,500 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036–38.html` | — | Previous versions (kept; don't edit) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
 | `docs/` | — | Research reports, roadmap, unified-tool plan |
@@ -31,7 +31,9 @@ Pipeline (`generate()`): continentality (if world_structure on) → warp → pla
 
 Since v0.037, erosion ops (`erode`, `streamPowerErode`, `glacialErode`) also: spawn droplets ∝ precipitation, apply `isostaticRebound(pre)` (~80% of broad eroded column returns as uplift, England & Molnar 1990), and refresh with `computeFlow(true)`.
 
-Since v0.038 (`docs/research/gravity-influence.md` G1): `state.planet = {g, rotationHours, axialTiltDeg, radiusRel}`. Gravity hooks: stream-power K ×g, droplet acceleration ×g, glacial abrasion ×g, temperature lapse ×g (CPU **and** GPU `uLapse` uniform — keep in lockstep), crater radius ×g^−0.22, coastal waveStr ×1/g (via temporary `state.coastal` swap so GPU and CPU paths match). Talus is deliberately g-independent. **Invariant 10: Earth defaults (g=1) must reproduce the previous version bit-exactly** (asserted in tests via g-toggle round-trip). `rotationHours`/`axialTiltDeg` have no effect yet — reserved for weather v2 (cell count, seasons).
+Since v0.038 (`docs/research/gravity-influence.md` G1): `state.planet = {g, rotationHours, axialTiltDeg, radiusRel}`. Gravity hooks: stream-power K ×g, droplet acceleration ×g, glacial abrasion ×g, temperature lapse ×g (CPU **and** GPU `uLapse` uniform — keep in lockstep), crater radius ×g^−0.22, coastal waveStr ×1/g (via temporary `state.coastal` swap so GPU and CPU paths match). Talus is deliberately g-independent. **Invariant 10: Earth defaults (g=1) must reproduce the previous version bit-exactly** (asserted in tests via g-toggle round-trip). `axialTiltDeg` has no effect yet — reserved for seasons (W3).
+
+Since v0.039 (`docs/research/weather-model-v2.md` W1): `buildWind(wx,wy,WW,WH,step,tc)` builds a per-coarse-cell wind field — latitude-band circulation with cell count from `circulationCells()` (≈ `3·√((24/rotationHours)·radiusRel/√g)`, Earth = 3) plus a pressure-gradient perturbation (P′ ∝ −T, geostrophic with `|f|` floored at 0.25, downgradient within ~±15° of the equator, magnitude normalised to 0.8·step at `climate.pressK=1`, total capped at 1.8·step for semi-Lagrangian stability). Region mode defaults to `climate.windMode:'auto'`; `'manual'` + `windDir` is the legacy override. **Legacy saves load as `windMode:'manual', pressK:0`, which is bit-identical to v0.038** (proven cross-version). Region border inflow now wets any border cell whose wind points inward.
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

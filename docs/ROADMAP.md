@@ -4,10 +4,8 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Now
 
-1. **W1 — Wind field** (`docs/research/weather-model-v2.md`)
-   Latitude-band circulation (cell count from planet g/Ω) + Coriolis-deflected pressure-gradient winds on the coarse grid; manual `windDir` becomes an override toggle.
-2. **W2 — Moisture physics**
-   Clausius–Clapeyron capacity, supersaturation rainfall, wind-speed evaporation; delete ITCZ/dry-belt latitude hacks (now emergent).
+1. **W2 — Moisture physics polish**
+   `satCap` is already Clausius–Clapeyron-ish (`0.16·e^{0.058T}`) and supersaturation rainfall exists; remaining: wind-speed-dependent evaporation `E = C_e·U·(q_s−q)`, then re-evaluate whether the ITCZ/dry-belt latitude correctors can be retired (subsidence drying may now emerge from the W1 band structure).
 
 ## Next
 
@@ -34,6 +32,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Done
 
+- 2026-06: **v0.039 — W1 planetary wind field**: per-cell winds = latitude-band circulation (cell count from day length/size/gravity, Earth=3) + Coriolis-deflected thermal pressure-gradient flow (geostrophic poleward of ~15°, downgradient near equator, `pressK` slider). Region mode gets banded winds by default; manual windDir kept as override; legacy saves load as manual/pressK=0 — proven bit-identical to v0.038. Per-cell upwind border inflow. 50 assertions green.
 - 2026-06: **v0.038 — G1 planet parameters**: `state.planet {g, rotationHours, axialTiltDeg, radiusRel}` + Planet UI section. Gravity scales stream-power/droplet/glacial erosion (×g), lapse (×g, CPU+GPU), craters (×g^-0.22), waves (×1/g); peak altitude rescales ~1/g on slider change. Earth defaults proven bit-identical to v0.037 (fixed-seed cross-version diff). 42 assertions green.
 - 2026-06: **v0.037 — natural-order pipeline fixes** (`docs/research/pipeline-order-audit.md`): generate() now runs flow(area) → climate → flow(discharge); `computeFlow(true)` seeds runoff from rainField (Whipple & Tucker 1999); droplet erosion spawns ∝ precipitation; `isostaticRebound()` after fluvial/glacial/droplet erosion (England & Molnar 1990, ~80% broad-unload rebound). 38 smoke assertions green.
 - 2026-06: Repo scaffolded — CLAUDE.md, headless verification harness, `verify-elevation` skill, research docs (weather v2, gravity, optimization, unified UI, pipeline-order audit), unified tool plan.

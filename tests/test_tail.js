@@ -149,6 +149,40 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   check('g restored to 1 reproduces Earth terrain bit-exactly', same);
 }
 
+/* ---------- droplet kernel self-containment (v0.041+, W0 worker contract) ---------- */
+{
+  // Rebuild the kernel from its string form with every module global shadowed to
+  // undefined — exactly the environment it gets inside the Worker. Any closure
+  // leak (a reference to field/GW/state/...) throws or corrupts the output here.
+  const shadows = ['field', 'rainField', 'GW', 'GH', 'state', 'mulberry32', 'erodeThermal',
+                   'isostaticRebound', 'computeFlow', 'refreshClimate', 'renderNow', 'gaussBlur'];
+  let rebuilt = null, evalOk = true;
+  try {
+    rebuilt = new Function(...shadows, 'return (' + dropletKernel.toString() + ')')
+      .apply(null, shadows.map(() => undefined));
+  } catch (e){ evalOk = false; }
+  check('dropletKernel rebuilds from source (worker stringification)', evalOk && typeof rebuilt === 'function');
+  if (rebuilt){
+    const W = 64, H = 48, n = W * H;
+    const mk = () => { const a = new Float32Array(n);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a[y * W + x] = Math.max(0, 1 - Math.hypot(x - W / 2, y - H / 2) / (W / 2));
+      return a; };
+    const rain = new Float32Array(n).fill(0.5);
+    const P = { droplets: 2000, inertia: 0.05, capacity: 4, minSlope: 0.01, deposit: 0.3, erode: 0.35,
+                evaporate: 0.02, gravity: 4, g: 1, maxLifetime: 30, initSpeed: 1, initWater: 1, radius: 3, ck: 0.5, seed: 99 };
+    const a = mk(), b = mk(), orig = mk();
+    rebuilt(a, rain, W, H, P);
+    dropletKernel(b, rain, W, H, P);
+    let identical = true, changed = false;
+    for (let i = 0; i < n; i++){ if (a[i] !== b[i]) identical = false; if (a[i] !== orig[i]) changed = true; }
+    check('rebuilt kernel output finite & changed terrain', allFinite(a) && changed);
+    check('rebuilt kernel bit-identical to in-module kernel (no closure leaks)', identical);
+    let progCalls = 0;
+    rebuilt(mk(), rain, W, H, { ...P, droplets: 500 }, () => progCalls++);
+    check('kernel reports progress (' + progCalls + ' callbacks)', progCalls >= 2);
+  }
+}
+
 /* ---------- erosion pipeline keeps field finite ---------- */
 const savedDroplets = state.erosion.droplets;
 state.erosion.droplets = 5000;

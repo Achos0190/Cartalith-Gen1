@@ -6,8 +6,8 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Next
 
-3. **W0 — Worker erosion + JS micro-opts** (`docs/research/engine-optimization.md`)
-   Blob-URL worker, transferable buffers, progress events. Unblocks the UI before the merge makes frames more expensive.
+3. **W0b — extend Worker coverage** (`docs/research/engine-optimization.md`)
+   v0.041 moved the droplet pass (heaviest CPU op) into a blob-URL Worker with progress + sync fallback. Remaining candidates: stream-power and glacial kernels (same self-contained-kernel pattern), then JS micro-opts in the stencil loops.
 4. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`)
    Namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel.
 5. **P2 — Save schema v10** with both legacy importers.
@@ -29,6 +29,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Done
 
+- 2026-06: **v0.041 — W0 worker droplet erosion**: droplet pass refactored into self-contained `dropletKernel` (no module globals), stringified into a blob-URL Web Worker with progress events and sync fallback; field copied in / transferred back so the live heightmap never detaches. Kernel proven bit-identical to v0.040 (fixed-seed 20k-droplet cross-version diff) and self-containment is regression-tested by rebuilding from `toString()` with shadowed globals. 57 assertions green. Worker path needs one manual browser check.
 - 2026-06: **v0.040 — W2 moisture physics**: bulk-aerodynamic ocean evaporation `E = Ce·U·(qs−q)` (wind-speed + saturation-deficit, `climate.bulkEvap`); ITCZ/dry-belt corrector parametrised as `climate.zonalK`, default halved to 0.5 after measuring that W1 bands already produce emergent equator-max / 25–40° dry-dip / wet-westerlies structure. Legacy saves (zonalK 1, bulkEvap off) bit-identical to v0.039. 53 assertions green incl. emergent zonal-structure regression test.
 - 2026-06: **v0.039 — W1 planetary wind field**: per-cell winds = latitude-band circulation (cell count from day length/size/gravity, Earth=3) + Coriolis-deflected thermal pressure-gradient flow (geostrophic poleward of ~15°, downgradient near equator, `pressK` slider). Region mode gets banded winds by default; manual windDir kept as override; legacy saves load as manual/pressK=0 — proven bit-identical to v0.038. Per-cell upwind border inflow. 50 assertions green.
 - 2026-06: **v0.038 — G1 planet parameters**: `state.planet {g, rotationHours, axialTiltDeg, radiusRel}` + Planet UI section. Gravity scales stream-power/droplet/glacial erosion (×g), lapse (×g, CPU+GPU), craters (×g^-0.22), waves (×1/g); peak altitude rescales ~1/g on slider change. Earth defaults proven bit-identical to v0.037 (fixed-seed cross-version diff). 42 assertions green.

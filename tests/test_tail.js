@@ -57,6 +57,24 @@ check('classifyBiome returns a value across T×M sweep', (() => {
   return true;
 })());
 
+/* ---------- discharge-weighted drainage (v0.037+, pipeline-order-audit gap 2) ---------- */
+{
+  const areaFlow = computeFlow().slice();
+  const qFlow = computeFlow(true).slice();
+  check('discharge flow finite & non-negative', allFinite(qFlow) && minMax(qFlow)[0] >= 0);
+  let meanAbsDiff = 0;
+  for (let i = 0; i < areaFlow.length; i++) meanAbsDiff += Math.abs(areaFlow[i] - qFlow[i]);
+  meanAbsDiff /= areaFlow.length;
+  check('discharge flow differs from area flow (rain coupling wired)', meanAbsDiff > 1e-4);
+  /* totals legitimately differ (they depend on path lengths through wet vs dry cells);
+     the seed normalisation only guarantees the same magnitude regime so TWI and
+     river thresholds stay valid */
+  let sa = 0, sq = 0;
+  for (let i = 0; i < areaFlow.length; i++){ sa += areaFlow[i]; sq += qFlow[i]; }
+  const ratio = sq / sa;
+  check('discharge flow in same magnitude regime as area flow (got ×' + ratio.toFixed(2) + ')', ratio > 0.33 && ratio < 3);
+}
+
 /* ---------- erosion pipeline keeps field finite ---------- */
 const savedDroplets = state.erosion.droplets;
 state.erosion.droplets = 5000;

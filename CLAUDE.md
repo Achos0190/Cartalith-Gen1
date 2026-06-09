@@ -4,7 +4,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.036.html` | ~2,400 | Procedural heightmap/terrain/climate generator (R&D spike) |
+| `elevation_foundation_v0.037.html` | ~2,400 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036.html` | ~2,400 | Previous version (kept; don't edit) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
 | `docs/` | — | Research reports, roadmap, unified-tool plan |
@@ -26,7 +27,9 @@ One `<script>` block, module-level globals, no classes. Resolution `GW × GH` (w
 
 Global Float32Arrays (allocated in `allocate()`, line ~921): `field` (heightmap [0,1], sea level default 0.42), `stressField`, `baseField`, `ageField`, `flexureField`, `heterogeneityField`, `resistanceField`, `volcanicField`, `impactField`, `tempField` (°C), `rainField` [0,1], `flowField`, `continentalField` (nullable), plus `plateId` (Int16), `boundaryMask` (Uint8), `warpX`/`warpY` (nullable until `computeWarp()`).
 
-Pipeline (`generate()`, ~line 294): continentality (if world_structure on) → warp → plates (Voronoi + Lloyd) → JFA assign → stress → flexure → base blur + age → heterogeneity → resistance → height formula → normalize → volcanism + craters → flow → climate (`computeTemperature` ~940, `simulateWeather` ~1107 on a coarse 240×150 grid, correctors ~1408 in HTML numbering) → render (`renderNow`).
+Pipeline (`generate()`): continentality (if world_structure on) → warp → plates (Voronoi + Lloyd) → JFA assign → stress → flexure → base blur + age → heterogeneity → resistance → height formula → normalize → volcanism + craters → **flow(area) → climate → flow(discharge)** (`computeTemperature`, `simulateWeather` on a coarse 240×150 grid, correctors) → render (`renderNow`). The flow→climate→flow sandwich is deliberate (LEM-style coupling): rivers accumulate *runoff*, so `computeFlow(true)` seeds cells with mean-normalised `rainField` instead of 1. The natural-order rationale and formulas live in `docs/research/pipeline-order-audit.md` — keep new stages consistent with its canonical order (climate before water-driven processes, biomes last).
+
+Since v0.037, erosion ops (`erode`, `streamPowerErode`, `glacialErode`) also: spawn droplets ∝ precipitation, apply `isostaticRebound(pre)` (~80% of broad eroded column returns as uplift, England & Molnar 1990), and refresh with `computeFlow(true)`.
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

@@ -113,6 +113,25 @@ check('classifyBiome returns a value across T×M sweep', (() => {
   applyClimateMoistureCorrectors();
 }
 
+/* ---------- moisture physics (v0.040+, weather-model-v2 W2) ---------- */
+{
+  const meanAbs = (a, b) => { let d = 0; for (let i = 0; i < a.length; i++) d += Math.abs(a[i] - b[i]); return d / a.length; };
+  const base = (simulateWeather(state.climate.wIters), rainField.slice());
+  state.climate.bulkEvap = false;
+  simulateWeather(state.climate.wIters);
+  check('bulk-aerodynamic evaporation changes rainfall', meanAbs(rainField, base) > 1e-4);
+  state.climate.bulkEvap = true;
+
+  const zk = state.climate.zonalK;
+  simulateWeather(state.climate.wIters); applyClimateMoistureCorrectors();
+  const withZonal = rainField.slice();
+  state.climate.zonalK = 0;
+  simulateWeather(state.climate.wIters); applyClimateMoistureCorrectors();
+  check('zonalK scales the latitude corrector', meanAbs(rainField, withZonal) > 1e-4);
+  state.climate.zonalK = zk;
+  simulateWeather(state.climate.wIters); applyClimateMoistureCorrectors();
+}
+
 /* ---------- planet parameters (v0.038+, gravity-influence G1) ---------- */
 check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 && state.planet.rotationHours === 24);
 {
@@ -158,6 +177,23 @@ fieldsFinite('generate(world)');
   for (let y = 0; y < GH; y++) d += Math.abs(field[y * GW] - field[y * GW + GW - 1]);
   d /= GH;
   check('world seam avg delta < 0.12 (got ' + d.toFixed(4) + ')', d < 0.12);
+}
+
+/* ---------- emergent zonal climate structure (world mode, v0.039+) ---------- */
+{
+  const sums = { eq: [0, 0], dry: [0, 0] };
+  for (let y = 0; y < GH; y++){
+    const aLat = Math.abs(90 - (y / (GH - 1)) * 180);
+    const slot = aLat < 10 ? 'eq' : (aLat >= 25 && aLat < 35 ? 'dry' : null);
+    if (!slot) continue;
+    for (let x = 0; x < GW; x++){ const i = y * GW + x; if (field[i] >= state.seaLevel){ sums[slot][0] += rainField[i]; sums[slot][1]++; } }
+  }
+  if (sums.eq[1] > 100 && sums.dry[1] > 100){
+    const eq = sums.eq[0] / sums.eq[1], dry = sums.dry[0] / sums.dry[1];
+    check('zonal structure: equatorial belt wetter than subtropical dry belt (' + eq.toFixed(2) + ' vs ' + dry.toFixed(2) + ')', eq > dry * 1.2);
+  } else {
+    console.log('skip - zonal structure (not enough land in test bands this seed)');
+  }
 }
 
 console.log('\n' + __pass + ' passed, ' + __fail + ' failed');

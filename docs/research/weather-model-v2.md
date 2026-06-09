@@ -23,6 +23,12 @@ The doc describes an intermediate-complexity chain: pressure (hydrostatic `P = P
 2. **Don't iterate a full primitive-equation solve.** Keep the existing relaxation structure: compute a *static* wind field once per climate refresh (bands + Coriolis deflection + pressure-gradient perturbation), then run the existing moisture advection along that field. This preserves v0.036's performance profile.
 3. **Seasonality multiplies cost ×4** (Jan/Apr/Jul/Oct). Acceptable: weather already runs on demand (`weatherBtn`), and the coarse grid is only 36k cells. Cache the four passes; derive MAT/Tmax/Tmin/MAP/Pmax/Pmin per cell for Köppen.
 
+## Status (June 2026)
+
+**W1 shipped in v0.039** (planetary bands + pressure/Coriolis winds, manual override kept). **W2 shipped in v0.040** (bulk-aerodynamic evaporation; zonal corrector halved after the emergence measurement below). W3 (seasons + Köppen) open.
+
+Emergence measurement (world mode, 256px, corrector off): zonal-mean land rain peaks 0.37 at 0–5°, dips to 0.17 at 25–40°, rises to 0.42 at 55–60°, dries poleward of 65° — ITCZ/dry-belt/westerlies structure appears from the wind field + Clausius–Clapeyron capacity alone. The corrector (now `zonalK`, default 0.5) only sharpens contrast toward Earth-like ratios, standing in for vertical subsidence that 2-D advection cannot represent.
+
 ## Recommended staged implementation
 
 **Stage W1 — Wind field (replaces single `windDir`):**

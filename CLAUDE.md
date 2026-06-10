@@ -1,5 +1,7 @@
 # Cartalith Gen1
 
+> **New session? Read `docs/HANDOFF.md` first** — current state, next task, how to verify.
+
 HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Gen1"):
 
 | File | Lines | Role |

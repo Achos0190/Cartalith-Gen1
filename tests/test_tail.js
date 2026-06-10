@@ -183,6 +183,28 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   }
 }
 
+/* ---------- biome raster handoff (v0.042+, BIOME_AND_VISUALS_PLAN Part A) ---------- */
+{
+  const raster = buildBiomeRaster();
+  check('biome raster length = GW×GH', raster.length === GW * GH);
+  let valid = true, oceanMatchesSea = true, distinct = new Set();
+  const maxIdx = BIOME_KEYS.length; // ocean=0, biomes 1..maxIdx
+  for (let i = 0; i < raster.length; i++){
+    const v = raster[i];
+    if (v < 0 || v > maxIdx || (v | 0) !== v){ valid = false; break; }
+    distinct.add(v);
+    const isSea = field[i] < state.seaLevel;
+    if (isSea !== (v === 0)){ oceanMatchesSea = false; }
+  }
+  check('biome raster values are valid indices (0..' + maxIdx + ')', valid);
+  check('biome raster: index 0 ⇔ below sea level', oceanMatchesSea);
+  check('biome raster has multiple biomes (' + distinct.size + ' distinct)', distinct.size >= 3);
+  const man = biomeIndexManifest();
+  check('manifest covers every index in the raster', [...distinct].every(v => man.indices[String(v)] !== undefined));
+  check('manifest index order is frozen (ocean=0, ice=1, tropWet=12)',
+    man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' && man.indices[String(BIOME_KEYS.length)].key === 'tropWet');
+}
+
 /* ---------- erosion pipeline keeps field finite ---------- */
 const savedDroplets = state.erosion.droplets;
 state.erosion.droplets = 5000;

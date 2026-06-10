@@ -4,8 +4,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.041.html` | ~2,600 | **Current** procedural heightmap/terrain/climate generator |
-| `elevation_foundation_v0.036–40.html` | — | Previous versions (kept; don't edit) |
+| `elevation_foundation_v0.042.html` | ~2,600 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036–41.html` | — | Previous versions (kept; don't edit) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
 | `docs/` | — | Research reports, roadmap, unified-tool plan |
@@ -38,6 +38,8 @@ Since v0.039 (`docs/research/weather-model-v2.md` W1): `buildWind(wx,wy,WW,WH,st
 Since v0.040 (W2): ocean evaporation is bulk-aerodynamic when `climate.bulkEvap` (default true) — `E = Ce·U·(qs−q)`, wind speeds it up, saturation deficit caps it. The ITCZ/dry-belt corrector is scaled by `climate.zonalK` (default **0.5**; the W1 bands make most of the zonal structure emergent — measured equator max, 25–40° dry dip, wet westerlies with the corrector fully off — the corrector only sharpens contrast that 2-D advection can't reach without vertical subsidence). Legacy saves load as `zonalK:1, bulkEvap:false` — bit-identical to v0.039.
 
 Since v0.041 (W0): droplet erosion lives in **`dropletKernel(fld, rain, W, H, P, onProgress)` — a deliberately self-contained function (no module globals)** that is stringified into a blob-URL Web Worker by `erodeAsync()` (UI path: copies field/rain in, transfers result back, progress %, sync fallback when Workers are unavailable or error). The sync `erode()` calls the same kernel — proven bit-identical to v0.040. **Invariant 11: `dropletKernel` must stay self-contained** — the suite rebuilds it from `toString()` with all module globals shadowed and asserts bit-identical output. Thermal pass, rebound, flow and climate refresh stay on the main thread (`erodeFinish`). The worker path itself can't run headless — verify in a browser after touching it.
+
+Since v0.042 (`docs/BIOME_AND_VISUALS_PLAN.md` Part A): `buildBiomeRaster()` emits one Uint8 biome index per cell (0 = ocean, then a **frozen append-only order** `ice…tropWet` = 1…12) via `classifyBiome`; `exportZip()` adds `biome_raster.bin` + `biome_index.json` (decode manifest) for the Cartalith handoff. Index order is save-format-stable — never renumber `BIOME_KEYS`.
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

@@ -1,0 +1,2575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartalith — Elevation Foundation v0.036</title>
+<style>
+  :root{
+    --bg:#101218; --panel:#171a22; --panel2:#1f232e; --line:#2c313d;
+    --ink:#d7dce5; --dim:#8b93a3; --faint:#5c6473;
+    --accent:#d9a45b; --accent2:#5f9bd1; --warn:#cf6a6a;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:baseline;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin:0}
+  header .ver{font-family:var(--mono);font-size:11px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:1px 8px}
+  header .tag{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.04em}
+  .stage{flex:1;display:flex;min-height:0}
+  .canvas-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(0deg,#0c0e13 0 24px,#0d0f15 24px 48px);overflow:hidden;padding:18px}
+  canvas#view{max-width:100%;max-height:100%;background:#000;border:1px solid var(--line);image-rendering:auto;cursor:crosshair;box-shadow:0 0 0 1px #000}
+  .legend{position:absolute;left:24px;bottom:20px;font-family:var(--mono);font-size:10px;color:var(--dim);background:rgba(10,12,17,.74);border:1px solid var(--line);border-radius:6px;padding:8px 10px;line-height:1.7;pointer-events:none}
+  .legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+  .busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,12,17,.55);font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.1em}
+  aside{width:324px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
+  .sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+  .sec h2{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin:0 0 12px}
+  .row{display:flex;align-items:center;gap:8px;margin:9px 0}
+  .row label{flex:0 0 90px;color:var(--dim);font-size:12px}
+  .row input[type=range]{flex:1;accent-color:var(--accent);height:22px;min-width:0}
+  .row .val{flex:0 0 60px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--ink)}
+  input[type=number]{width:88px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:5px 7px;font-family:var(--mono);font-size:12px}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:7px 11px;font-size:12px;cursor:pointer;font-family:var(--sans)}
+  button:hover{border-color:var(--faint)}
+  button:disabled{opacity:.5;cursor:default}
+  button.on{background:var(--accent);border-color:var(--accent);color:#1a1206;font-weight:600}
+  button.accent{border-color:var(--accent);color:var(--accent)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{border:0;border-radius:0;border-right:1px solid var(--line);flex:1;padding:7px 3px;font-size:11.5px}
+  .seg button:last-child{border-right:0}
+  .seg.sm button{padding:6px 1px;font-size:10.5px}
+  .readout{font-family:var(--mono);font-size:11.5px;line-height:1.9;color:var(--dim)}
+  .readout b{color:var(--ink);font-weight:600}
+  .readout .big{color:var(--accent);font-size:13px}
+  .hint{font-size:11px;color:var(--faint);line-height:1.5;margin-top:8px}
+  .sublabel{font-size:11px;color:var(--dim);margin:12px 0 5px;font-weight:600}
+  .file{display:none}
+  .pill{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+  label.chk{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--dim);font-size:12px;margin:9px 0}
+  progress{flex:1;height:8px;border:0;border-radius:4px;background:var(--panel2);accent-color:var(--accent);overflow:hidden}
+  progress::-webkit-progress-bar{background:var(--panel2);border-radius:4px}
+  progress::-webkit-progress-value{background:var(--accent);border-radius:4px}
+  progress::-moz-progress-bar{background:var(--accent)}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:6px 8px;font-family:var(--mono);font-size:12px;min-width:0}
+  option:disabled{color:var(--faint)}
+  .panel-toggle{display:none;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 11px;font-size:16px;line-height:1;cursor:pointer}
+  .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:25}
+  body.panel-open .scrim{display:block}
+  @media (max-width:860px){
+    header{padding:10px 12px;gap:10px}
+    header .tag{display:none}
+    .panel-toggle{display:inline-block}
+    .stage{flex-direction:column}
+    .canvas-wrap{padding:10px}
+    aside{position:fixed;top:0;right:0;bottom:0;width:min(87vw,360px);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .22s ease;z-index:30;box-shadow:-12px 0 34px rgba(0,0,0,.55)}
+    body.panel-open aside{transform:translateX(0)}
+    .row label{flex-basis:78px;font-size:13px}
+    .row input[type=range]{height:32px}
+    .row .val{flex-basis:54px}
+    button{padding:11px 12px;font-size:13px}
+    .seg button{padding:10px 3px}
+    label.chk{margin:12px 0}
+    input[type=number],input[type=text],select{font-size:16px}
+    .legend{font-size:9px;left:14px;bottom:14px}
+  }
+/* ---- sidebar tab bar ---- */
+#tabBar{display:flex;gap:2px;margin-bottom:10px;flex-shrink:0}
+.tab{flex:1;padding:6px 4px;background:var(--bg2);color:var(--fg);border:1px solid var(--border);cursor:pointer;font:inherit;font-size:11px;letter-spacing:.04em;text-transform:uppercase;transition:background .15s}
+.tab.on{background:var(--accent);color:#18191a;border-color:var(--accent);font-weight:700}
+/* ---- polyline overlay canvas ---- */
+.canvas-stack{position:relative;line-height:0;flex-shrink:0}   /* tight wrapper — overlay aligns to canvas, not to padded wrap */
+#polyOverlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+/* ---- zoom buttons (mobile) ---- */
+#zoomOverlay{position:absolute;bottom:10px;right:10px;display:none;flex-direction:column;gap:6px;z-index:20}
+.zbtn{width:42px;height:42px;font-size:22px;font-weight:700;background:rgba(10,10,10,.72);color:#e0e0e0;border:1px solid rgba(255,255,255,.18);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+/* ---- undo memory hint accent ---- */
+.undo-warn{color:var(--accent)!important}
+</style>
+</head>
+<body>
+<header>
+  <button id="panelToggle" class="panel-toggle" aria-label="Toggle controls">☰</button>
+  <h1>Elevation Foundation</h1>
+  <span class="ver">v0.036</span>
+  <span class="tag">tectonics · warp · volcanism · erosion · climate · biomes — Cartalith prototype</span>
+</header>
+
+<div class="stage">
+  <div class="canvas-wrap">
+    <div class="canvas-stack">
+      <canvas id="view" width="512" height="328"></canvas>
+      <canvas id="polyOverlay" width="512" height="328"></canvas>
+    </div>
+    <div id="zoomOverlay">
+      <button class="zbtn" id="zoomIn">+</button>
+      <button class="zbtn" id="zoomOut">−</button>
+      <button class="zbtn" id="zoomReset" style="font-size:14px">⟳</button>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="busy" id="busy">working…</div>
+  </div>
+
+  <aside>
+    <div id="tabBar">
+      <button class="tab on" data-tab="terrain">Terrain</button>
+      <button class="tab" data-tab="sculpt">Sculpt</button>
+    </div>
+    <div id="terrainPanel">
+    <div class="sec">
+      <h2>Source</h2>
+      <div class="btnrow"><button class="accent" id="loadBtn">Load heightmap…</button></div>
+      <input type="file" id="file" class="file" accept="image/*">
+      <div class="sublabel">Working resolution</div>
+      <div class="seg sm" id="resSeg">
+        <button data-w="512">Fast 512</button>
+        <button data-w="1024">Mid 1K</button>
+        <button data-w="2048" class="on">Full 2K</button>
+      </div>
+      <div class="hint">Generate a world below, or load a grayscale heightmap (white = high). Both feed the same field you can warp, erode, sculpt and calibrate.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Save &amp; export</h2>
+      <div class="row"><label>Image size</label>
+        <select id="bakeRes" style="flex:1">
+          <option value="2048">2K — 2048 px</option>
+          <option value="4096">4K — 4096 px</option>
+          <option value="8192" selected>8K — 8192 px</option>
+        </select>
+      </div>
+      <label class="chk"><input type="checkbox" id="bakeTiles"> Export as tiles — no size limit (huge maps / iOS)</label>
+      <div class="hint" id="bakeNote">PNG keeps full detail — pick a size, then export.</div>
+      <div class="btnrow" style="margin-top:8px"><button class="accent" id="exportBtn">Export .zip</button><button id="loadZipBtn">Load .zip…</button></div>
+      <input type="file" id="zipFile" class="file" accept=".zip,application/zip">
+      <div class="row" id="bakeProgRow" style="display:none"><label>Baking</label><progress id="bakeProg" max="100" value="0"></progress><span class="val" id="bakeProgV">0%</span></div>
+      <div class="hint">One .zip with everything: the rendered map (PNG), raw 32-bit heightmap + temperature + rainfall, each layer as an image, and all parameters. <b>Load</b> restores the full world.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Performance</h2>
+      <label class="chk"><input type="checkbox" id="gpuToggle"> GPU acceleration <span class="tag" id="gpuTag" style="margin-left:auto">checking…</span></label>
+      <div class="row"><label>Last heavy pass</label><span class="val" id="perfV">—</span></div>
+      <div class="hint"><b>Experimental.</b> Heavy grid passes (currently thermal erosion) run on your GPU when it's supported, and fall back to the CPU automatically. On startup the GPU path is checked against the CPU on a small test grid; if the results don't match, or your device lacks WebGL 2 float support, it stays on CPU. Untick to force CPU. More passes (weather, diffusion, stream-power) will move to the GPU as they're validated.</div>
+    </div>
+
+    <div class="sec">
+      <h2>World Structure</h2>
+      <label class="chk"><input type="checkbox" id="wsEnabled"> Enable continental steering</label>
+      <div id="wsPanel" style="display:none">
+        <div class="seg" id="archetypeSeg">
+          <button data-arc="earth" class="on">Earth</button>
+          <button data-arc="supercontinent">Super</button>
+          <button data-arc="archipelago">Islands</button>
+          <button data-arc="volcanic">Volcanic</button>
+          <button data-arc="rift">Rift</button>
+          <button data-arc="custom">Custom</button>
+        </div>
+        <div class="row"><label>Continentality</label><input type="range" id="wsCont" min="1" max="90" step="1" value="30"><span class="val" id="wsContV">0.30</span></div>
+        <div class="row"><label>Fragmentation</label><input type="range" id="wsFrag" min="0" max="100" step="1" value="50"><span class="val" id="wsFragV">0.50</span></div>
+        <div class="row"><label>Tectonic energy</label><input type="range" id="wsTect" min="0" max="100" step="1" value="60"><span class="val" id="wsTectV">0.60</span></div>
+        <div class="row"><label>Ocean depth</label><input type="range" id="wsOcean" min="0" max="100" step="1" value="60"><span class="val" id="wsOceanV">0.60</span></div>
+        <div class="row"><label>Hotspot density</label><input type="range" id="wsHot" min="0" max="100" step="1" value="20"><span class="val" id="wsHotV">0.20</span></div>
+      </div>
+      <div class="hint">When enabled a Continentality field is generated first: continental plates settle in high-field zones, oceanic in low, and a large-scale elevation bias anchors the land/sea split. Continental interiors become drier. <b>Disabled (default):</b> existing random plate generation — identical to current behaviour. All tectonic sliders below remain editable as fine-tuning on top of whichever archetype is active.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Tectonics</h2>
+      <div class="btnrow"><button class="accent" id="genBtn">Generate world</button><button id="reseedBtn">New seed</button></div>
+      <div class="row"><label>Plates</label><input type="range" id="plates" min="4" max="40" step="1" value="14"><span class="val" id="platesV">14</span></div>
+      <div class="row"><label>Drift</label><input type="range" id="vel" min="0" max="100" step="1" value="50"><span class="val" id="velV">×1.00</span></div>
+      <div class="row"><label>Warp</label><input type="range" id="warp" min="0" max="100" step="1" value="45"><span class="val" id="warpV">0.45</span></div>
+      <div class="row"><label>Uplift spread</label><input type="range" id="sigma" min="0" max="100" step="1" value="40"><span class="val" id="sigmaV">18px</span></div>
+      <div class="row"><label>Tectonic α</label><input type="range" id="alpha" min="0" max="100" step="1" value="71"><span class="val" id="alphaV">0.85</span></div>
+      <div class="row"><label>Noise β</label><input type="range" id="beta" min="0" max="100" step="1" value="37"><span class="val" id="betaV">0.22</span></div>
+      <div class="row"><label>Erosion / age</label><input type="range" id="age" min="0" max="100" step="1" value="60"><span class="val" id="ageV">0.60</span></div>
+      <div class="sublabel">Physical coupling fields</div>
+      <div class="row"><label>Flexure F</label><input type="range" id="flexure" min="0" max="60" step="1" value="20"><span class="val" id="flexureV">0.20</span></div>
+      <div class="row"><label>Heterogeneity C</label><input type="range" id="hetero" min="0" max="40" step="1" value="8"><span class="val" id="heteroV">0.08</span></div>
+      <div class="row"><label>Rock resistance</label><input type="range" id="resist" min="0" max="100" step="1" value="50"><span class="val" id="resistV">0.50</span></div>
+      <div class="hint"><b>Flexure</b> adds broad isostatic arches around mountain ranges and subsidence in rift basins — the main driver of continental shelves. <b>Heterogeneity</b> applies low-frequency crustal diversity inside old stable plates (cratons, sedimentary basins). <b>Rock resistance</b> scales erodibility in stream-power erosion: old shields resist incision, young volcanic arcs erode rapidly.</div>
+      <label class="chk"><input type="checkbox" id="ridged" checked> Ridged mountain detail</label>
+      <div class="row"><label>Seed</label><input type="number" id="seedN" value="0" step="1"></div>
+      <div class="hint"><b>Warp</b> bends the straight plate boundaries into organic coastlines and ranges.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Volcanism &amp; impacts</h2>
+      <div class="row"><label>Volcanoes</label><input type="range" id="volc" min="0" max="100" step="1" value="20"><span class="val" id="volcV">20</span></div>
+      <div class="row"><label>Volcano age</label><input type="range" id="volca" min="0" max="100" step="1" value="40"><span class="val" id="volcaV">0.40</span></div>
+      <label class="chk"><input type="checkbox" id="volcProv" checked> Provinces &amp; arc/rift placement</label>
+      <div class="row"><label>Craters</label><input type="range" id="crat" min="0" max="100" step="1" value="50"><span class="val" id="cratV">100</span></div>
+      <div class="row"><label>Crater age</label><input type="range" id="crata" min="0" max="100" step="1" value="50"><span class="val" id="crataV">0.50</span></div>
+      <div class="hint">Built into the world after mountain-building. Volcanoes cluster on plate boundaries (arcs &amp; rifts) with power-law sizes; impacts scatter by Poisson with D⁻² sizes. Both degrade with age. Re-erode to weather them.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Climate &amp; biomes</h2>
+      <div class="sublabel">Map extent</div>
+      <div class="seg sm" id="extentSeg">
+        <button data-world="0" class="on">Region</button>
+        <button data-world="1">Whole world</button>
+      </div>
+      <div class="sublabel">Latitude band this map spans</div>
+      <div class="row"><label>North edge</label><input type="range" id="latN" min="-90" max="90" step="1" value="55"><span class="val" id="latNV">55°</span></div>
+      <div class="row"><label>South edge</label><input type="range" id="latS" min="-90" max="90" step="1" value="5"><span class="val" id="latSV">5°</span></div>
+      <div class="sublabel">Temperature</div>
+      <div class="row"><label>Equator °C</label><input type="range" id="teq" min="0" max="45" step="1" value="30"><span class="val" id="teqV">30°C</span></div>
+      <div class="row"><label>Pole °C</label><input type="range" id="tpo" min="-50" max="10" step="1" value="-25"><span class="val" id="tpoV">−25°C</span></div>
+      <div class="row"><label>Lapse rate</label><input type="range" id="lapse" min="0" max="120" step="1" value="65"><span class="val" id="lapseV">6.5°C/km</span></div>
+      <div class="hint">Temperature falls with latitude (insolation) and altitude (lapse rate). In <b>Whole world</b> mode the map spans pole-to-pole; in <b>Region</b> mode you set the latitude band.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Weather · rainfall sim</h2>
+      <div class="btnrow"><button class="accent" id="weatherBtn">Simulate weather</button></div>
+      <div class="row"><label>Iterations</label><input type="range" id="wIters" min="20" max="200" step="5" value="70"><span class="val" id="wItersV">70</span></div>
+      <div class="row"><label>Orographic</label><input type="range" id="rainK" min="0" max="200" step="1" value="100"><span class="val" id="rainKV">×1.00</span></div>
+      <div class="row"><label>Evaporation</label><input type="range" id="evap" min="0" max="100" step="1" value="40"><span class="val" id="evapV">0.12</span></div>
+      <div class="row"><label>Dryness</label><input type="range" id="rainDep" min="0" max="100" step="1" value="35"><span class="val" id="rainDepV">0.35</span></div>
+      <div class="row"><label>Ocean supply</label><input type="range" id="ocean" min="0" max="200" step="1" value="100"><span class="val" id="oceanV">×1.00</span></div>
+      <div class="row"><label>Wind model</label><div class="seg sm" id="windModeSeg"><button data-wm="auto" class="on">Planetary</button><button data-wm="manual">Manual</button></div></div>
+      <div class="row"><label>Pressure infl.</label><input type="range" id="pressK" min="0" max="150" step="5" value="60"><span class="val" id="pressKV">0.60</span></div>
+      <div class="row"><label>Zonal belts</label><input type="range" id="zonalK" min="0" max="150" step="5" value="50"><span class="val" id="zonalKV">0.50</span></div>
+      <div class="row"><label>Wind →</label><input type="range" id="windDir" min="0" max="360" step="5" value="0"><span class="val" id="windDirV">0°</span></div>
+      <div class="hint">Moisture evaporates off the seas (more from warm water), rides the wind, and rains where air climbs terrain or saturates — windward coasts wet, lee interiors dry. <b>Planetary</b> wind = latitude belts (trades / westerlies / polar easterlies; belt count follows day length) bent by thermal lows and highs (pressure influence, Coriolis-deflected) — monsoon-style sea→land flow emerges where summer land runs hot. <b>Manual</b> = one fixed direction (Wind →, region only). Runs on click; more iterations push moisture deeper inland.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Erosion</h2>
+      <div class="sublabel">Hydraulic · droplet</div>
+      <div class="btnrow"><button class="accent" id="erodeBtn">Erode (droplet)</button><button id="resetBtn">Reset</button></div>
+      <div class="row"><label>Droplets</label><input type="range" id="drops" min="0" max="100" step="1" value="40"><span class="val" id="dropsV">60k</span></div>
+      <div class="row"><label>Strength</label><input type="range" id="estr" min="0" max="100" step="1" value="35"><span class="val" id="estrV">0.35</span></div>
+      <div class="row"><label>Deposition</label><input type="range" id="edep" min="0" max="100" step="1" value="30"><span class="val" id="edepV">0.30</span></div>
+      <div class="row"><label>Thermal</label><input type="range" id="ethr" min="0" max="30" step="1" value="8"><span class="val" id="ethrV">8</span></div>
+      <div class="row"><label>Slope limit</label><input type="range" id="etal" min="1" max="40" step="1" value="12"><span class="val" id="etalV">0.012</span></div>
+      <div class="sublabel">Hillslope diffusion · Step 2b (∂z/∂t = D∇²z)</div>
+      <div class="btnrow"><button class="accent" id="diffuseBtn">Hillslope diffuse</button></div>
+      <div class="row"><label>Diffusivity D</label><input type="range" id="edD" min="1" max="100" step="1" value="75"><span class="val" id="edDV">0.15</span></div>
+      <div class="row"><label>Passes</label><input type="range" id="edPas" min="1" max="40" step="1" value="6"><span class="val" id="edPasV">6</span></div>
+      <div class="btnrow"><button class="accent" id="streamBtn">Stream-power carve</button></div>
+      <div class="row"><label>Uplift</label><input type="range" id="sUp" min="0" max="100" step="1" value="45"><span class="val" id="sUpV">0.18</span></div>
+      <div class="row"><label>Channeling</label><input type="range" id="sK" min="0" max="100" step="1" value="40"><span class="val" id="sKV">0.012</span></div>
+      <div class="row"><label>Iterations</label><input type="range" id="sIt" min="4" max="40" step="1" value="15"><span class="val" id="sItV">15</span></div>
+      <div class="row"><label>Deposition</label><input type="range" id="sDep" min="0" max="100" step="1" value="30"><span class="val" id="sDepV">0.30</span></div>
+      <div class="row"><label>Rain → erosion</label><input type="range" id="sClim" min="0" max="100" step="1" value="50"><span class="val" id="sClimV">0.50</span></div>
+      <div class="hint">Stream-power couples tectonic uplift with fluvial erosion (Cordonnier 2016): it grows ranges and carves dendritic river networks. <b>Deposition</b> routes eroded sediment downhill — it deposits where the gradient drops (alluvial fans) and at the coastline (deltas). <b>Rain → erosion</b> makes wet areas erode faster and develop denser drainage (tropical weathering feedback); at 0 erosion is uniform. Switch to the <b>Flow</b> view to see the rivers.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Glacial erosion</h2>
+      <div class="btnrow"><button class="accent" id="glacBtn">Glacial carve</button></div>
+      <div class="row"><label>Snowline</label><input type="range" id="gSnow" min="0" max="100" step="1" value="65"><span class="val" id="gSnowV">0.65</span></div>
+      <div class="row"><label>Intensity</label><input type="range" id="gKg" min="1" max="100" step="1" value="15"><span class="val" id="gKgV">0.15</span></div>
+      <div class="row"><label>U-width</label><input type="range" id="gUF" min="0" max="100" step="1" value="60"><span class="val" id="gUFV">0.60</span></div>
+      <div class="row"><label>Passes</label><input type="range" id="gPas" min="1" max="30" step="1" value="8"><span class="val" id="gPasV">8</span></div>
+      <label class="chk"><input type="checkbox" id="showRivers" checked> Show rivers in biome view</label>
+      <div class="hint">Carves high, cold terrain (above the snowline) into U-shaped valleys. Ice follows the drainage network and widens valleys laterally instead of just cutting down. Glacier heads scoop into cirque bowls. Lower the snowline to glaciate more of the landscape; raise it to restrict ice to the peaks. Run after erosion for best results — erode first, then glaciate. Rivers overlay the drainage network as blue channels on the biome view.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Coastal</h2>
+      <div class="btnrow"><button class="accent" id="coastBtn">Apply coastal</button></div>
+      <div class="row"><label>Wave strength</label><input type="range" id="cWave" min="0" max="100" step="1" value="50"><span class="val" id="cWaveV">0.50</span></div>
+      <div class="row"><label>Estuary depth</label><input type="range" id="cEst" min="0" max="100" step="1" value="40"><span class="val" id="cEstV">0.08</span></div>
+      <div class="row"><label>Marsh band</label><input type="range" id="cMar" min="0" max="100" step="1" value="30"><span class="val" id="cMarV">0.03</span></div>
+      <div class="row"><label>Passes</label><input type="range" id="cPas" min="1" max="15" step="1" value="4"><span class="val" id="cPasV">4</span></div>
+      <div class="hint">Three coastal processes in one pass. <b>Sea cliffs</b>: wave energy erodes exposed coastal cells and leaves steep cliff faces (run multiple times to carve retreating cliffs). <b>Estuaries</b>: high-flow river mouths near sea level are widened with an exponential taper — funnel-shaped inlets emerge where major rivers meet the coast. <b>Tidal marsh</b>: the narrow, flat intertidal band is roughened with organic micro-relief. Run after stream-power carve so river mouths are established.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Planet</h2>
+      <div class="row"><label>Gravity</label><input type="range" id="pg" min="30" max="250" step="5" value="100"><span class="val" id="pgV">1.00 g</span></div>
+      <div class="row"><label>Day length</label><input type="range" id="prot" min="6" max="96" step="1" value="24"><span class="val" id="protV">24 h</span></div>
+      <div class="row"><label>Axial tilt</label><input type="range" id="ptilt" min="0" max="45" step="0.5" value="23.4"><span class="val" id="ptiltV">23.4&deg;</span></div>
+      <div class="hint">Surface gravity scales fluvial &amp; glacial erosion (&times;g), temperature lapse (&times;g), crater size (&times;g<sup>&minus;0.22</sup>), wave energy (&times;1/g) and rescales peak altitude (~1/g). Talus angle stays fixed: friction-dominated, gravity-independent. Day length and tilt are stored for the weather model (circulation cells, seasons) &mdash; no terrain effect yet.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Calibrate · vertical</h2>
+      <div class="row"><label>Sea level</label><input type="range" id="sea" min="0" max="100" step="1" value="42"><span class="val" id="seaV">42%</span></div>
+      <div class="row"><label>Peak altitude</label><input type="number" id="peak" value="4000" min="1" step="50"><span class="pill">m</span></div>
+      <div class="hint">Sea level = which height is 0&nbsp;m (below is sea). Peak = metres of the highest point. Together: the <b>vertical</b> scale.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Calibrate · horizontal</h2>
+      <div class="row"><label>Map width</label><input type="number" id="mapw" value="800" min="1" step="10"><span class="pill">km</span></div>
+      <div class="hint">Independent of vertical. Combined with vertical it yields true <b>grade</b>.</div>
+    </div>
+
+    <div class="sec">
+      <h2>View</h2>
+      <div class="seg" id="modeSeg">
+        <button data-mode="biome" class="on">Biome</button>
+        <button data-mode="hypso">Relief</button>
+        <button data-mode="gray">Height</button>
+        <button data-mode="shade">Shade</button>
+      </div>
+      <div class="row" style="margin-top:12px"><label>Relief ↔ biome</label><input type="range" id="bioBlend" min="0" max="100" step="1" value="90"><span class="val" id="bioBlendV">0.90</span></div>
+      <div class="sublabel">Debug view</div>
+      <div class="seg sm" id="debugSeg">
+        <button data-d="off" class="on">Off</button>
+        <button data-d="temp">Temp</button>
+        <button data-d="rain">Rain</button>
+        <button data-d="plates">Plates</button>
+        <button data-d="bounds">Bounds</button>
+        <button data-d="stress">Stress</button>
+        <button data-d="age">Age</button>
+        <button data-d="flow">Flow</button>
+      </div>
+      <div class="row" style="margin-top:12px"><label>Relief</label><input type="range" id="exag" min="0" max="100" step="1" value="42"><span class="val" id="exagV">×3.4</span></div>
+      <div class="row"><label>Sun</label><input type="range" id="sun" min="0" max="360" step="5" value="315"><span class="val" id="sunV">315°</span></div>
+      <label class="chk"><input type="checkbox" id="shadeOnHypso" checked> Hillshade the tinted map</label>
+    </div>
+
+    </div><!-- end terrainPanel -->
+
+    <div id="sculptPanel" style="display:none">
+      <div class="sec">
+        <h2>Polyline sculpt (GPU)</h2>
+        <div class="sublabel">1. Pick effect &nbsp; 2. Tap canvas to place waypoints &nbsp; 3. Apply</div>
+        <div class="seg" id="polyBrushSeg">
+          <button data-pb="raise" class="on">Raise</button>
+          <button data-pb="lower">Lower</button>
+          <button data-pb="ridge">Ridge</button>
+          <button data-pb="canyon">Canyon</button>
+          <button data-pb="cliff">Cliff</button>
+        </div>
+        <div class="row"><label>Width (radius)</label><input type="range" id="polyRad" min="2" max="100" step="1" value="22"><span class="val" id="polyRadV">22</span></div>
+        <div class="row"><label>Strength</label><input type="range" id="polyStr" min="1" max="100" step="1" value="35"><span class="val" id="polyStrV">0.35</span></div>
+        <div class="btnrow">
+          <button class="accent" id="polyDrawBtn">Draw path</button>
+          <button id="polyApplyBtn" disabled>Apply</button>
+          <button id="polyClearBtn">Clear</button>
+        </div>
+        <div class="hint" id="polyHint">Tap <b>Draw path</b>, then tap the terrain to place waypoints. The shaded tube shows the effect radius. Tap <b>Apply</b> to commit — the path is baked GPU-accelerated along the full polyline.</div>
+        <div id="polyStats" style="font-size:10px;color:var(--fg2);margin-top:4px"></div>
+      </div>
+
+      <div class="sec">
+        <h2>Direct paint (CPU)</h2>
+        <div class="sublabel">Drag on the terrain to sculpt in real time</div>
+        <div class="seg" id="brushSeg">
+          <button data-brush="raise" class="on">Raise</button>
+          <button data-brush="lower">Lower</button>
+          <button data-brush="smooth">Smooth</button>
+          <button data-brush="cliff">Cliff</button>
+          <button data-brush="ridge">Ridge</button>
+          <button data-brush="canyon">Canyon</button>
+          <button data-brush="mesa">Mesa</button>
+          <button data-brush="volcano">Volc.</button>
+        </div>
+        <div class="row" style="margin-top:12px"><label>Radius</label><input type="range" id="brad" min="2" max="80" step="1" value="22"><span class="val" id="bradV">22</span></div>
+        <div class="row"><label>Strength</label><input type="range" id="bstr" min="1" max="100" step="1" value="35"><span class="val" id="bstrV">35%</span></div>
+        <div class="hint">Drag to edit (disabled in debug views). <b>Cliff / Ridge / Canyon</b> follow drag direction. <b>Mesa / Volc.</b> stamp once on tap.</div>
+      </div>
+
+      <div class="sec">
+        <h2>Undo</h2>
+        <div class="btnrow"><button id="undoBtn" disabled>Undo last operation</button></div>
+        <div class="hint" id="undoMem">Up to 5 steps saved in memory</div>
+      </div>
+    </div><!-- end sculptPanel -->
+
+    <div class="sec">
+      <div class="readout" id="readout"></div>
+    </div>
+  </aside>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<script>
+"use strict";
+const VERSION='0.042';
+const view = document.getElementById('view');
+const vctx = view.getContext('2d');
+
+let GW = 512, GH = 328;
+let field = new Float32Array(GW*GH);
+let img   = vctx.createImageData(GW, GH);
+let plates = [];
+let plateId    = new Int16Array(GW*GH);
+let boundaryMask = new Uint8Array(GW*GH);
+let stressField  = new Float32Array(GW*GH);
+let baseField    = new Float32Array(GW*GH);
+let ageField     = new Float32Array(GW*GH);
+let volcanicField= new Float32Array(GW*GH);   // feature field: volcanic influence (for biomes)
+let impactField  = new Float32Array(GW*GH);   // feature field: impact influence (for biomes)
+let tempField    = new Float32Array(GW*GH);   // climate: temperature in °C
+let rainField    = new Float32Array(GW*GH);   // climate: relative moisture/rainfall, normalized [0,1]
+let flexureField     = new Float32Array(GW*GH);   // lithospheric flexure response (doc §4.2): shelves, foreland basins
+let heterogeneityField=new Float32Array(GW*GH);   // crustal heterogeneity within plates (doc §6.1): craton diversity
+let resistanceField  = new Float32Array(GW*GH);   // erosion resistance by rock type (doc §6.2): shields vs arcs
+let flowField        = new Float32Array(GW*GH);   // flow accumulation (drainage area proxy); populated after erosion
+let continentalField = null;                   // Float32Array [-1..+1] or null when disabled; generated before plate building
+let suspendRender=false;                       // when true, render() is a no-op (used while syncing many controls)
+let gridSlope=null, gridShade=null, gridShadeMeso=null;   // per-cell slope, macro shade & meso shade, precomputed before a bake
+let warpX = null, warpY = null;
+
+const state = {
+  resW:2048, world:false,
+  seaLevel:0.42, peakM:4000, mapWidthKm:800,
+  mode:'biome', debug:'off', exag:3.4, sunAz:315, shadeHypso:true, bioBlend:0.90,
+  brush:'raise', radius:22, strength:0.35,
+  world_structure:{ enabled:false, archetype:'earth', continentality:0.30, fragmentation:0.50, tectonicEnergy:0.60, oceanDepth:0.60, hotspotDensity:0.20 },
+  tect:{ plates:14, seed:(Math.random()*99999)|0, vel:1.0, warp:0.45, blurR:18, alpha:0.85, beta:0.22, age:0.6, ridged:true, lloyd:2,
+         flexure:0.20, hetero:0.08, resist:0.50 },
+  volc:{ count:20, age:0.40, provinces:true },
+  crater:{ count:100, age:0.50 },
+  erosion:{ droplets:60000, inertia:0.05, capacity:4.0, minSlope:0.01, deposit:0.30, erode:0.35, evaporate:0.02, gravity:4.0, maxLifetime:30, initSpeed:1.0, initWater:1.0, radius:3, talus:0.012, thermalPasses:8, diffuseD:0.15, diffusePasses:6 },
+  stream:{ uplift:0.18, k:0.012, iters:15, deposit:0.3, climateK:0.5 },
+  glacial:{ kg:0.15, mg:0.4, snowline:0.65, uFactor:0.6, passes:8 },
+  coastal:{ waveStr:0.5, estuaryDepth:0.08, marshBand:0.03, passes:4 },
+  planet:{ g:1.0, rotationHours:24, axialTiltDeg:23.4, radiusRel:1.0 },   /* planetary parameters (docs/research/gravity-influence.md, G1) */
+  showRivers: true,
+  climate:{ latN:55, latS:5, equatorTemp:30, poleTemp:-25, lapseRate:6.5, rainK:1.0, rainDep:0.35, oceanHum:1.0, windDir:0, windMode:'auto', pressK:0.6, zonalK:0.5, bulkEvap:true, evap:0.12, ocean:1.0, wIters:70 }
+};
+
+/* ===================== noise ===================== */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function hash(x,y,s){ let h=(x|0)*374761393+(y|0)*668265263+(s|0)*362437; h=(h^(h>>>13))*1274126177; return ((h^(h>>>16))>>>0)/4294967295; }
+function vnoise(x,y,s){ const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi; const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf); const a=hash(xi,yi,s), b=hash(xi+1,yi,s), c=hash(xi,yi+1,s), d=hash(xi+1,yi+1,s); return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v; }
+function fbm(x,y,s){ let amp=.5,freq=1,sum=0,nrm=0; for(let o=0;o<6;o++){ sum+=amp*vnoise(x*freq,y*freq,s+o*131); nrm+=amp; amp*=.5; freq*=2; } return sum/nrm; }
+function ridged(x,y,s){ let amp=.5,freq=1,sum=0,nrm=0; for(let o=0;o<6;o++){ let n=vnoise(x*freq,y*freq,s+o*131); n=1-Math.abs(2*n-1); sum+=amp*n*n; nrm+=amp; amp*=.5; freq*=2; } return sum/nrm; }
+/* periodic variants: pvnoise wraps the x lattice coordinate mod pX so the noise tiles exactly on a cylinder */
+function pvnoise(x,y,s,pX){ const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi; const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf); const px=((xi%pX)+pX)%pX, px1=(px+1)%pX; const a=hash(px,yi,s),b=hash(px1,yi,s),c=hash(px,yi+1,s),d=hash(px1,yi+1,s); return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v; }
+function pfbm(x,y,s,pX){ let amp=.5,freq=1,sum=0,nrm=0,p=Math.max(2,pX|0); for(let o=0;o<6;o++){ sum+=amp*pvnoise(x*freq,y*freq,s+o*131,p); nrm+=amp; amp*=.5; freq*=2; p=Math.max(2,p*2); } return sum/nrm; }
+function pridged(x,y,s,pX){ let amp=.5,freq=1,sum=0,nrm=0,p=Math.max(2,pX|0); for(let o=0;o<6;o++){ let n=pvnoise(x*freq,y*freq,s+o*131,p); n=1-Math.abs(2*n-1); sum+=amp*n*n; nrm+=amp; amp*=.5; freq*=2; p=Math.max(2,p*2); } return sum/nrm; }
+
+/* ===================== separable blur ===================== */
+function boxH(src,dst,w,h,r,wrap){ const norm=1/(2*r+1); for(let y=0;y<h;y++){ const row=y*w; let acc=0; if(wrap){ for(let k=-r;k<=r;k++) acc+=src[row+(((k)%w)+w)%w]; } else { for(let k=-r;k<=r;k++) acc+=src[row+Math.min(w-1,Math.max(0,k))]; } for(let x=0;x<w;x++){ dst[row+x]=acc*norm; if(wrap){ const o=((x-r)%w+w)%w,i=((x+r+1)%w+w)%w; acc+=src[row+i]-src[row+o]; } else { const o=Math.min(w-1,Math.max(0,x-r)),i=Math.min(w-1,Math.max(0,x+r+1)); acc+=src[row+i]-src[row+o]; } } } }
+function boxV(src,dst,w,h,r){ const norm=1/(2*r+1); for(let x=0;x<w;x++){ let acc=0; for(let k=-r;k<=r;k++) acc+=src[Math.min(h-1,Math.max(0,k))*w+x]; for(let y=0;y<h;y++){ dst[y*w+x]=acc*norm; const o=Math.min(h-1,Math.max(0,y-r)), i=Math.min(h-1,Math.max(0,y+r+1)); acc+=src[i*w+x]-src[o*w+x]; } } }
+function gaussBlur(src,r,w,h,wrapX){ w=w||GW; h=h||GH; wrapX=wrapX===undefined?!!state.world:wrapX; if(r<1) return src.slice(); const pr=Math.max(1,Math.round(r/1.6));
+  if(GPU.enabled && GPU.blurOK && w===GW && h===GH && pr<=200){ try{ return GPU.blurArr(src,r,wrapX); }catch(e){ console.warn('GPU blur→CPU',e); GPU.blurOK=false; } }
+  let a=src.slice(), b=new Float32Array(src.length); for(let p=0;p<3;p++){ boxH(a,b,w,h,pr,wrapX); boxV(b,a,w,h,pr); } return a; }
+
+/* ===================== domain warp ===================== */
+/* ===================== world structure · continentality system ===================== */
+function v(id,val){ const e=document.getElementById(id); if(e)e.value=val; }   // global slider/input value setter
+function lab(id,txt){ const e=document.getElementById(id); if(e)e.textContent=txt; }   // global label setter
+const ARCHETYPES = {
+  earth:         { continentality:0.30, fragmentation:0.50, tectonicEnergy:0.60, oceanDepth:0.60, hotspotDensity:0.20 },
+  supercontinent:{ continentality:0.60, fragmentation:0.10, tectonicEnergy:0.50, oceanDepth:0.70, hotspotDensity:0.10 },
+  archipelago:   { continentality:0.15, fragmentation:0.90, tectonicEnergy:0.80, oceanDepth:0.30, hotspotDensity:0.50 },
+  volcanic:      { continentality:0.05, fragmentation:1.00, tectonicEnergy:0.90, oceanDepth:0.80, hotspotDensity:1.00 },
+  rift:          { continentality:0.40, fragmentation:0.35, tectonicEnergy:0.75, oceanDepth:0.55, hotspotDensity:0.30 },
+};
+function deriveFromWorldStructure(){
+  const ws=state.world_structure;
+  state.tect.plates=Math.max(4,Math.min(40,Math.round(4+ws.fragmentation*24)));
+  state.tect.vel=ws.tectonicEnergy*2;
+  state.volc.count=Math.round(ws.hotspotDensity*60);
+}
+function syncDerivedTectSliders(){
+  v('plates',state.tect.plates); lab('platesV',''+state.tect.plates);
+  v('vel',Math.round(state.tect.vel/2*100)); lab('velV','×'+state.tect.vel.toFixed(2));
+  v('volc',state.volc.count); lab('volcV',''+state.volc.count);
+}
+function syncWSSliders(){
+  const ws=state.world_structure;
+  v('wsCont',Math.round(ws.continentality*100)); lab('wsContV',ws.continentality.toFixed(2));
+  v('wsFrag',Math.round(ws.fragmentation*100)); lab('wsFragV',ws.fragmentation.toFixed(2));
+  v('wsTect',Math.round(ws.tectonicEnergy*100)); lab('wsTectV',ws.tectonicEnergy.toFixed(2));
+  v('wsOcean',Math.round(ws.oceanDepth*100)); lab('wsOceanV',ws.oceanDepth.toFixed(2));
+  v('wsHot',Math.round(ws.hotspotDensity*100)); lab('wsHotV',ws.hotspotDensity.toFixed(2));
+}
+function generateContinentalityField(){
+  const ws=state.world_structure;
+  if(!ws.enabled){ continentalField=null; return; }
+  /* Run on a coarse grid (smooth field, no need for full res), then upsample */
+  const CFW=Math.min(GW,240), CFH=Math.max(2,Math.round(CFW*GH/GW)), N=CFW*CFH;
+  const seed=state.tect.seed^0xc0ffee;
+  const freq=0.3+ws.fragmentation*2.7;       // low=one big blob (supercontinent), high=many blobs (archipelago)
+  const pX=Math.max(2,Math.round(freq));
+  const raw=new Float32Array(N);
+  for(let y=0;y<CFH;y++)for(let x=0;x<CFW;x++){
+    const nx=x/CFW*freq, ny=y/CFH*freq;
+    let vv=0,amp=0.5,fr=1,nrm=0;
+    for(let o=0;o<3;o++){                                                 // 3-octave (smooth, low-freq)
+      vv+=amp*(state.world?pvnoise(nx*fr,ny*fr,seed+o*131,Math.max(2,pX*(1<<o))):vnoise(nx*fr,ny*fr,seed+o*131));
+      nrm+=amp; amp*=0.5; fr*=2;
+    }
+    raw[y*CFW+x]=vv/nrm;
+  }
+  /* Percentile-normalise: shift so exactly continentality fraction of cells > 0.
+     O(N) histogram replaces O(N log N) Float32Array.sort per doc §8.          */
+  const BINS=2000; const hist=new Int32Array(BINS);
+  let hmin=Infinity,hmax=-Infinity; for(let i=0;i<N;i++){if(raw[i]<hmin)hmin=raw[i];if(raw[i]>hmax)hmax=raw[i];}
+  const hRange=hmax-hmin||1;
+  for(let i=0;i<N;i++) hist[Math.min(BINS-1,((raw[i]-hmin)/hRange*BINS)|0)]++;
+  let cumCount=0; const target=Math.floor((1-ws.continentality)*N); let thresh=hmin;
+  for(let b=0;b<BINS;b++){ cumCount+=hist[b]; if(cumCount>=target){ thresh=hmin+b/BINS*hRange; break; } }
+  let cmin=Infinity,cmax=-Infinity;
+  for(let i=0;i<N;i++){ raw[i]-=thresh; if(raw[i]<cmin)cmin=raw[i]; if(raw[i]>cmax)cmax=raw[i]; }
+  const cRange=Math.max(1e-6,Math.max(Math.abs(cmin),Math.abs(cmax)));
+  for(let i=0;i<N;i++) raw[i]/=cRange;
+  /* Bilinear upsample to full GW×GH */
+  continentalField=new Float32Array(GW*GH);
+  const wrapX=!!state.world;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++) continentalField[y*GW+x]=bilC(raw,x/(GW-1)*(CFW-1),y/(GH-1)*(CFH-1),CFW,CFH,wrapX);
+}
+/* warp cache — only recompute when seed or warp amount changes (doc §2) */
+let _warpCacheSeed=-1, _warpCacheAmt=-1;
+function computeWarp(){
+  const amp = state.tect.warp * 0.18 * GW;
+  if(amp < 0.5){ warpX=null; warpY=null; _warpCacheSeed=-1; return; }
+  if(warpX && state.tect.seed===_warpCacheSeed && state.tect.warp===_warpCacheAmt) return; // cache hit
+  _warpCacheSeed=state.tect.seed; _warpCacheAmt=state.tect.warp;
+  warpX=new Float32Array(GW*GH); warpY=new Float32Array(GW*GH);
+  const s=state.tect.seed, wf=state.world?3/GW:2.5/GW, pX=3;
+  const nf=state.world?pfbm:fbm;  // periodic in world mode
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x;
+    const qx=state.world?pfbm(x*wf,y*wf,s+17,pX):fbm(x*wf,y*wf,s+17);
+    const qy=state.world?pfbm(x*wf,y*wf,s+101,pX):fbm(x*wf,y*wf,s+101);
+    const wx=state.world?pfbm(x*wf+4*qx,y*wf+4*qy,s+213,pX)-0.5:fbm(x*wf+4*qx,y*wf+4*qy,s+213)-0.5;
+    const wy=state.world?pfbm(x*wf+4*qx,y*wf+4*qy,s+331,pX)-0.5:fbm(x*wf+4*qx,y*wf+4*qy,s+331)-0.5;
+    warpX[i]=wx*2*amp; warpY[i]=wy*2*amp;
+  }
+}
+
+/* ===================== tectonic pipeline ===================== */
+function buildPlates(){
+  const rng=mulberry32(state.tect.seed>>>0), n=state.tect.plates; plates=[];
+  for(let i=0;i<n;i++){ const oceanic=rng()<0.45; plates.push({ x:rng()*GW, y:rng()*GH, vx:rng()*2-1, vy:rng()*2-1, base:(oceanic?-1:1)*(0.55+0.45*rng()) }); }
+  for(let it=0; it<state.tect.lloyd; it++){
+    const sx=new Float64Array(n), sy=new Float64Array(n), c=new Float64Array(n);
+    const sxs=state.world?new Float64Array(n):null, sxc=state.world?new Float64Array(n):null;   // sin/cos for circular mean x
+    for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+      let best=0,bd=Infinity;
+      for(let p=0;p<n;p++){ let dx=x-plates[p].x; if(state.world){ dx=dx-Math.round(dx/GW)*GW; } const dy=y-plates[p].y,d=dx*dx+dy*dy; if(d<bd){bd=d;best=p;} }
+      if(state.world){ const th=x/GW*Math.PI*2; sxs[best]+=Math.sin(th); sxc[best]+=Math.cos(th); }
+      else sx[best]+=x; sy[best]+=y; c[best]++;
+    }
+    for(let p=0;p<n;p++) if(c[p]){
+      plates[p].x=state.world?((Math.atan2(sxs[p],sxc[p])/(Math.PI*2)+1)*GW%GW):sx[p]/c[p];
+      plates[p].y=sy[p]/c[p];
+    }
+  }
+  /* When world structure is on, reclassify plate bases using the continentality field */
+  if(state.world_structure.enabled && continentalField){
+    const ws=state.world_structure, dScale=0.5+ws.oceanDepth*0.5;
+    for(let p=0;p<plates.length;p++){
+      const xi=Math.min(GW-1,Math.max(0,Math.round(plates[p].x)));
+      const yi=Math.min(GH-1,Math.max(0,Math.round(plates[p].y)));
+      const C=continentalField[yi*GW+xi];
+      plates[p].base = C>=0 ? (0.6+C*0.4) : -(0.5+Math.abs(C)*0.5)*dScale;  // continental positive, oceanic negative
+    }
+  }
+}
+/* assignPlates: Jump Flood Algorithm (JFA) — O(N log N) Voronoi rasterisation
+   per doc §9. Replaces the O(N × plates) brute-force nested loop.
+   Warp field displaces sample positions. World mode wraps x.                   */
+function assignPlates(){
+  const n=GW*GH, wrap=!!state.world;
+  /* seed: for each pixel, find the nearest plate centre in warp-displaced space */
+  const nearest=new Int16Array(n).fill(-1); // plate index at each cell
+  const bestD2=new Float32Array(n).fill(1e30);
+  /* Seed each plate's nearest cell to its centre (warped) */
+  for(let p=0;p<plates.length;p++){
+    const cx=plates[p].x|0, cy=Math.max(0,Math.min(GH-1,plates[p].y|0));
+    const wx_=cx<GW?cx:0, wy_=Math.max(0,Math.min(GH-1,cy));
+    const i=wy_*GW+wx_; nearest[i]=p; bestD2[i]=0;
+  }
+  /* JFA passes: step size halves each pass */
+  const maxStep=1<<Math.ceil(Math.log2(Math.max(GW,GH)));
+  for(let step=maxStep>>1; step>=1; step>>=1){
+    for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+      const i=y*GW+x;
+      const ax=warpX?x+warpX[i]:x, ay=warpY?y+warpY[i]:y;
+      for(let dy=-step; dy<=step; dy+=step){
+        for(let dx=-step; dx<=step; dx+=step){
+          if(!dx&&!dy) continue;
+          let nx_=x+dx, ny_=y+dy;
+          if(wrap){ nx_=((nx_)%GW+GW)%GW; } else { if(nx_<0||nx_>=GW)continue; }
+          if(ny_<0||ny_>=GH) continue;
+          const j=ny_*GW+nx_; const p=nearest[j]; if(p<0) continue;
+          let ddx=ax-plates[p].x; if(wrap) ddx=ddx-Math.round(ddx/GW)*GW;
+          const ddy=ay-plates[p].y, d2=ddx*ddx+ddy*ddy;
+          if(d2<bestD2[i]){ bestD2[i]=d2; nearest[i]=p; }
+        }
+      }
+    }
+  }
+  /* copy result; any still-unassigned cell falls back to brute-force (rare) */
+  for(let i=0;i<n;i++){
+    if(nearest[i]>=0){ plateId[i]=nearest[i]; continue; }
+    const x=i%GW, y=(i/GW)|0, ax=warpX?x+warpX[i]:x, ay=warpY?y+warpY[i]:y;
+    let best=0,bd=Infinity;
+    for(let p=0;p<plates.length;p++){ let dx=ax-plates[p].x; if(wrap)dx=dx-Math.round(dx/GW)*GW; const d=dx*dx+(ay-plates[p].y)**2; if(d<bd){bd=d;best=p;} }
+    plateId[i]=best;
+  }
+}
+function computeStress(){
+  const raw=new Float32Array(GW*GH); boundaryMask=new Uint8Array(GW*GH);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x, a=plateId[i];
+    const ns=[]; if(x+1<GW) ns.push(i+1); if(y+1<GH) ns.push(i+GW);
+    if(state.world && x===GW-1) ns.push(y*GW);                            // wrap: right-edge checks left-edge neighbour
+    for(const j of ns){ const b=plateId[j];
+      if(b!==a){ boundaryMask[i]=1; boundaryMask[j]=1; const A=plates[a], B=plates[b];
+        let nx=B.x-A.x, ny=B.y-A.y; const nl=Math.hypot(nx,ny)||1; nx/=nl; ny/=nl;
+        const C=((A.vx-B.vx)*nx+(A.vy-B.vy)*ny)*state.tect.vel; raw[i]+=C; raw[j]+=C; } }
+  }
+  stressField=gaussBlur(raw, state.tect.blurR);
+  let mx=1e-6; for(let i=0;i<stressField.length;i++){ const v=Math.abs(stressField[i]); if(v>mx)mx=v; }
+  for(let i=0;i<stressField.length;i++) stressField[i]/=mx;
+}
+function distanceToBoundary(){
+  const INF=1e9, d=new Float32Array(GW*GH);
+  for(let i=0;i<d.length;i++) d[i]=boundaryMask[i]?0:INF;
+  const id=(x,y)=>y*GW+x;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ let v=d[id(x,y)]; if(x>0)v=Math.min(v,d[id(x-1,y)]+1); if(y>0)v=Math.min(v,d[id(x,y-1)]+1); if(x>0&&y>0)v=Math.min(v,d[id(x-1,y-1)]+1.4142); if(x<GW-1&&y>0)v=Math.min(v,d[id(x+1,y-1)]+1.4142); d[id(x,y)]=v; }
+  for(let y=GH-1;y>=0;y--)for(let x=GW-1;x>=0;x--){ let v=d[id(x,y)]; if(x<GW-1)v=Math.min(v,d[id(x+1,y)]+1); if(y<GH-1)v=Math.min(v,d[id(x,y+1)]+1); if(x<GW-1&&y<GH-1)v=Math.min(v,d[id(x+1,y+1)]+1.4142); if(x>0&&y<GH-1)v=Math.min(v,d[id(x-1,y+1)]+1.4142); d[id(x,y)]=v; }
+  return d;
+}
+/* ===================== physical coupling fields (doc §4.2, §6.1, §6.2) =====================
+   Three fields that add geological realism by coupling existing fields (stress, age, crust type)
+   rather than by geometric subdivision. Computed after stress+age are ready in generate().     */
+
+/* F(x): lithospheric flexure — broad isostatic response to plate boundary loads.
+   Seeds from boundary stress, blurs at 3× the stress radius.  Produces:
+   · gentle positive arch (forebulge) flanking mountain ranges
+   · continental shelves (positive halo at ocean-continent transition)
+   · foreland basins (negative depression between mountains and craton)      */
+function computeFlexure(){
+  const n=GW*GH;
+  const raw=new Float32Array(n);
+  for(let i=0;i<n;i++) if(boundaryMask[i]) raw[i]=stressField[i];  // seed only from boundaries
+  const broad=gaussBlur(raw, state.tect.blurR*3);                   // flexural wavelength >> stress wavelength
+  let mx=1e-6; for(let i=0;i<n;i++){const v=Math.abs(broad[i]); if(v>mx)mx=v;}
+  for(let i=0;i<n;i++) flexureField[i]=broad[i]/mx;
+}
+
+/* C(x): crustal heterogeneity — low-frequency noise modulated by tectonic age.
+   Old stable cratons (high ageField) show more internal diversity (varied basement).
+   Near-boundary zones are dominated by tectonic stress and need less heterogeneity.  */
+function computeHeterogeneity(){
+  const n=GW*GH, seed=state.tect.seed^0x44bb, hf=1.5;  // hf < nf(5) = coarser than main noise
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const i=y*GW+x;
+    const wx=warpX?x+warpX[i]:x, wy=warpY?y+warpY[i]:y;
+    const lowN=(state.world
+      ? pfbm(wx*hf/GW, wy*hf/GW, seed, Math.max(2,Math.round(hf)))
+      : fbm(wx*hf/GW, wy*hf/GW, seed)) - 0.5;
+    /* stronger in old stable interiors; weaker near active boundaries */
+    heterogeneityField[i]=lowN*(0.3+0.7*ageField[i]);
+  }
+  let mx=1e-6; for(let i=0;i<n;i++){const v=Math.abs(heterogeneityField[i]); if(v>mx)mx=v;}
+  for(let i=0;i<n;i++) heterogeneityField[i]/=mx;
+}
+
+/* R(x): erosion resistance — rock hardness from plate type + crustal age.
+   Old continental shields → high R (peneplains, slow incision).
+   Young volcanic arcs / oceanic crust → low R (deep canyons, rapid erosion).
+   Used in streamPowerErode to spatially modulate erodibility K.                */
+function computeResistance(){
+  const n=GW*GH;
+  for(let i=0;i<n;i++){
+    const pl=plates[plateId[i]];
+    const crustal=Math.max(0,pl.base);     // positive base = continental crust
+    resistanceField[i]=Math.min(1, crustal*0.6+ageField[i]*0.4);
+  }
+}
+function generate(){
+  generateContinentalityField();
+  computeWarp(); buildPlates(); assignPlates(); computeStress();
+  computeFlexure();                                                          // needs boundaryMask + stressField
+  baseField=new Float32Array(GW*GH);
+  for(let i=0;i<baseField.length;i++) baseField[i]=plates[plateId[i]].base;
+  baseField=gaussBlur(baseField, Math.max(2, state.tect.blurR*0.35));
+  const dRaw=distanceToBoundary();
+  let maxd=1e-6; for(let i=0;i<dRaw.length;i++) if(dRaw[i]<1e8 && dRaw[i]>maxd) maxd=dRaw[i];
+  ageField=new Float32Array(GW*GH);
+  for(let i=0;i<ageField.length;i++) ageField[i]=Math.min(1,dRaw[i]/maxd);
+  computeHeterogeneity();                                                    // needs ageField + warpX/Y
+  computeResistance();                                                       // needs ageField + plateId + plates
+  const nf=5.0, seed=state.tect.seed, A=state.tect.alpha, B=state.tect.beta, ageInf=state.tect.age;
+  const Fwt=state.tect.flexure, Hwt=state.tect.hetero;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x; const T=stressField[i], base=baseField[i]; const rug=Math.exp(-ageField[i]*(1+ageInf*6));
+    const wx = warpX ? x+warpX[i] : x, wy = warpY ? y+warpY[i] : y;
+    let N=(state.world
+      ? (state.tect.ridged ? pridged(wx*nf/GW, wy*nf/GW, seed, 5) : pfbm(wx*nf/GW, wy*nf/GW, seed, 5))
+      : (state.tect.ridged ? ridged(wx*nf/GW, wy*nf/GW, seed)     : fbm(wx*nf/GW, wy*nf/GW, seed))) - 0.5;
+    /* h = tectonic + flexure + crustal heterogeneity + noise (doc §4.1-4.3, §6.1) */
+    field[i]=0.5 + A*(0.40*base + 0.50*T)
+           + Fwt*flexureField[i]           // broad isostatic response → shelves, foreland basins
+           + Hwt*heterogeneityField[i]     // within-plate crustal diversity → craton topography
+           + B*N*(0.25+0.75*rug);          // fBm noise: rough near boundaries, smooth in interiors
+  }
+  normalize();
+  // ---- volcanism & impacts: feature stamping after mountain-building (per geological pipeline) ----
+  volcanicField.fill(0); impactField.fill(0);
+  stampVolcanoes();
+  stampCraters();
+  for(let i=0;i<field.length;i++){ if(field[i]<0)field[i]=0; else if(field[i]>1)field[i]=1; }
+  /* natural order: structural drainage → climate → discharge-weighted drainage
+     (coupled like an LEM iteration; docs/research/pipeline-order-audit.md §gap 1) */
+  computeFlow(); refreshClimate(); computeFlow(true); renderNow();
+}
+
+/* ===================== volcanism (provinces on plate boundaries + hotspots) ===================== */
+function stampOneVolcano(cx,cy,radCells,heightM,age){
+  let H=(heightM/state.peakM)*0.9*(1-age*0.5); const R=Math.max(2,radCells), caldera=heightM>1000;
+  const x0=Math.max(0,(cx-R)|0),x1=Math.min(GW-1,(cx+R)|0),y0=Math.max(0,(cy-R)|0),y1=Math.min(GH-1,(cy+R)|0);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy); if(d>R)continue; const t=d/R;
+    let add=H*Math.pow(1-t,1.6-age*0.8); if(caldera&&t<0.16) add-=H*0.5*(1-t/0.16);
+    const i=y*GW+x; field[i]+=add; if(field[i]>1)field[i]=1; else if(field[i]<0)field[i]=0;
+    volcanicField[i]=Math.max(volcanicField[i],(1-t)*(1-age)); }
+}
+function stampVolcanoes(){
+  if(state.volc.count<=0) return;
+  if(state.volc.provinces) stampVolcanoesProvinces();
+  else stampVolcanoesSimple();
+}
+/* shared: pick a power-law size class (70/25/5) and stamp one volcano; returns [x,y] or null */
+function placeSizedVolcano(x,y,rng,age){
+  if(x<0||y<0||x>=GW-1||y>=GH-1) return null;
+  const cellKm=state.mapWidthKm/GW; const r=rng(); let hM,radKm;
+  if(r<0.70){ hM=200+rng()*800;  radKm=2+rng()*8;  }
+  else if(r<0.95){ hM=1000+rng()*2000; radKm=10+rng()*20; }
+  else { hM=3000+rng()*4000; radKm=30+rng()*50; }
+  hM=Math.min(hM, state.peakM*0.95);
+  stampOneVolcano(x,y, radKm/cellKm, hM, age); return [x,y];
+}
+/* simple mode (v0.013 behaviour): volcanoes dusted along any boundary + hotspots */
+function stampVolcanoesSimple(){
+  const v=state.volc, rng=mulberry32((state.tect.seed^0x5bf03635)>>>0);
+  const bc=[]; for(let i=0;i<boundaryMask.length;i++) if(boundaryMask[i]) bc.push(i);
+  let placed=0,guard=0;
+  while(placed<v.count && guard<v.count*40){ guard++;
+    let cx,cy; if(bc.length&&rng()<0.8){ const i=bc[(rng()*bc.length)|0]; cx=i%GW; cy=(i/GW)|0; } else { cx=(rng()*GW)|0; cy=(rng()*GH)|0; }
+    cx+=(rng()*2-1)*6; cy+=(rng()*2-1)*6;
+    if(placeSizedVolcano(cx,cy,rng,rng()*v.age)) placed++;
+  }
+}
+/* split boundary cells by stress sign: convergent (subduction) vs divergent (rift) */
+function classifyBoundaries(){
+  const conv=[], div=[], thr=0.05;
+  for(let i=0;i<boundaryMask.length;i++){ if(!boundaryMask[i])continue; const s=stressField[i]; if(s>thr)conv.push(i); else if(s<-thr)div.push(i); }
+  return {conv,div};
+}
+/* place a province's volcanoes: arc/rift follow the matching boundary (spaced); hotspot = age-progressive chain along plate drift */
+function placeProvinceVolcanoes(type,cx,cy,radProv,count,conv,div,rng,cellKm){
+  const placed=[];
+  if(type==='hotspot'){
+    const pl=plates[plateId[(cy|0)*GW+(cx|0)]]; let ux=pl.vx,uy=pl.vy; const L=Math.hypot(ux,uy)||1; ux/=L; uy/=L;
+    const step=(80+rng()*70)/cellKm;
+    for(let n=0;n<count;n++){
+      const t=n-(count-1)/2;                                   // centre the chain on the province point
+      const x=cx+ux*step*t+(rng()*2-1)*6, y=cy+uy*step*t+(rng()*2-1)*6;
+      const age=Math.min(1,(n/Math.max(1,count-1))*0.85 + rng()*state.volc.age*0.4);  // older down-chain
+      const p=placeSizedVolcano(x,y,rng,age); if(p)placed.push(p);
+    }
+    return placed;
+  }
+  const pool=(type==='arc')?conv:div, cand=[];
+  for(const i of pool){ const x=i%GW,y=(i/GW)|0; if(Math.hypot(x-cx,y-cy)<=radProv) cand.push(i); }
+  const sp=(50+rng()*100)/cellKm;                              // 50–150 km along-arc spacing
+  if(cand.length===0){ for(let n=0;n<count;n++){ const a=rng()*6.283,r=rng()*radProv*0.5; const p=placeSizedVolcano(cx+Math.cos(a)*r,cy+Math.sin(a)*r,rng,rng()*state.volc.age); if(p)placed.push(p);} return placed; }
+  for(let k=cand.length-1;k>0;k--){ const j=(rng()*(k+1))|0; const t=cand[k];cand[k]=cand[j];cand[j]=t; }
+  const chosen=[];
+  for(const i of cand){ const x=i%GW,y=(i/GW)|0; let ok=true; for(const c of chosen){ if(Math.hypot(x-(c%GW),y-((c/GW)|0))<sp){ok=false;break;} } if(ok){ chosen.push(i); if(chosen.length>=count)break; } }
+  let pc=0;
+  for(const i of chosen){ const x=i%GW,y=(i/GW)|0; const p=placeSizedVolcano(x+(rng()*2-1)*6,y+(rng()*2-1)*6,rng,rng()*state.volc.age); if(p)placed.push(p); pc++; }
+  while(pc<count){ const base=chosen.length?chosen[(rng()*chosen.length)|0]:cand[(rng()*cand.length)|0]; const bx=base%GW,by=(base/GW)|0; const p=placeSizedVolcano(bx+(rng()*2-1)*8,by+(rng()*2-1)*8,rng,rng()*state.volc.age); if(p)placed.push(p); pc++; }
+  return placed;
+}
+/* province mode: cluster into a few provinces, type by 75/15/10 (subduction/rift/hotspot) */
+function stampVolcanoesProvinces(){
+  const v=state.volc, rng=mulberry32((state.tect.seed^0x5bf03635)>>>0);
+  const {conv,div}=classifyBoundaries(), cellKm=state.mapWidthKm/GW;
+  const nProv=Math.max(1,Math.min(7,Math.round(v.count/7))); let remaining=v.count;
+  for(let pi=0; pi<nProv && remaining>0; pi++){
+    const roll=rng(); let type = roll<0.75?'arc':(roll<0.90?'rift':'hotspot');
+    if(type==='arc'&&!conv.length) type=div.length?'rift':'hotspot';
+    if(type==='rift'&&!div.length) type=conv.length?'arc':'hotspot';
+    let cx,cy,radKmP;
+    if(type==='arc'){ const i=conv[(rng()*conv.length)|0]; cx=i%GW; cy=(i/GW)|0; radKmP=100+rng()*200; }     // island arc 100–300 km
+    else if(type==='rift'){ const i=div[(rng()*div.length)|0]; cx=i%GW; cy=(i/GW)|0; radKmP=200+rng()*400; } // rift zone 200–600 km
+    else { cx=(rng()*GW)|0; cy=(rng()*GH)|0; radKmP=500+rng()*500; }                                          // hotspot chain 500–1000 km
+    const provLeft=nProv-pi; let sub=Math.max(1,Math.round(remaining/provLeft*(0.6+0.8*rng()))); if(sub>remaining)sub=remaining;
+    placeProvinceVolcanoes(type,cx,cy,radKmP/cellKm,sub,conv,div,rng,cellKm);
+    remaining-=sub;
+  }
+}
+
+/* ===================== impacts (Poisson + D^-2 sizes) ===================== */
+function stampOneCrater(cx,cy,radCells,large,basin,age){
+  const R=Math.max(1.5,radCells); let depth=Math.min(0.4,0.02+radCells*0.004)*(1-age*0.8); const rim=depth*0.25;
+  const x0=Math.max(0,(cx-R*1.3)|0),x1=Math.min(GW-1,(cx+R*1.3)|0),y0=Math.max(0,(cy-R*1.3)|0),y1=Math.min(GH-1,(cy+R*1.3)|0);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy); const t=d/R; const i=y*GW+x;
+    if(t<1){ field[i]+= -depth*(1-t*t); if(large&&t<0.18) field[i]+=depth*0.5*(1-t/0.18); }
+    if(t>0.85&&t<1.25){ const rt=1-Math.abs(t-1.05)/0.2; if(rt>0) field[i]+=rim*rt; }
+    if(basin&&t<1){ field[i]+= Math.cos(t*Math.PI*3)*depth*0.08; }
+    if(field[i]<0)field[i]=0; else if(field[i]>1)field[i]=1; if(d<R) impactField[i]=Math.max(impactField[i],1-t); }
+}
+function stampCraters(){
+  const c=state.crater; if(c.count<=0)return; const rng=mulberry32((state.tect.seed^0x27d4eb2f)>>>0);
+  const cellKm=state.mapWidthKm/GW; const big=[]; let placed=0,guard=0;
+  while(placed<c.count && guard<c.count*40){ guard++; const cx=(rng()*GW)|0, cy=(rng()*GH)|0;
+    const r=rng(); let radKm,large=false,basin=false; if(r<0.90){radKm=0.5+rng()*4.5;} else if(r<0.99){radKm=5+rng()*20;} else {radKm=25+rng()*175; large=true; if(radKm>200)basin=true;}
+    const radCells=(radKm*Math.pow(state.planet.g,-0.22))/cellKm;   /* crater size ~ g^-0.22 (G1) */
+    if(large){ let ok=true; for(const p of big){ if(Math.hypot(p[0]-cx,p[1]-cy)<(p[2]+radCells)*0.8){ok=false;break;} } if(!ok)continue; big.push([cx,cy,radCells]); }
+    stampOneCrater(cx,cy,radCells,large,basin,rng()*c.age); placed++; }
+}
+
+/* ===================== erosion · droplet ===================== */
+/* dropletKernel is SELF-CONTAINED by design: no module globals, everything arrives via
+   arguments. It is stringified (Function.prototype.toString) and shipped to a Web Worker
+   (W0, docs/research/engine-optimization.md) — adding any outer reference will break the
+   worker path. The self-containment is asserted in the test suite. Mutates fld in place.
+   Numerics replicate the former inline loop exactly (same RNG, same op order). */
+function dropletKernel(fld, rain, W, H, P, onProgress){
+  const mul=function(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; };
+  const rng=mul((P.seed^0x9e3779b9)>>>0);
+  const bDX=[], bDY=[], bW=[];
+  { const R=P.radius; let sum=0; const w=[];
+    for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){ const d2=dx*dx+dy*dy; if(d2<=R*R){ const wt=1-Math.sqrt(d2)/R; bDX.push(dx); bDY.push(dy); w.push(wt); sum+=wt; } }
+    for(let k=0;k<w.length;k++) bW.push(w[k]/sum); }
+  function hgrad(px,py){
+    const nx=px|0, ny=py|0, fx=px-nx, fy=py-ny, i=ny*W+nx;
+    const h00=fld[i], h10=fld[i+1], h01=fld[i+W], h11=fld[i+W+1];
+    const gradX=(h10-h00)*(1-fy)+(h11-h01)*fy, gradY=(h01-h00)*(1-fx)+(h11-h10)*fx;
+    const height=h00*(1-fx)*(1-fy)+h10*fx*(1-fy)+h01*(1-fx)*fy+h11*fx*fy;
+    return {height,gradX,gradY};
+  }
+  function deposit(nx,ny,fx,fy,amount){ const i=ny*W+nx; fld[i]+=amount*(1-fx)*(1-fy); if(nx+1<W) fld[i+1]+=amount*fx*(1-fy); if(ny+1<H) fld[i+W]+=amount*(1-fx)*fy; if(nx+1<W&&ny+1<H) fld[i+W+1]+=amount*fx*fy; }
+  function scrape(cx,cy,amount){ for(let k=0;k<bDX.length;k++){ const x=cx+bDX[k], y=cy+bDY[k]; if(x<0||y<0||x>=W||y>=H)continue; const i=y*W+x; fld[i]-=amount*bW[k]; if(fld[i]<0)fld[i]=0; } }
+  const ck=P.ck, progEvery=Math.max(1,(P.droplets/25)|0);
+  for(let d=0; d<P.droplets; d++){
+    if(onProgress && d%progEvery===0) onProgress(d/P.droplets);
+    /* spawn ∝ precipitation: humid cells get the fluvial work, deserts stay
+       weathering-limited (docs/research/pipeline-order-audit.md §gap 3) */
+    let px,py,tries=0;
+    do{ px=rng()*(W-1); py=rng()*(H-1); }
+    while(ck>0 && rng()>0.15+0.85*rain[(py|0)*W+(px|0)] && ++tries<16);
+    let dx=0,dy=0, speed=P.initSpeed, water=P.initWater, sed=0;
+    for(let life=0; life<P.maxLifetime; life++){
+      const nx=px|0, ny=py|0, fx=px-nx, fy=py-ny; const hg=hgrad(px,py);
+      dx=dx*P.inertia - hg.gradX*(1-P.inertia); dy=dy*P.inertia - hg.gradY*(1-P.inertia);
+      const len=Math.hypot(dx,dy); if(len<1e-6) break; dx/=len; dy/=len; px+=dx; py+=dy;
+      if(px<0||py<0||px>=W-1||py>=H-1) break;
+      const dH=hgrad(px,py).height - hg.height;
+      const cap=Math.max(-dH,P.minSlope)*speed*water*P.capacity;
+      if(sed>cap || dH>0){ const dep=dH>0?Math.min(dH,sed):(sed-cap)*P.deposit; sed-=dep; deposit(nx,ny,fx,fy,dep); }
+      else { const rf=ck>0?rain[ny*W+nx]:1; const ero=Math.min((cap-sed)*P.erode*(1+ck*rf),-dH); sed+=ero; scrape(nx,ny,ero); }
+      speed=Math.sqrt(Math.max(0, speed*speed + (-dH)*P.gravity*P.g)); water*=(1-P.evaporate); if(water<1e-3) break;   /* droplet accel ~ g (G1) */
+    }
+  }
+  if(onProgress) onProgress(1);
+  return fld;
+}
+/* ===================== GPU acceleration · WebGL2 GPGPU (CPU fallback) =====================
+   Heavy grid-parallel passes run on the GPU when supported. GPU code can't be unit-tested in
+   this build environment, so the framework self-tests at init and each op is validated against
+   the CPU on a small grid before it's trusted; any failure or mismatch disables that GPU path
+   and the work silently runs on the CPU. The framework is general — weather, hillslope diffusion
+   and stream-power incision are designed to plug into the same texture-pingpong runner next. */
+const GPU = {
+  ok:false, enabled:false, thermalOK:false, diffuseOK:false, polylineOK:false, blurOK:false, normOK:false, tempOK:false, coastOK:false, gl:null, lastMs:0, lastDev:'CPU', _w:0, _h:0, _rgba:null, A:null, B:null,
+  _vs:`#version 300 es
+in vec2 aPos; void main(){ gl_Position=vec4(aPos,0.0,1.0); }`,
+  _fsTest:`#version 300 es
+precision highp float; uniform sampler2D uH; out vec4 o;
+void main(){ o=vec4(texelFetch(uH,ivec2(gl_FragCoord.xy),0).r*3.0,0.0,0.0,1.0); }`,
+  _fsDiffuse:`#version 300 es
+precision highp float; uniform sampler2D uH; uniform float uD; out vec4 o;
+void main(){ ivec2 p=ivec2(gl_FragCoord.xy),s=textureSize(uH,0); float h=texelFetch(uH,p,0).r;
+  ivec2 L=ivec2((p.x-1+s.x)%s.x,p.y), R=ivec2((p.x+1)%s.x,p.y);
+  ivec2 up=ivec2(p.x,max(0,p.y-1)), dw=ivec2(p.x,min(s.y-1,p.y+1));
+  float lap=texelFetch(uH,L,0).r+texelFetch(uH,R,0).r+texelFetch(uH,up,0).r+texelFetch(uH,dw,0).r-4.0*h;
+  o=vec4(clamp(h+uD*lap,0.0,1.0),0.0,0.0,1.0); }`,
+  /* polyline sculpt shader: each draw call applies one line segment worth of brush */
+  _fsPoly:`#version 300 es
+precision highp float;
+uniform sampler2D uH; uniform vec2 uP0,uP1; uniform float uR,uStr; uniform int uBrush;
+out vec4 o;
+void main(){
+  ivec2 px=ivec2(gl_FragCoord.xy); float h=texelFetch(uH,px,0).r;
+  vec2 pos=vec2(px); vec2 d=uP1-uP0; float len2=dot(d,d);
+  float t=(len2>0.001)?clamp(dot(pos-uP0,d)/len2,0.0,1.0):0.0;
+  vec2 cl=uP0+t*d; float dist=length(pos-cl);
+  if(dist>=uR){ o=vec4(h,0.0,0.0,1.0); return; }
+  float fall=1.0-dist/uR;
+  vec2 dir=(len2>0.001)?normalize(d):vec2(1.0,0.0);
+  vec2 perp=vec2(-dir.y,dir.x);         // perpendicular to segment
+  float pd=dot(pos-cl,perp);            // signed distance from segment axis (left-right of path)
+  if(uBrush==0)       h+=uStr*fall*0.06;
+  else if(uBrush==1)  h-=uStr*fall*0.06;
+  else if(uBrush==2){ float w=uR*0.28; h+=uStr*0.05*exp(-pd*pd/(w*w))*fall; }
+  else if(uBrush==3){ float cW=uR*0.18,wW=uR*0.45;
+    if(abs(pd)<cW)    h-=uStr*0.07*(1.0-abs(pd)/cW)*fall;
+    else if(abs(pd)<wW) h+=uStr*0.025*(1.0-(abs(pd)-cW)/(wW-cW))*fall; }
+  else if(uBrush==4){ float sp=smoothstep(0.0,uR*0.10,abs(pd));
+    h+=uStr*sp*(pd>0.0?-0.055:0.055)*fall; }
+  o=vec4(clamp(h,0.0,1.0),0.0,0.0,1.0);
+}`,
+  /* separable box blur — H pass: uniform loop bound (GLSL ES 3.00 allows dynamic loops) */
+  _fsBlurH:`#version 300 es
+precision highp float; uniform sampler2D uTex; uniform int uR; uniform int uW; uniform int uWrap;
+out vec4 o;
+void main(){ ivec2 p=ivec2(gl_FragCoord.xy); float s=0.0;
+  for(int k=-uR;k<=uR;k++){
+    int x=uWrap!=0?((p.x+k+uW)%uW):clamp(p.x+k,0,uW-1); s+=texelFetch(uTex,ivec2(x,p.y),0).r; }
+  o=vec4(s/float(2*uR+1),0.0,0.0,1.0); }`,
+  /* V pass */
+  _fsBlurV:`#version 300 es
+precision highp float; uniform sampler2D uTex; uniform int uR; uniform int uHt;
+out vec4 o;
+void main(){ ivec2 p=ivec2(gl_FragCoord.xy); float s=0.0;
+  for(int k=-uR;k<=uR;k++) s+=texelFetch(uTex,ivec2(p.x,clamp(p.y+k,0,uHt-1)),0).r;
+  o=vec4(s/float(2*uR+1),0.0,0.0,1.0); }`,
+  /* normalize: CPU finds min/max, GPU applies linear map */
+  _fsNorm:`#version 300 es
+precision highp float; uniform sampler2D uTex; uniform float uMin,uRange;
+out vec4 o;
+void main(){ float v=texelFetch(uTex,ivec2(gl_FragCoord.xy),0).r; o=vec4((v-uMin)/uRange,0.0,0.0,1.0); }`,
+  /* temperature per cell: T = seaBaseline − lapse*elevation, capped at sea for ocean cells */
+  _fsTemp:`#version 300 es
+precision highp float; uniform sampler2D uField;
+uniform float uSea,uEqT,uPoT,uLapse,uLatT,uLatB,uMpu;
+out vec4 o;
+void main(){ ivec2 px=ivec2(gl_FragCoord.xy); float h=texelFetch(uField,px,0).r;
+  float frac=float(px.y)/float(textureSize(uField,0).y-1);
+  float lat=(uLatT-frac*(uLatT-uLatB))*3.14159265/180.0;
+  float tSea=uPoT+(uEqT-uPoT)*max(0.0,cos(lat));
+  float T=(h<uSea)?tSea:tSea-uLapse*((h-uSea)*uMpu/1000.0);
+  o=vec4(T,0.0,0.0,1.0); }`,
+  /* coastal processes: sea cliffs (wave retreat) + estuary widening. Marsh handled on CPU. */
+  _fsCoast:`#version 300 es
+precision highp float; uniform sampler2D uField,uFlow;
+uniform float uSea,uWave,uEstD,uRThresh;
+out vec4 o;
+void main(){ ivec2 px=ivec2(gl_FragCoord.xy),sz=textureSize(uField,0);
+  float h=texelFetch(uField,px,0).r,delta=0.0;
+  if(h>=uSea){
+    ivec2 off4[4]; off4[0]=ivec2(-1,0); off4[1]=ivec2(1,0); off4[2]=ivec2(0,-1); off4[3]=ivec2(0,1);
+    float seaNb=0.0;
+    for(int i=0;i<4;i++){ ivec2 nb=clamp(px+off4[i],ivec2(0),sz-1);
+      if(texelFetch(uField,nb,0).r<uSea) seaNb+=1.0; }
+    if(seaNb>0.0) delta-=uWave*(seaNb/4.0)*0.002;
+    float fl=texelFetch(uFlow,px,0).r;
+    if(fl>uRThresh&&h<uSea+uEstD){
+      float ff=min(1.0,log(fl/uRThresh)/5.0);
+      delta-=0.003*ff*(1.0-(h-uSea)/uEstD)*uWave; }
+  }
+  o=vec4(clamp(h+delta,0.0,1.0),0.0,0.0,1.0); }`,
+  _fsThermal:`#version 300 es
+precision highp float; uniform sampler2D uH; uniform float uTalus; out vec4 o;
+float H(ivec2 p){ ivec2 s=textureSize(uH,0); p=clamp(p,ivec2(0),s-ivec2(1)); return texelFetch(uH,p,0).r; }
+float exc(ivec2 p){ float h=H(p),e=0.0,d;
+  d=h-H(p+ivec2(-1,0)); if(d>uTalus)e+=d-uTalus;
+  d=h-H(p+ivec2( 1,0)); if(d>uTalus)e+=d-uTalus;
+  d=h-H(p+ivec2(0,-1)); if(d>uTalus)e+=d-uTalus;
+  d=h-H(p+ivec2(0, 1)); if(d>uTalus)e+=d-uTalus; return e; }
+void main(){ ivec2 s=textureSize(uH,0); ivec2 p=ivec2(gl_FragCoord.xy); float h=H(p);
+  float ep=exc(p); float delta=(ep>0.0)?-min(h,ep*0.125):0.0;
+  ivec2 off[4]; off[0]=ivec2(-1,0); off[1]=ivec2(1,0); off[2]=ivec2(0,-1); off[3]=ivec2(0,1);
+  for(int k=0;k<4;k++){ ivec2 np=p+off[k]; if(np.x<0||np.y<0||np.x>=s.x||np.y>=s.y) continue;
+    float hn=H(np), d=hn-h; if(d>uTalus){ float en=exc(np); if(en>0.0) delta+=min(hn,en*0.125)*((d-uTalus)/en); } }
+  o=vec4(clamp(h+delta,0.0,1.0),0.0,0.0,1.0); }`,
+  _tag(s){ this._tagStr=s; const el=document.getElementById('gpuTag'); if(el) el.textContent=s; },
+  init(){ try{
+    const c=document.createElement('canvas'); c.width=c.height=4;
+    const gl=c.getContext('webgl2',{antialias:false,depth:false,stencil:false});
+    if(!gl){ this._tag('not supported'); return; }
+    if(!gl.getExtension('EXT_color_buffer_float')){ this._tag('no float buffers'); return; }
+    this.gl=gl;
+    this.pTest=this._prog(this._fsTest); this.pThermal=this._prog(this._fsThermal); this.pDiffuse=this._prog(this._fsDiffuse); this.pPoly=this._prog(this._fsPoly);
+    this.pBlurH=this._prog(this._fsBlurH); this.pBlurV=this._prog(this._fsBlurV);
+    this.pNorm=this._prog(this._fsNorm); this.pTemp=this._prog(this._fsTemp); this.pCoast=this._prog(this._fsCoast);
+    if(!this.pTest||!this.pThermal||!this.pDiffuse||!this.pPoly){ this._tag('shader error'); return; }
+    if(!this.pBlurH||!this.pBlurV||!this.pNorm||!this.pTemp||!this.pCoast){ this._tag('partial shader error'); }
+    const vao=gl.createVertexArray(); gl.bindVertexArray(vao);
+    const buf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1, 3,-1, -1,3]),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0); this._vao=vao;
+    if(!this._selfTest()){ this._tag('self-test failed'); return; }
+    this.ok=true; this.enabled=true; this.thermalOK=this._validateThermal(); this.diffuseOK=this._validateDiffuse(); this.polylineOK=!!this.pPoly;
+    this.blurOK=!!(this.pBlurH&&this.pBlurV); this.normOK=!!this.pNorm; this.tempOK=!!this.pTemp; this.coastOK=!!this.pCoast;
+    const ops=[this.thermalOK?'thermal':null,this.diffuseOK?'diffuse':null,this.polylineOK?'poly':null,this.blurOK?'blur':null,this.normOK?'norm':null,this.tempOK?'temp':null,this.coastOK?'coastal':null].filter(Boolean);
+    this._tag(ops.length?'active ('+ops.join('+')+')':'active (limited)');
+  }catch(e){ console.warn('GPU init failed',e); this.ok=false; this.enabled=false; this._tag('init error'); } },
+  _prog(fsSrc){ const gl=this.gl;
+    const vs=gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(vs,this._vs); gl.compileShader(vs);
+    if(!gl.getShaderParameter(vs,gl.COMPILE_STATUS)){ console.warn('VS',gl.getShaderInfoLog(vs)); return null; }
+    const fs=gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(fs,fsSrc); gl.compileShader(fs);
+    if(!gl.getShaderParameter(fs,gl.COMPILE_STATUS)){ console.warn('FS',gl.getShaderInfoLog(fs)); return null; }
+    const p=gl.createProgram(); gl.attachShader(p,vs); gl.attachShader(p,fs); gl.bindAttribLocation(p,0,'aPos'); gl.linkProgram(p);
+    if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ console.warn('LINK',gl.getProgramInfoLog(p)); return null; } return p; },
+  _mkTex(w,h){ const gl=this.gl, t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,w,h,0,gl.RGBA,gl.FLOAT,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    const f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+    const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE; gl.bindFramebuffer(gl.FRAMEBUFFER,null); return ok?{t,f}:null; },
+  _size(w,h){ const gl=this.gl; if(this._w===w&&this._h===h&&this.A) return true;
+    if(this.A){ gl.deleteTexture(this.A.t); gl.deleteFramebuffer(this.A.f); gl.deleteTexture(this.B.t); gl.deleteFramebuffer(this.B.f); }
+    const a=this._mkTex(w,h), b=this._mkTex(w,h); if(!a||!b){ this.A=null; return false; } this.A=a; this.B=b; this._w=w; this._h=h; this._rgba=new Float32Array(w*h*4); return true; },
+  _up(scalar,tex){ const gl=this.gl, n=this._w*this._h, r=this._rgba; for(let i=0,j=0;i<n;i++,j+=4){ r[j]=scalar[i]; r[j+1]=0; r[j+2]=0; r[j+3]=1; } gl.bindTexture(gl.TEXTURE_2D,tex); gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,this._w,this._h,0,gl.RGBA,gl.FLOAT,r); },
+  _down(fbo,out){ const gl=this.gl, n=this._w*this._h, r=this._rgba; gl.bindFramebuffer(gl.FRAMEBUFFER,fbo); gl.readPixels(0,0,this._w,this._h,gl.RGBA,gl.FLOAT,r); gl.bindFramebuffer(gl.FRAMEBUFFER,null); for(let i=0,j=0;i<n;i++,j+=4) out[i]=r[j]; },
+  _draw(){ const gl=this.gl; gl.bindVertexArray(this._vao); gl.drawArrays(gl.TRIANGLES,0,3); },
+  _selfTest(){ const gl=this.gl; if(!this._size(2,2)) return false; const inp=new Float32Array([1,2,3,4]); this._up(inp,this.A.t);
+    gl.useProgram(this.pTest); gl.viewport(0,0,2,2); gl.bindFramebuffer(gl.FRAMEBUFFER,this.B.f);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,this.A.t); gl.uniform1i(gl.getUniformLocation(this.pTest,'uH'),0); this._draw();
+    const out=new Float32Array(4); this._down(this.B.f,out); this._w=0;
+    for(let i=0;i<4;i++) if(Math.abs(out[i]-inp[i]*3)>1e-3) return false; return true; },
+  _thermal(passes,inp,w,h){ const gl=this.gl; if(!this._size(w,h)) throw new Error('alloc'); this._up(inp,this.A.t); let s=this.A,d=this.B;
+    gl.useProgram(this.pThermal); gl.viewport(0,0,w,h);
+    const uH=gl.getUniformLocation(this.pThermal,'uH'), uT=gl.getUniformLocation(this.pThermal,'uTalus');
+    for(let p=0;p<passes;p++){ gl.bindFramebuffer(gl.FRAMEBUFFER,d.f); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,s.t); gl.uniform1i(uH,0); gl.uniform1f(uT,state.erosion.talus); this._draw(); const t=s; s=d; d=t; }
+    const out=new Float32Array(w*h); this._down(s.f,out); return out; },
+  _validateThermal(){ try{ const w=40,h=28,n=w*h,a=new Float32Array(n); let sd=12345>>>0; for(let i=0;i<n;i++){ sd=(sd*1664525+1013904223)>>>0; a[i]=sd/4294967296; }
+    const cpu=a.slice(); erodeThermalCPU(3,cpu,w,h); const gpu=this._thermal(3,a,w,h); let md=0; for(let i=0;i<n;i++){ const dd=Math.abs(cpu[i]-gpu[i]); if(dd>md)md=dd; } return md<2e-3; }catch(e){ console.warn('thermal validate',e); return false; } },
+  _tempTex(arr){ /* create a scratch texture from an arbitrary float array */
+    const gl=this.gl, rgba=new Float32Array(arr.length*4);
+    for(let i=0,j=0;i<arr.length;i++,j+=4){rgba[j]=arr[i];rgba[j+1]=0;rgba[j+2]=0;rgba[j+3]=1;}
+    const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,this._w,this._h,0,gl.RGBA,gl.FLOAT,rgba);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    return t; },
+  /* GPU separable box blur: 3 H+V pass pairs ≈ Gaussian. Works on field in-place.
+     Only used for small-to-medium radii (pr ≤ 200). Caller can pass any GW×GH array. */
+  _blurPasses(inp, w, h, pr, wrapX){
+    const gl=this.gl; if(!this._size(w,h)) throw new Error('alloc'); this._up(inp,this.A.t); let s=this.A,d=this.B;
+    const uH=gl.getUniformLocation(this.pBlurH,'uTex'), uR_H=gl.getUniformLocation(this.pBlurH,'uR');
+    const uW=gl.getUniformLocation(this.pBlurH,'uW'), uWr=gl.getUniformLocation(this.pBlurH,'uWrap');
+    const uV=gl.getUniformLocation(this.pBlurV,'uTex'), uR_V=gl.getUniformLocation(this.pBlurV,'uR'), uHt=gl.getUniformLocation(this.pBlurV,'uHt');
+    gl.viewport(0,0,w,h);
+    for(let p=0;p<3;p++){
+      gl.useProgram(this.pBlurH); gl.bindFramebuffer(gl.FRAMEBUFFER,d.f); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,s.t);
+      gl.uniform1i(uH,0); gl.uniform1i(uR_H,pr); gl.uniform1i(uW,w); gl.uniform1i(uWr,wrapX?1:0); this._draw(); [s,d]=[d,s];
+      gl.useProgram(this.pBlurV); gl.bindFramebuffer(gl.FRAMEBUFFER,d.f); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,s.t);
+      gl.uniform1i(uV,0); gl.uniform1i(uR_V,pr); gl.uniform1i(uHt,h); this._draw(); [s,d]=[d,s];
+    }
+    const out=new Float32Array(w*h); this._down(s.f,out); return out; },
+  blurArr(arr, r){ /* public: blur a GW×GH float array, return new array */
+    const pr=Math.max(1,Math.round(r/1.6));
+    return this._blurPasses(arr,GW,GH,pr,!!state.world); },
+  norm(mn,mx){ /* public: normalize field in-place using pre-computed min/max */
+    const gl=this.gl; if(!this._size(GW,GH)) return; this._up(field,this.A.t);
+    const range=Math.max(1e-9,mx-mn);
+    gl.useProgram(this.pNorm); gl.viewport(0,0,GW,GH); gl.bindFramebuffer(gl.FRAMEBUFFER,this.B.f);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,this.A.t);
+    const uT=gl.getUniformLocation(this.pNorm,'uTex'),uMn=gl.getUniformLocation(this.pNorm,'uMin'),uRng=gl.getUniformLocation(this.pNorm,'uRange');
+    gl.uniform1i(uT,0); gl.uniform1f(uMn,mn); gl.uniform1f(uRng,range); this._draw();
+    const out=new Float32Array(GW*GH); this._down(this.B.f,out); field.set(out); },
+  temperature(latT,latB,mpu){ /* public: compute tempField on GPU */
+    const gl=this.gl,c=state.climate; if(!this._size(GW,GH)) return; this._up(field,this.A.t);
+    gl.useProgram(this.pTemp); gl.viewport(0,0,GW,GH); gl.bindFramebuffer(gl.FRAMEBUFFER,this.B.f);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,this.A.t);
+    gl.uniform1i(gl.getUniformLocation(this.pTemp,'uField'),0);
+    gl.uniform1f(gl.getUniformLocation(this.pTemp,'uSea'),state.seaLevel);
+    gl.uniform1f(gl.getUniformLocation(this.pTemp,'uEqT'),c.equatorTemp); gl.uniform1f(gl.getUniformLocation(this.pTemp,'uPoT'),c.poleTemp);
+    gl.uniform1f(gl.getUniformLocation(this.pTemp,'uLapse'),c.lapseRate*state.planet.g);   /* lapse ~ g (G1) */ gl.uniform1f(gl.getUniformLocation(this.pTemp,'uMpu'),mpu);
+    gl.uniform1f(gl.getUniformLocation(this.pTemp,'uLatT'),latT); gl.uniform1f(gl.getUniformLocation(this.pTemp,'uLatB'),latB);
+    this._draw();
+    const out=new Float32Array(GW*GH); this._down(this.B.f,out); tempField.set(out); },
+  coastal(passes){ /* public: GPU coastal (sea cliffs + estuary); marsh stays CPU */
+    const gl=this.gl,c=state.coastal,sea=state.seaLevel; if(!this._size(GW,GH)) return;
+    const tFlow=this._tempTex(flowField);
+    const uField=gl.getUniformLocation(this.pCoast,'uField'), uFlow=gl.getUniformLocation(this.pCoast,'uFlow');
+    const uSea=gl.getUniformLocation(this.pCoast,'uSea'), uWave=gl.getUniformLocation(this.pCoast,'uWave');
+    const uEstD=gl.getUniformLocation(this.pCoast,'uEstD'), uRThr=gl.getUniformLocation(this.pCoast,'uRThresh');
+    gl.useProgram(this.pCoast); gl.viewport(0,0,GW,GH);
+    gl.uniform1f(uSea,sea); gl.uniform1f(uWave,c.waveStr); gl.uniform1f(uEstD,c.estuaryDepth);
+    gl.uniform1f(uRThr,GW*GH*0.001);
+    this._up(field,this.A.t); let s=this.A,d=this.B;
+    for(let p=0;p<passes;p++){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,d.f);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,s.t); gl.uniform1i(uField,0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,tFlow); gl.uniform1i(uFlow,1);
+      this._draw(); [s,d]=[d,s];
+    }
+    const out=new Float32Array(GW*GH); this._down(s.f,out); field.set(out);
+    gl.deleteTexture(tFlow); },
+  _validateDiffuse(){ try{ const w=30,h=24,n=w*h,a=new Float32Array(n); let sd=9876>>>0; for(let i=0;i<n;i++){ sd=(sd*1664525+1013904223)>>>0; a[i]=sd/4294967296; } const cpu=a.slice(); hillslopeDiffuseCPU(2,0.1,cpu,w,h); const gpu=this._diffuse(2,0.1,a,w,h); let md=0; for(let i=0;i<n;i++){ const dd=Math.abs(cpu[i]-gpu[i]); if(dd>md)md=dd; } return md<1e-3; }catch(e){ console.warn('diffuse validate',e); return false; } },
+  polyline(pts, r, str, brushInt){ /* Apply polyline segments via GPU: each segment = one full-screen draw call */
+    const gl=this.gl; if(!this._size(GW,GH)) throw new Error('alloc');
+    this._up(field,this.A.t); let s=this.A, d=this.B;
+    gl.useProgram(this.pPoly); gl.viewport(0,0,GW,GH);
+    const uH=gl.getUniformLocation(this.pPoly,'uH'), uP0=gl.getUniformLocation(this.pPoly,'uP0');
+    const uP1=gl.getUniformLocation(this.pPoly,'uP1'), uR=gl.getUniformLocation(this.pPoly,'uR');
+    const uStr=gl.getUniformLocation(this.pPoly,'uStr'), uBrush=gl.getUniformLocation(this.pPoly,'uBrush');
+    gl.uniform1f(uR,r); gl.uniform1f(uStr,str); gl.uniform1i(uBrush,brushInt);
+    for(let i=0;i<pts.length-1;i++){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,d.f);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,s.t);
+      gl.uniform1i(uH,0); gl.uniform2f(uP0,pts[i].x,pts[i].y); gl.uniform2f(uP1,pts[i+1].x,pts[i+1].y);
+      this._draw(); const tmp=s; s=d; d=tmp;
+    }
+    const out=new Float32Array(GW*GH); this._down(s.f,out); field.set(out);
+  },
+  _diffuse(passes,D,inp,w,h){ const gl=this.gl; if(!this._size(w,h)) throw new Error('alloc'); this._up(inp,this.A.t); let s=this.A,d=this.B;
+    gl.useProgram(this.pDiffuse); gl.viewport(0,0,w,h);
+    const uH=gl.getUniformLocation(this.pDiffuse,'uH'), uD=gl.getUniformLocation(this.pDiffuse,'uD');
+    for(let p=0;p<passes;p++){ gl.bindFramebuffer(gl.FRAMEBUFFER,d.f); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,s.t); gl.uniform1i(uH,0); gl.uniform1f(uD,D); this._draw(); const t=s; s=d; d=t; }
+    const out=new Float32Array(w*h); this._down(s.f,out); return out; },
+  diffuse(passes,D){ const t0=performance.now(); const r=this._diffuse(passes,D,field,GW,GH); field.set(r); this.lastMs=performance.now()-t0; this.lastDev='GPU'; },
+  thermal(passes){ const t0=performance.now(); const r=this._thermal(passes,field,GW,GH); field.set(r); this.lastMs=performance.now()-t0; this.lastDev='GPU'; }
+};
+function perfShow(){ const el=document.getElementById('perfV'); if(el) el.textContent=GPU.lastMs.toFixed(0)+' ms · '+GPU.lastDev; }
+function erodeThermalCPU(passes, fld, w, h){ fld=fld||field; w=w||GW; h=h||GH; const talus=state.erosion.talus;
+  for(let pass=0;pass<passes;pass++){
+    const delta=new Float32Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const i=y*w+x, hh=fld[i]; let excess=0; const nb=[]; const ne=[[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+      for(const [nx,ny] of ne){ if(nx<0||ny<0||nx>=w||ny>=h)continue; const dh=hh-fld[ny*w+nx]; if(dh>talus){ nb.push([ny*w+nx,dh-talus]); excess+=dh-talus; } }
+      if(excess>0){ const move=Math.min(hh, excess*0.5*0.25); delta[i]-=move; for(const [j,e] of nb) delta[j]+=move*(e/excess); }
+    }
+    for(let i=0;i<w*h;i++){ fld[i]+=delta[i]; if(fld[i]<0)fld[i]=0; else if(fld[i]>1)fld[i]=1; }
+  }
+}
+function erodeThermal(passes){
+  if(GPU.enabled && GPU.thermalOK){ try{ GPU.thermal(passes); perfShow(); return; }catch(e){ console.warn('GPU thermal failed → CPU',e); GPU.thermalOK=false; GPU._tag('CPU (gpu error)'); } }
+  const t0=performance.now(); erodeThermalCPU(passes); GPU.lastMs=performance.now()-t0; GPU.lastDev='CPU'; perfShow();
+}
+/* ===================== hillslope diffusion · ∂z/∂t = D∇²z (hillslope equation, Doc 1 eq.3) ===================== */
+function hillslopeDiffuseCPU(passes,D,fld,w,h){ fld=fld||field; w=w||GW; h=h||GH; const ww=!!state.world&&w===GW;
+  for(let pass=0;pass<passes;pass++){
+    const delta=new Float32Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){ const i=y*w+x;
+      const xl=ww?(x-1+w)%w:(x>0?x-1:x), xr=ww?(x+1)%w:(x<w-1?x+1:x);
+      const L=fld[y*w+xl],R=fld[y*w+xr],U=y>0?fld[(y-1)*w+x]:fld[i],Dn=y<h-1?fld[(y+1)*w+x]:fld[i];
+      delta[i]=D*(L+R+U+Dn-4*fld[i]);
+    }
+    for(let i=0;i<w*h;i++){ fld[i]+=delta[i]; if(fld[i]<0)fld[i]=0; if(fld[i]>1)fld[i]=1; }
+  }
+}
+function hillslopeDiffuse(){
+  const D=state.erosion.diffuseD, passes=state.erosion.diffusePasses;
+  if(GPU.enabled && GPU.diffuseOK){ try{ GPU.diffuse(passes,D); perfShow(); computeFlow(true); refreshClimate(); renderNow(); return; }catch(e){ console.warn('GPU diffuse→CPU',e); GPU.diffuseOK=false; } }
+  const t0=performance.now(); hillslopeDiffuseCPU(passes,D); GPU.lastMs=performance.now()-t0; GPU.lastDev='CPU'; perfShow();
+  computeFlow(true); refreshClimate(); renderNow();
+}
+function dropletParams(p,ck){ return { droplets:p.droplets, inertia:p.inertia, capacity:p.capacity, minSlope:p.minSlope,
+  deposit:p.deposit, erode:p.erode, evaporate:p.evaporate, gravity:p.gravity, g:state.planet.g,
+  maxLifetime:p.maxLifetime, initSpeed:p.initSpeed, initWater:p.initWater, radius:p.radius, ck, seed:state.tect.seed }; }
+function erodeFinish(pre,p){
+  erodeThermal(p.thermalPasses);
+  for(let i=0;i<field.length;i++){ if(field[i]<0)field[i]=0; else if(field[i]>1)field[i]=1; }
+  isostaticRebound(pre);
+  computeFlow(true); refreshClimate(); renderNow();
+}
+function erode(){
+  const p=state.erosion, ck=state.stream.climateK||0, pre=field.slice();
+  dropletKernel(field, ck>0?rainField:null, GW, GH, dropletParams(p,ck));
+  erodeFinish(pre,p);
+}
+
+/* ==== W0: droplet erosion in a Web Worker (blob URL — works under file://) ====
+   Field/rain are COPIED in (main-thread field stays live for renders), result
+   transferred back. Falls back to the synchronous path when Workers are missing
+   or the worker errors. Thermal pass, rebound and climate refresh stay on the
+   main thread via erodeFinish(). */
+let _dropWorker=null, _dropBusy=false;
+function erodeAsync(){
+  if(_dropBusy) return;
+  const p=state.erosion, ck=state.stream.climateK||0;
+  let w=null;
+  try{
+    if(typeof Worker==='undefined') throw new Error('no Worker');
+    if(!_dropWorker){
+      const src=dropletKernel.toString()+
+        '\nself.onmessage=function(e){ var d=e.data; var f=new Float32Array(d.field), r=d.rain?new Float32Array(d.rain):null;'+
+        ' dropletKernel(f, r, d.W, d.H, d.P, function(pr){ self.postMessage({prog:pr}); });'+
+        ' self.postMessage({done:true, field:f.buffer}, [f.buffer]); };';
+      _dropWorker=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+    }
+    w=_dropWorker;
+  }catch(_){ withBusy('eroding…',erode); return; }
+  _dropBusy=true; busy.textContent='eroding… 0%'; busy.style.display='flex';
+  const pre=field.slice(), fieldCopy=field.slice(), rainCopy=ck>0?rainField.slice():null;
+  w.onerror=()=>{ _dropBusy=false; _dropWorker=null; withBusy('eroding…',erode); };
+  w.onmessage=e=>{
+    if(e.data.prog!=null){ busy.textContent='eroding… '+Math.round(e.data.prog*100)+'%'; return; }
+    if(e.data.done){
+      _dropBusy=false;
+      const r=new Float32Array(e.data.field);
+      if(r.length!==field.length){ busy.style.display='none'; return; }   // resolution changed mid-run: discard
+      field.set(r); busy.textContent='finishing…';
+      setTimeout(()=>{ erodeFinish(pre,p); busy.style.display='none'; },10);
+    }
+  };
+  const fb=fieldCopy.buffer, rb=rainCopy?rainCopy.buffer:null;
+  w.postMessage({field:fb, rain:rb, W:GW, H:GH, P:dropletParams(p,ck)}, rb?[fb,rb]:[fb]);
+}
+
+/* ===================== erosion · stream-power (Step 3, Cordonnier/Braun-Willett) ===================== */
+function MinHeap(){ this.p=[]; this.v=[]; }
+MinHeap.prototype.size=function(){return this.v.length;};
+MinHeap.prototype.push=function(prio,val){ const p=this.p,v=this.v; p.push(prio); v.push(val); let i=p.length-1; while(i>0){ const par=(i-1)>>1; if(p[par]<=p[i])break; let t=p[par];p[par]=p[i];p[i]=t; t=v[par];v[par]=v[i];v[i]=t; i=par; } };
+MinHeap.prototype.pop=function(){ const p=this.p,v=this.v; const rv=v[0]; const lp=p.pop(),lv=v.pop(); if(p.length){ p[0]=lp;v[0]=lv; let i=0,n=p.length; for(;;){ let l=2*i+1,r=2*i+2,s=i; if(l<n&&p[l]<p[s])s=l; if(r<n&&p[r]<p[s])s=r; if(s===i)break; let t=p[s];p[s]=p[i];p[i]=t; t=v[s];v[s]=v[i];v[i]=t; i=s; } } return rv; };
+function computeFlowRouting(){
+  const n=GW*GH;
+  /* reuse module-level typed arrays — no heap allocation for these (doc §7)   */
+  const receiver=ibuf(0,n); receiver.fill(-1);
+  const order=ibuf(1,n);
+  const dist=mbuf(3,n);
+  const done=ubuf(0,n); done.fill(0);
+  const filled=mbuf(4,n); filled.set(field);   // field snapshot — avoids field.slice()
+  const heap=new MinHeap();
+  const seed=(x,y)=>{ const i=y*GW+x; if(!done[i]){ done[i]=1; heap.push(filled[i],i); } };
+  for(let x=0;x<GW;x++){ seed(x,0); seed(x,GH-1); }
+  if(!state.world){ for(let y=0;y<GH;y++){ seed(0,y); seed(GW-1,y); } }
+  let cnt=0; const EPS=1e-5;
+  while(heap.size()){
+    const i=heap.pop(); order[cnt++]=i; const x=i%GW,y=(i/GW)|0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      if(!dx&&!dy)continue;
+      let nx=x+dx, ny=y+dy;
+      if(state.world){ nx=((nx)%GW+GW)%GW; } else { if(nx<0||nx>=GW)continue; }
+      if(ny<0||ny>=GH)continue;
+      const j=ny*GW+nx; if(done[j])continue; done[j]=1;
+      if(filled[j]<=filled[i]) filled[j]=filled[i]+EPS;
+      receiver[j]=i; dist[j]=Math.hypot(dx,dy); heap.push(filled[j],j);
+    }
+  }
+  return {receiver,order,dist};
+}
+function streamPowerErode(){
+  const sp=state.stream, n=GW*GH, sea=state.seaLevel; const pre=field.slice();
+  /* uplift field from stress (pooled — no allocation) */
+  const U=mbuf(0,n); U.fill(0); let ss=0;
+  for(let i=0;i<n;i++){ const s=stressField[i]; if(s>0)U[i]=s; ss+=Math.abs(s); }
+  if(ss<1e-3){ for(let i=0;i<n;i++) U[i]=Math.max(0,field[i]-0.3); }
+  for(let i=0;i<n;i++) U[i]*=sp.uplift;
+  const m=0.5, K=sp.k*state.planet.g, dt=1.0, dep=sp.deposit||0, ck=sp.climateK||0;   /* stream power ~ g (G1) */
+  /* route ONCE (not sp.iters times) — 15× fewer O(N log N) routing calls   */
+  const {receiver,order,dist}=computeFlowRouting();
+  const area=mbuf(1,n);
+  for(let it=0; it<sp.iters; it++){
+    area.fill(1);
+    for(let k=n-1;k>=0;k--){ const i=order[k], r=receiver[i]; if(r>=0) area[r]+=area[i]; }
+    const oldH=dep>0 ? (mbuf(5,n).set(field),mbuf(5,n)) : null;
+    for(let k=0;k<n;k++){ const i=order[k], r=receiver[i]; if(r<0)continue; const L=dist[i];
+      /* K spatially varies: old shields resist erosion; young arcs incise quickly (doc §6.2) */
+      const res=state.tect.resist*0.7*resistanceField[i];
+      const Ki=K*Math.max(0.05,1-res)*(1+ck*2*rainField[i]);
+      const C=Ki*dt*Math.pow(area[i],m)/L; field[i]=(field[i]+dt*U[i]+C*field[r])/(1+C); }
+    if(dep>0){
+      const sed=mbuf(2,n); sed.fill(0);
+      for(let i=0;i<n;i++) sed[i]=Math.max(0, oldH[i]+dt*U[i]-field[i]);
+      for(let k=n-1;k>=0;k--){
+        const i=order[k], r=receiver[i]; if(r<0) continue;
+        const slope=Math.max(1e-6, (field[i]-field[r])/(dist[i]||1));
+        const cap=0.005*Math.pow(area[i],0.5)*slope;
+        if(sed[i]>cap){ const d=(sed[i]-cap)*dep; field[i]+=d; sed[i]-=d; }
+        if(field[i]<=sea && sed[i]>0){ const d=sed[i]*dep*0.8; field[i]+=d; sed[i]-=d; }
+        sed[r]+=sed[i];
+      }
+    }
+  }
+  for(let i=0;i<n;i++){ if(field[i]<0)field[i]=0; else if(field[i]>1)field[i]=1; }
+  isostaticRebound(pre);
+  computeFlow(true); refreshClimate(); renderNow();
+}
+
+/* ===================== erosion · glacial (U-valley carving, cirque scooping) ===================== */
+function glacialErode(){
+  const gl=state.glacial, n=GW*GH, snowEl=state.seaLevel+(1-state.seaLevel)*gl.snowline; const pre=field.slice();
+  /* route ONCE — 8× fewer O(N log N) routing calls across all passes         */
+  const {receiver,order,dist}=computeFlowRouting();
+  const flow=mbuf(0,n), delta=mbuf(1,n);
+  for(let pass=0;pass<gl.passes;pass++){
+    flow.fill(1);
+    for(let k=n-1;k>=0;k--){ const i=order[k],r=receiver[i]; if(r>=0) flow[r]+=flow[i]; }
+    delta.fill(0);
+    for(let k=0;k<n;k++){ const i=order[k];
+      if(field[i]<snowEl||tempField[i]>=0) continue;
+      const r=receiver[i]; if(r<0) continue;
+      const slope=Math.max(0,(field[i]-field[r]))/(dist[i]||1);
+      const E=gl.kg*state.planet.g*Math.pow(flow[i],gl.mg)*slope*0.001;   /* abrasion ~ g (G1) */
+      delta[i]-=E;
+      const x=i%GW,y=(i/GW)|0,rx=r%GW,ry=(r/GW)|0,ddx=rx-x,ddy=ry-y;
+      const lx1=x-ddy,ly1=y+ddx,lx2=x+ddy,ly2=y-ddx;
+      if(lx1>=0&&lx1<GW&&ly1>=0&&ly1<GH) delta[ly1*GW+lx1]-=E*gl.uFactor;
+      if(lx2>=0&&lx2<GW&&ly2>=0&&ly2<GH) delta[ly2*GW+lx2]-=E*gl.uFactor;
+      if(flow[i]<100) delta[i]-=E*0.6;
+    }
+    for(let i=0;i<n;i++){ field[i]+=delta[i]; if(field[i]<0)field[i]=0; if(field[i]>1)field[i]=1; }
+  }
+  isostaticRebound(pre);
+  computeFlow(true); refreshClimate(); renderNow();
+}
+
+/* ===================== coastal processing · sea cliffs · estuary funnels · tidal marsh ===================== */
+function coastalProcess(){
+  const c0=state.coastal;
+  const c={...c0, waveStr:c0.waveStr/Math.max(0.05,state.planet.g)};   /* wave energy ~ 1/g (G1) */
+  state.coastal=c;   /* GPU path reads state.coastal — restored below */
+  try{
+  const sea=state.seaLevel, n=GW*GH, riverThresh=GW*GH*0.001;
+  /* sea cliffs + estuary: GPU if available */
+  if(GPU.enabled && GPU.coastOK){ try{ GPU.coastal(c.passes); } catch(e){ console.warn('GPU coastal→CPU',e); GPU.coastOK=false; coastalProcessCPU(c,sea,n,riverThresh); } }
+  else { coastalProcessCPU(c,sea,n,riverThresh); }
+  /* tidal marsh: per-cell noise — stays CPU (vnoise not in shader) */
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const i=y*GW+x, h=field[i];
+    if(h>=sea && h<sea+c.marshBand){ const sl=slopeAt(x,y); if(sl<0.08){
+      const fn=1-sl/0.08; field[i]+=(vnoise(x*0.18,y*0.18,77)-0.5)*c.marshBand*0.55*fn;
+      if(field[i]<0)field[i]=0; if(field[i]>1)field[i]=1; } }
+  }
+  } finally { state.coastal=c0; }
+  computeFlow(true); refreshClimate(); renderNow();
+}
+function coastalProcessCPU(c,sea,n,riverThresh){
+  const offs=[[-1,0],[1,0],[0,-1],[0,1]];
+  for(let pass=0;pass<c.passes;pass++){
+    const delta=new Float32Array(n);
+    for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+      const i=y*GW+x, h=field[i]; if(h<sea) continue;
+      let seaNb=0;
+      for(const[dx,dy] of offs){ const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=GW||ny>=GH)continue; if(field[ny*GW+nx]<sea) seaNb++; }
+      if(seaNb>0){ const exp=seaNb/4; delta[i]-=c.waveStr*exp*0.002;
+        for(const[dx,dy] of offs){ const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=GW||ny>=GH)continue; if(field[ny*GW+nx]>=sea) delta[ny*GW+nx]+=c.waveStr*exp*0.0005; } }
+      const fl=flowField[i];
+      if(fl>riverThresh && h<sea+c.estuaryDepth){
+        const ff=Math.min(1,Math.log(fl/riverThresh)/5);
+        delta[i]-=0.003*ff*(1-(h-sea)/c.estuaryDepth)*c.waveStr; }
+    }
+    for(let i=0;i<n;i++){ field[i]+=delta[i]; if(field[i]<0)field[i]=0; if(field[i]>1)field[i]=1; }
+  }
+}
+/* erosional unloading → flexural isostatic rebound: ~80% of the broad eroded column
+   returns as uplift (England & Molnar 1990; docs/research/pipeline-order-audit.md §gap 4).
+   One-sided: only removal rebounds — tectonic uplift inside an op is not load removal. */
+function isostaticRebound(pre){
+  const n=GW*GH, d=new Float32Array(n); let any=false;
+  for(let i=0;i<n;i++){ const e=pre[i]-field[i]; if(e>0){ d[i]=e; any=true; } }
+  if(!any) return;
+  const b=gaussBlur(d, Math.max(8, state.tect.blurR));   // only long-wavelength unloading rebounds
+  for(let i=0;i<n;i++){ const v=field[i]+0.8*b[i]; field[i]=v<0?0:v>1?1:v; }
+}
+
+function computeFlow(useRain){
+  const n=GW*GH, order=new Array(n); for(let i=0;i<n;i++) order[i]=i;
+  order.sort((a,b)=>field[b]-field[a]);
+  const acc=new Float32Array(n);
+  /* discharge seeding: rivers accumulate runoff, not bare area (Whipple & Tucker 1999;
+     docs/research/pipeline-order-audit.md §gap 2). Mean-normalised so TWI and river
+     thresholds keep the area-flow magnitude scale. */
+  if(useRain){ let sm=0; for(let i=0;i<n;i++){ const r=Math.max(0.05,rainField[i]); acc[i]=r; sm+=r; }
+    const k=n/Math.max(1e-6,sm); for(let i=0;i<n;i++) acc[i]*=k; }
+  else acc.fill(1);
+  for(let k=0;k<n;k++){ const i=order[k], x=i%GW, y=(i/GW)|0, h=field[i]; let best=-1, bestDrop=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ if(!dx&&!dy)continue;
+      let nx=x+dx, ny=y+dy;
+      if(state.world){ nx=((nx)%GW+GW)%GW; } else { if(nx<0||nx>=GW)continue; }
+      if(ny<0||ny>=GH)continue;
+      const j=ny*GW+nx, drop=(h-field[j])/Math.hypot(dx,dy); if(drop>bestDrop){ bestDrop=drop; best=j; } }
+    if(best>=0) acc[best]+=acc[i]; }
+  flowField.set(acc);                                                      // persist for river overlay and glacial erosion
+  return acc;
+}
+
+/* ===================== load + normalize ===================== */
+function loadImage(file){
+  const url=URL.createObjectURL(file), im=new Image();
+  im.onload=()=>{
+    const ar=im.width/im.height; GW=state.resW; GH=Math.max(80,Math.round(GW/ar));
+    const off=document.createElement('canvas'); off.width=GW; off.height=GH;
+    off.getContext('2d').drawImage(im,0,0,GW,GH);
+    const d=off.getContext('2d').getImageData(0,0,GW,GH).data;
+    allocate(); warpX=null; warpY=null;
+    for(let i=0;i<GW*GH;i++) field[i]=(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2])/255;
+    URL.revokeObjectURL(url); normalize(); refreshClimate(); renderNow();
+  };
+  im.src=url;
+}
+function normalize(){
+  let mn=Infinity, mx=-Infinity;
+  for(let i=0;i<field.length;i++){ const v=field[i]; if(v<mn)mn=v; if(v>mx)mx=v; }
+  const r=mx-mn||1;
+  if(GPU.enabled && GPU.normOK){ try{ GPU.norm(mn,mx); return; }catch(e){ console.warn('GPU norm→CPU',e); GPU.normOK=false; } }
+  for(let i=0;i<field.length;i++) field[i]=(field[i]-mn)/r;   // CPU fallback
+}
+function allocate(){
+  field=new Float32Array(GW*GH); img=vctx.createImageData(GW,GH);
+  plateId=new Int16Array(GW*GH); boundaryMask=new Uint8Array(GW*GH);
+  stressField=new Float32Array(GW*GH); baseField=new Float32Array(GW*GH); ageField=new Float32Array(GW*GH);
+  flexureField=new Float32Array(GW*GH); heterogeneityField=new Float32Array(GW*GH); resistanceField=new Float32Array(GW*GH);
+  volcanicField=new Float32Array(GW*GH); impactField=new Float32Array(GW*GH);
+  tempField=new Float32Array(GW*GH); rainField=new Float32Array(GW*GH); flowField=new Float32Array(GW*GH);
+  view.width=GW; view.height=GH;
+}
+
+/* ===================== calibration ===================== */
+const metersPerUnit = () => state.peakM/((1-state.seaLevel)||1e-6);
+const elevM = (v) => (v-state.seaLevel)*metersPerUnit();
+function maxGrade(){ const cellM=(state.mapWidthKm*1000)/GW; if(!cellM) return 0; let g=0; for(let y=0;y<GH;y++)for(let x=0;x<GW-1;x++){ const dz=Math.abs(elevM(field[y*GW+x+1])-elevM(field[y*GW+x])); const gr=dz/cellM; if(gr>g)g=gr; } return g; }
+
+/* ===================== climate · temperature, moisture, biomes ===================== */
+/* top row of the grid is the NORTH edge of the latitude band, bottom row the SOUTH edge */
+function latAt(y){ const c=state.climate; if(state.world) return 90 - (y/Math.max(1,GH-1))*180; return c.latN + (y/Math.max(1,GH-1))*(c.latS - c.latN); }   // degrees (world = whole planet, poles top/bottom)
+function gridH(gw){ return Math.round(gw*(state.world?0.5:0.64)); }   // world = 2:1 equirectangular; region = 1.56:1 frame
+function computeTemperature(){
+  const c=state.climate, mpu=metersPerUnit();
+  const latT=state.world?90:c.latN, latB=state.world?-90:c.latS;
+  if(GPU.enabled && GPU.tempOK){ try{ GPU.temperature(latT,latB,mpu); return; }catch(e){ console.warn('GPU temp→CPU',e); GPU.tempOK=false; } }
+  for(let y=0;y<GH;y++){
+    const lat=latAt(y)*Math.PI/180;
+    const tSea=c.poleTemp + (c.equatorTemp-c.poleTemp)*Math.max(0,Math.cos(lat));
+    for(let x=0;x<GW;x++){
+      const i=y*GW+x, aboveSea=Math.max(0,(field[i]-state.seaLevel))*mpu;
+      tempField[i]=tSea - c.lapseRate*state.planet.g*(aboveSea/1000);   /* lapse ~ g (G1) */
+    }
+  }
+}
+function computeRainfall(){
+  const c=state.climate, raw=new Float32Array(GW*GH);
+  for(let y=0;y<GH;y++){
+    const aLat=Math.abs(latAt(y));
+    const dir=(aLat<30)?-1:(aLat<60)?1:-1;        // trades (W-ward) · westerlies (E-ward) · polar easterlies (W-ward)
+    let humidity=c.oceanHum, prevH=null;
+    const x0=dir>0?0:GW-1, x1=dir>0?GW:-1;
+    for(let x=x0; x!==x1; x+=dir){
+      const i=y*GW+x, h=field[i];
+      if(h<state.seaLevel){ humidity=c.oceanHum; raw[i]=0.06*c.oceanHum; prevH=h; continue; }   // re-saturate over sea
+      const up=(prevH==null)?h:prevH, slope=Math.max(0,h-up);     // upslope into the wind drives orographic lift
+      const oro=humidity*slope*c.rainK*14, conv=humidity*0.07;    // orographic + baseline convective
+      let rain=oro+conv; if(rain>humidity) rain=humidity;
+      raw[i]=rain;
+      humidity=Math.max(0, humidity - rain*(0.4+c.rainDep));      // deplete; dryness slider raises loss
+      prevH=h;
+    }
+  }
+  rainField=gaussBlur(raw,3);
+  // normalize land rainfall to a typical-wet percentile (robust to outliers), giving a fuller mid-range
+  const land=[]; for(let i=0;i<rainField.length;i++) if(field[i]>=state.seaLevel) land.push(rainField[i]);
+  land.sort((a,b)=>a-b);
+  const ref=land.length? Math.max(1e-6, land[Math.min(land.length-1, Math.floor(land.length*0.82))]) : 1e-6;
+  for(let i=0;i<rainField.length;i++) rainField[i]=Math.min(1,rainField[i]/ref);   // relative moisture [0,1]
+}
+function recomputeClimate(){ computeTemperature(); }                 // temperature is cheap & live; rainfall is the weather sim (run on demand)
+function refreshClimate(){ computeTemperature(); simulateWeather(state.climate.wIters); applyClimateMoistureCorrectors(); }   // full refresh after terrain changes
+
+/* ===================== dependency graph · invalidation flags (doc §1) =====================
+   dirty.X = true means "X needs recomputing before next render". Only downstream nodes
+   are marked. Changing sun angle marks dirty.render only; changing tectonic params marks
+   everything. This prevents the weather sim re-running when you move a view slider. */
+const dirty={tectonics:false, heightmap:false, flow:false, temperature:false, rainfall:false, render:false};
+function invalidate(what){
+  switch(what){
+    case 'tectonics': dirty.tectonics=true; dirty.heightmap=true; /* fall through */
+    case 'heightmap': dirty.flow=true; dirty.temperature=true; /* fall through */
+    case 'flow':      dirty.rainfall=true; /* fall through */
+    case 'rainfall':  /* fall through */
+    case 'temperature':
+    case 'render':    dirty.render=true; break;
+  }
+  if(what==='temperature'){ dirty.temperature=true; dirty.rainfall=true; }
+  if(what==='flow'){ dirty.flow=true; }
+}
+function flushDirty(){
+  /* recompute only what changed; runs synchronously (workers in future sprint) */
+  if(dirty.flow){ computeFlow(true); dirty.flow=false; }
+  if(dirty.temperature){ computeTemperature(); dirty.temperature=false; }
+  if(dirty.rainfall){ simulateWeather(state.climate.wIters); applyClimateMoistureCorrectors(); dirty.rainfall=false; }
+  if(dirty.render){ renderNow(); dirty.render=false; }
+}
+
+/* ===================== requestAnimationFrame scheduling (doc §5) =====================
+   Multiple rapid changes within one frame collapse into a single render call.       */
+let _rafPending=false;
+function scheduleRender(){
+  dirty.render=true;
+  if(!_rafPending){ _rafPending=true; requestAnimationFrame(()=>{ _rafPending=false; if(dirty.render){ renderNow(); dirty.render=false; } }); }
+}
+
+/* ===================== scratch buffer pool (doc §7) =====================
+   Module-level reusable typed arrays — avoids repeated large allocations.
+   Each index is a named "slot"; caller must not reuse the same slot for two
+   live arrays. Single-threaded JS: no race hazards.
+   mbuf=Float32, ibuf=Int32, ubuf=Uint8.                                    */
+const _mbufs=[], _ibufs=[], _ubufs=[];
+function mbuf(i,n){ if(!_mbufs[i]||_mbufs[i].length<n) _mbufs[i]=new Float32Array(n); return _mbufs[i]; }
+function ibuf(i,n){ if(!_ibufs[i]||_ibufs[i].length<n) _ibufs[i]=new Int32Array(n); return _ibufs[i]; }
+function ubuf(i,n){ if(!_ubufs[i]||_ubufs[i].length<n) _ubufs[i]=new Uint8Array(n); return _ubufs[i]; }
+function clearScratch(){ _mbufs.length=0; _ibufs.length=0; _ubufs.length=0; } // call on grid resize
+/* ===================== climate moisture correctors =====================
+   Three additive post-processors applied to rainField after the main sim:
+   1. Coastal proximity — maritime air mass wets ALL coasts regardless of wind direction
+      (sea breeze effect; prevents leeward desert-next-to-ocean artefacts)
+   2. River corridors — rivers carry moisture; riparian zones green even in dry regions
+      (Nile effect; high flow-accumulation cells spread humidity into neighbours)
+   3. Latitude climate zones — ITCZ convergence belt wets the equator; subtropical
+      high-pressure belts dry the 20-35° band; applies in both Region and World mode   */
+function applyClimateMoistureCorrectors(){
+  const sea=state.seaLevel, N=GW*GH;
+  const WW=Math.min(GW,240), WH=Math.max(2,Math.round(WW*GH/GW)), Nc=WW*WH;
+  const wrapX=!!state.world;
+  const fieldC=(x,y)=>sampleArr(field,x/(WW-1)*(GW-1),y/(WH-1)*(GH-1));
+  const flowC =(x,y)=>sampleArr(flowField,x/(WW-1)*(GW-1),y/(WH-1)*(GH-1));
+
+  // 1. coastal proximity — blur ocean mask on the coarse grid (~14 coarse cells ≈ 120 full-res px)
+  const cMask=new Float32Array(Nc);
+  for(let y=0;y<WH;y++) for(let x=0;x<WW;x++) if(fieldC(x,y)<sea) cMask[y*WW+x]=1;
+  const cBlur=gaussBlur(cMask, Math.round(WW*0.06), WW, WH, wrapX);
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const i=y*GW+x; if(field[i]<sea) continue;
+    rainField[i]=Math.min(1, rainField[i]+bilC(cBlur,x/(GW-1)*(WW-1),y/(GH-1)*(WH-1),WW,WH,wrapX)*0.38);
+  }
+  // 2. river moisture corridors — max-pool flow mask on coarse grid (bilinear misses narrow rivers)
+  const rMask=new Float32Array(Nc); const fTh=N*0.0004; let fMax=1e-6;
+  for(let i=0;i<N;i++) if(flowField[i]>fMax) fMax=flowField[i];
+  const step=Math.max(1,Math.ceil(GW/WW));  // pixels per coarse cell
+  for(let y=0;y<WH;y++) for(let x=0;x<WW;x++){
+    const x0=(x/WW*(GW-1))|0, y0=(y/WH*(GH-1))|0;
+    let mx=0;
+    for(let dy=0;dy<step;dy++) for(let dx=0;dx<step;dx++){
+      const nx_=Math.min(GW-1,x0+dx), ny_=Math.min(GH-1,y0+dy);
+      const fl=flowField[ny_*GW+nx_]; if(fl>mx) mx=fl;
+    }
+    if(mx>fTh) rMask[y*WW+x]=Math.min(1,(mx-fTh)/(fMax*0.04));
+  }
+  const rBlur=gaussBlur(rMask, Math.max(2,Math.round(WW*0.012)), WW, WH, false);
+  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    const i=y*GW+x; if(field[i]<sea) continue;
+    rainField[i]=Math.min(1, rainField[i]+bilC(rBlur,x/(GW-1)*(WW-1),y/(GH-1)*(WH-1),WW,WH,false)*0.38);
+  }
+  // 3. latitude climate zones — ITCZ wet belt and subtropical dry belt
+  const latTop=state.world?90:state.climate.latN, latBot=state.world?-90:state.climate.latS;
+  for(let y=0;y<GH;y++){
+    const lat=latTop-(latTop-latBot)*y/(GH-1), absLat=Math.abs(lat);
+    const zk=state.climate.zonalK==null?0.5:state.climate.zonalK;   /* W1 winds already produce ITCZ/dry-belt structure;
+       this corrector now only sharpens the contrast that 2-D advection can't fully reach (no vertical subsidence) */
+    const itcz=Math.max(0,1-absLat/15)*0.22*zk, subDry=Math.max(0,1-Math.abs(absLat-28)/13)*0.30*zk;
+    for(let x=0;x<GW;x++){
+      const i=y*GW+x; if(field[i]<sea) continue;
+      rainField[i]=Math.max(0,Math.min(1, rainField[i]+itcz-subDry));
+    }
+  }
+}
+
+/* ===================== weather · iterative 2-D moisture simulation =====================
+   Runs on a coarse, smooth working grid (moisture is low-frequency), then upsamples the
+   rainfall to the full grid. Wind = latitude belts in World mode, one prevailing dir in
+   Region mode. Moisture evaporates off seas (warm water more), advects downwind, and rains
+   where air climbs terrain (orographic) or exceeds a temperature-dependent saturation. */
+function satCap(T){ return 0.16*Math.exp(0.058*T); }                 // warm air holds more moisture (Clausius–Clapeyron-ish)
+/* circulation cell count from planet rotation/size/gravity: N_c ~ sqrt(ΩR/sqrt(gH)),
+   normalised so Earth (24 h, 1 g, R=1) = 3 cells/hemisphere — Hadley·Ferrel·Polar
+   (docs/research/weather-model-v2.md W1). Slow rotators collapse to one giant Hadley cell. */
+function circulationCells(){
+  const p=state.planet||{}, rel=(24/(p.rotationHours||24))*(p.radiusRel||1)/Math.sqrt(p.g||1);
+  return Math.max(1, Math.min(8, Math.round(3*Math.sqrt(rel))));
+}
+function buildWind(wx,wy,WW,WH,step,tc){
+  const c=state.climate, N=WW*WH, wrapX=!!state.world;
+  const latOf=y=>state.world?90-(y/Math.max(1,WH-1))*180:(c.latN+(y/Math.max(1,WH-1))*(c.latS-c.latN));
+  if(!state.world && c.windMode==='manual'){
+    const rad=c.windDir*Math.PI/180, ux=Math.cos(rad)*step, uy=Math.sin(rad)*step;
+    for(let i=0;i<N;i++){ wx[i]=ux; wy[i]=uy; }
+  } else {
+    /* latitude-band prevailing winds; band count follows planet rotation (W1) */
+    const cells=circulationCells(), bandW=90/cells;
+    for(let y=0;y<WH;y++){
+      const lat=latOf(y), a=Math.abs(lat), band=Math.min(cells-1, Math.floor(a/bandW));
+      const zx=(band%2===0)?-1:1;                                   // even bands: surface easterlies (trades, polar) · odd: westerlies
+      const tilt=(band===cells-1&&band%2===0&&cells>1)?0.15:0.35;
+      const my=(band%2===0)?(lat>0?1:-1)*tilt:(lat>0?-1:1)*tilt;    // surface branch: equatorward in even bands, poleward in odd (+y = south)
+      const L=Math.hypot(zx,my)||1, ux=zx/L*step, uy=my/L*step;
+      for(let x=0;x<WW;x++){ wx[y*WW+x]=ux; wy[y*WW+x]=uy; }
+    }
+  }
+  /* pressure-gradient + Coriolis perturbation: warm = thermal low (P' ∝ −T);
+     geostrophic flow away from the equator, downgradient where f→0 (Hadley
+     convergence into heat lows). Gives monsoonal land–sea deflection. */
+  const kp=c.pressK==null?0.6:c.pressK;
+  if(!tc || kp<=0) return;
+  const P=gaussBlur(tc,2,WW,WH,wrapX);                              // smoothed thermal proxy (sign applied in gradients)
+  const gx=new Float32Array(N), gy=new Float32Array(N);
+  const omega=24/((state.planet&&state.planet.rotationHours)||24);
+  let mx=1e-9;
+  for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){
+    const i=y*WW+x;
+    const xm=wrapX?(x-1+WW)%WW:Math.max(0,x-1), xp=wrapX?(x+1)%WW:Math.min(WW-1,x+1);
+    const ym=Math.max(0,y-1), yp=Math.min(WH-1,y+1);
+    const dPdx=-(P[y*WW+xp]-P[y*WW+xm])*0.5;                        // P' = −T
+    const dPdyS=-(P[yp*WW+x]-P[ym*WW+x])*0.5;                       // gradient toward screen-south
+    const latR=latOf(y)*Math.PI/180;
+    const f=Math.sin(latR)*omega, geoW=clamp01((Math.abs(latR)*180/Math.PI-5)/10);
+    let ux=0, uy=0;
+    if(geoW>0){
+      /* geostrophic (X east, Y north): u=−(1/f)∂P/∂Y, vN=(1/f)∂P/∂X; ∂P/∂Y=−dPdyS, vy_screen=−vN.
+         |f| floored at 0.25 so the 1/f singularity can't dominate the normalisation. */
+      const inv=(f<0?-1:1)/Math.max(Math.abs(f),0.25);
+      ux=inv*dPdyS*geoW; uy=-inv*dPdx*geoW;
+    }
+    const dgw=(1-geoW)*1.5; ux+=-dPdx*dgw; uy+=-dPdyS*dgw;          // near-equator downgradient inflow
+    gx[i]=ux; gy[i]=uy; const m=Math.hypot(ux,uy); if(m>mx)mx=m;
+  }
+  const sc=(step*0.8)/mx*kp, cap=step*1.8;                          // strongest perturbation = 0.8·step at pressK=1; cap keeps backtrace stable
+  for(let i=0;i<N;i++){
+    let ux=wx[i]+gx[i]*sc, uy=wy[i]+gy[i]*sc;
+    const m=Math.hypot(ux,uy); if(m>cap){ ux*=cap/m; uy*=cap/m; }
+    wx[i]=ux; wy[i]=uy;
+  }
+}
+function bilC(a,fx,fy,WW,WH,wrapX){                                    // bilinear on the coarse grid (optional x-wrap)
+  if(wrapX){ fx=((fx%WW)+WW)%WW; } else { if(fx<0)fx=0; else if(fx>WW-1)fx=WW-1; }
+  if(fy<0)fy=0; else if(fy>WH-1)fy=WH-1;
+  const x0=fx|0, y0=fy|0; let x1=x0+1; if(x1>=WW)x1=wrapX?0:WW-1; let y1=y0+1; if(y1>=WH)y1=WH-1; const tx=fx-x0, ty=fy-y0;
+  return (a[y0*WW+x0]*(1-tx)+a[y0*WW+x1]*tx)*(1-ty)+(a[y1*WW+x0]*(1-tx)+a[y1*WW+x1]*tx)*ty;
+}
+function blurCoarse(a,WW,WH,wrapX,passes){ const t=new Float32Array(a.length);   // separable 3-tap; kills row/col banding without flattening large rain shadows
+  for(let p=0;p<passes;p++){
+    for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){ const xl=wrapX?(x-1+WW)%WW:(x>0?x-1:0), xr=wrapX?(x+1)%WW:(x<WW-1?x+1:WW-1); t[y*WW+x]=(a[y*WW+xl]+a[y*WW+x]+a[y*WW+xr])/3; }
+    for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){ const yu=y>0?y-1:0, yd=y<WH-1?y+1:WH-1; a[y*WW+x]=(t[yu*WW+x]+t[y*WW+x]+t[yd*WW+x])/3; }
+  }
+}
+function simulateWeather(iters){
+  const c=state.climate, sea=state.seaLevel, mpu=metersPerUnit();
+  const WW=Math.min(GW,240), WH=Math.max(2,Math.round(WW*GH/GW)), wrapX=!!state.world, N=WW*WH, step=3.0;
+  const eh=new Float32Array(N), tc=new Float32Array(N), sstEvap=new Float32Array(N);
+  for(let y=0;y<WH;y++){
+    const lat=(state.world?90-(y/Math.max(1,WH-1))*180:(c.latN+(y/Math.max(1,WH-1))*(c.latS-c.latN)))*Math.PI/180;
+    const tSea=c.poleTemp+(c.equatorTemp-c.poleTemp)*Math.max(0,Math.cos(lat));
+    const evF=0.2+0.8*clamp01((tSea+2)/30);                           // warm/cold ocean term: warm seas evaporate more
+    for(let x=0;x<WW;x++){ const i=y*WW+x, h=sampleArr(field, x/(WW-1)*(GW-1), y/(WH-1)*(GH-1)); eh[i]=h;
+      tc[i]=tSea - c.lapseRate*(Math.max(0,h-sea)*mpu/1000); sstEvap[i]=evF; }
+  }
+  const wx=new Float32Array(N), wy=new Float32Array(N); buildWind(wx,wy,WW,WH,step,tc);
+  const W=new Float32Array(N), rain=new Float32Array(N);
+  for(let i=0;i<N;i++) W[i]= eh[i]<sea ? c.oceanHum : 0.10;
+  const evap=c.evap, oceanK=c.ocean, K=c.rainK, dry=0.4+c.rainDep;
+  for(let it=0; it<iters; it++){
+    for(let i=0;i<N;i++) if(eh[i]<sea){ const cap=Math.max(c.oceanHum,satCap(tc[i]))*1.2;          // 1. evaporate over sea
+      let e=evap*sstEvap[i]*oceanK;
+      if(c.bulkEvap){ const U=Math.hypot(wx[i],wy[i])/step; e*=(0.4+0.6*U)*Math.max(0,1-W[i]/cap); }   // bulk aerodynamic: E = Ce·U·(qs−q) (W2)
+      W[i]=Math.min(cap, W[i]+e); }
+    if(!wrapX){ const th=0.15*step;                                    // 2. moist oceanic inflow wherever a border cell's wind points inward (region)
+      for(let y=0;y<WH;y++){ let i=y*WW; if(wx[i]>th&&W[i]<c.oceanHum)W[i]=c.oceanHum; i=y*WW+WW-1; if(wx[i]<-th&&W[i]<c.oceanHum)W[i]=c.oceanHum; }
+      for(let x=0;x<WW;x++){ let i=x; if(wy[i]>th&&W[i]<c.oceanHum)W[i]=c.oceanHum; i=(WH-1)*WW+x; if(wy[i]<-th&&W[i]<c.oceanHum)W[i]=c.oceanHum; } }
+    const W2=new Float32Array(N);                                     // 3. advect along wind (semi-Lagrangian backtrace)
+    for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){ const i=y*WW+x; W2[i]=bilC(W, x-wx[i], y-wy[i], WW,WH,wrapX); }
+    for(let y=0;y<WH;y++)for(let x=0;x<WW;x++){ const i=y*WW+x;        // 4. precipitate: orographic + convective excess
+      if(eh[i]<sea){ W[i]=W2[i]; continue; }
+      const ux=wx[i], uy=wy[i], L=Math.hypot(ux,uy)||1; const ehUp=bilC(eh, x-ux/L, y-uy/L, WW,WH,wrapX);
+      const oro=W2[i]*Math.max(0,eh[i]-ehUp)*K*9, excess=Math.max(0,W2[i]-satCap(tc[i])), conv=W2[i]*0.05;
+      let p=(oro+excess*0.6+conv)*dry; if(p>W2[i])p=W2[i];
+      W[i]=W2[i]-p; rain[i]=rain[i]*0.55+p*0.45;                       // EMA → steady precipitation rate
+    }
+  }
+  blurCoarse(rain,WW,WH,wrapX,3);                                   // de-band: smooth moisture across rows/cols
+  const land=[]; for(let i=0;i<N;i++) if(eh[i]>=sea) land.push(rain[i]); land.sort((a,b)=>a-b);
+  const ref=land.length? Math.max(1e-6, land[Math.min(land.length-1, Math.floor(land.length*0.82))]) : 1e-6;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const r=bilC(rain, x/(GW-1)*(WW-1), y/(GH-1)*(WH-1), WW,WH,wrapX); let moisture=Math.min(1, r/ref);
+    if(continentalField && state.world_structure.enabled && field[y*GW+x]>=sea){ const interior=Math.max(0,continentalField[y*GW+x]); moisture*=Math.max(0,1-interior*0.45); }   // continental interior dryness
+    rainField[y*GW+x]=moisture; }
+}
+
+/* Whittaker-style lookup: biome = f(temperature °C, relative moisture [0,1]) */
+const BIOME={
+  ice:{name:'Ice / glacier',col:[238,242,247]}, tundra:{name:'Tundra',col:[156,166,158]},
+  boreal:{name:'Boreal forest',col:[58,92,72]}, conifer:{name:'Montane conifer',col:[74,104,80]},
+  tempForest:{name:'Temperate forest',col:[66,118,58]}, tempRain:{name:'Temperate rainforest',col:[40,96,58]},
+  grass:{name:'Grassland / steppe',col:[176,170,96]}, shrub:{name:'Shrub / chaparral',col:[150,150,86]},
+  desert:{name:'Desert',col:[210,186,130]}, savanna:{name:'Savanna',col:[190,176,92]},
+  tropDry:{name:'Tropical dry forest',col:[120,150,66]}, tropWet:{name:'Tropical rainforest',col:[30,92,48]}
+};
+function classifyBiome(t,m){
+  if(t<-7) return 'ice';
+  if(t<0)  return 'tundra';
+  if(t<5)  return m<0.20?'tundra':'boreal';
+  if(t<12){ if(m<0.30) return 'grass'; if(m<0.60) return 'conifer'; return 'tempRain'; }
+  if(t<20){ if(m<0.12) return 'desert'; if(m<0.28) return 'shrub'; if(m<0.55) return 'tempForest'; return 'tempRain'; }
+  if(m<0.12) return 'desert'; if(m<0.30) return 'savanna'; if(m<0.55) return 'tropDry'; return 'tropWet';
+}
+/* ---- biome raster handoff to Cartalith (docs/BIOME_AND_VISUALS_PLAN.md, Part A) ----
+   Stable index: 0 = ocean, then a FROZEN order (append-only; never renumber — the
+   index is written into save files). One byte per cell. */
+const BIOME_KEYS=['ice','tundra','boreal','conifer','tempForest','tempRain','grass','shrub','desert','savanna','tropDry','tropWet'];
+const BIOME_INDEX=(()=>{ const m={ocean:0}; BIOME_KEYS.forEach((k,i)=>m[k]=i+1); return m; })();
+function buildBiomeRaster(){
+  const n=GW*GH, out=new Uint8Array(n), sea=state.seaLevel;
+  for(let i=0;i<n;i++) out[i]= field[i]<sea ? 0 : BIOME_INDEX[classifyBiome(tempField[i],rainField[i])];
+  return out;
+}
+/* manifest so the downstream editor can decode indices without hard-coding them */
+function biomeIndexManifest(){
+  const entries={'0':{key:'ocean',name:'Ocean',col:null}};
+  BIOME_KEYS.forEach((k,i)=>{ entries[String(i+1)]={key:k,name:(BIOME[k]&&BIOME[k].name)||k,col:(BIOME[k]&&BIOME[k].col)||null}; });
+  return { version:VERSION, indices:entries };
+}
+/* ===================== surface materials & cartographic synthesis =====================
+   Material model: per pixel, compute material weight fractions (snow/rock/sand/forest/grass,
+   Σ=1) under climate + slope + elevation; tint each by a climate-selected palette varied with
+   multi-scale noise; mix; multiply by a strong hillshade. Water is depth-banded and temperature-
+   tinted with a surf line. Biomes are not render primitives — colour is layered material synthesis. */
+function clamp01(x){ return x<0?0:x>1?1:x; }
+function smoothstep(a,b,x){ const t=clamp01((x-a)/((b-a)||1e-6)); return t*t*(3-2*t); }
+function ramp3(p,t){ t=clamp01(t); return t<0.5? mix(p[0],p[1],t/0.5) : mix(p[1],p[2],(t-0.5)/0.5); }
+/* material palettes (3 tonal steps) — earthy, desaturated cartographic set */
+const W_ABYSS=[[8,36,58],[10,45,70],[18,59,89]], W_DEEP=[[16,58,87],[26,75,104],[42,96,122]];
+const W_SHELF=[[47,118,150],[76,151,182],[111,179,207]], W_TROP=[[88,184,181],[121,206,197],[149,222,210]], W_GLAC=[[127,174,190],[165,197,207],[194,215,222]];
+const SAND_BEACH=[[200,180,138],[215,195,154],[227,208,167]], SAND_TROP=[[228,212,181],[239,226,197],[246,234,213]];
+const SAND_DESERT=[[201,169,104],[215,182,118],[226,197,138]], SAND_RED=[[168,101,61],[191,119,75],[208,137,92]];
+const GRASS_DRY=[[154,138,93],[176,154,106],[192,171,119]], GRASS_TEMP=[[127,138,86],[143,155,97],[162,175,112]];
+const GRASS_BOREAL=[[102,114,79],[115,128,90],[133,145,107]], GRASS_SAV=[[181,160,94],[198,176,109],[216,193,128]];
+const WOOD_TEMP=[[53,65,40],[66,82,50],[85,104,67]], WOOD_DENSE=[[40,51,31],[50,64,38],[64,80,48]];
+const WOOD_BOREAL=[[47,56,44],[57,68,53],[70,84,69]], WOOD_TROP=[[29,71,37],[40,96,50],[52,120,63]];
+const ROCK_GRANITE=[[123,117,108],[147,139,128],[170,161,149]], ROCK_SANDSTONE=[[167,122,87],[188,141,103],[208,159,118]], ROCK_SCREE=[[106,102,95],[122,118,110],[141,137,128]];
+const SNOW_SEAS=[[217,215,210],[232,231,228],[245,245,245]], SNOW_PERM=[[237,240,242],[245,247,248],[252,252,252]], SNOW_GLAC=[[184,210,219],[203,224,230],[221,236,239]];
+const WETLAND_TEMP=[[58,72,52],[72,88,63],[89,108,78]],  WETLAND_TROP=[[46,68,44],[60,86,55],[76,106,68]];   // marsh / swamp / riparian
+const MANGROVE=[[38,56,42],[50,72,52],[64,90,65]];                                                             // coastal tropical mangrove — darker, denser than inland wetland
+const ORGANIC=[[38,30,22],[52,42,30],[68,56,40]];                                                              // peat / dark humus / organic soil
+function slopeAt(x,y){ const xl=state.world?(x-1+GW)%GW:(x>0?x-1:x), xr=state.world?(x+1)%GW:(x<GW-1?x+1:x); const L=field[y*GW+xl],R=field[y*GW+xr],U=y>0?field[(y-1)*GW+x]:field[y*GW+x],D=y<GH-1?field[(y+1)*GW+x]:field[y*GW+x]; return Math.hypot((R-L)*0.5,(D-U)*0.5); }
+function vignetteAt(x,y){ const vx=x/(GW-1)-0.5, vy=y/(GH-1)-0.5; return 1 - smoothstep(0.34,0.74,Math.hypot(vx,vy))*0.42; }
+/* Aspect factor (doc §12): how much does this slope face the equator?
+   +1 = fully equator-facing (sunny/dry in NH, shaded/wet in SH), −1 = pole-facing.
+   Used to create moisture asymmetry between sun-facing and shaded hillsides.       */
+function aspectFactor(x,y){
+  const U=y>0?field[(y-1)*GW+x]:field[y*GW+x], D=y<GH-1?field[(y+1)*GW+x]:field[y*GW+x];
+  const dzdy=(D-U)*0.5;      // +ve = slope rises going south
+  const lat=latAt(y);        // degrees: +ve = northern hemisphere
+  return dzdy*(lat>=0?-1:1); // flip sign in SH so +1 always = sun-facing
+}
+/* Curvature / Laplacian (doc §12): ∂²h/∂x² + ∂²h/∂y²
+   Positive = concave basin (collects water, deepens soil, encourages wetland).
+   Negative = convex ridge/dome (sheds water, exposes rock, reduces vegetation).   */
+function curvatureAt(x,y){
+  const xl=x>0?x-1:x, xr=x<GW-1?x+1:x, yu=y>0?y-1:y, yd=y<GH-1?y+1:y;
+  return field[y*GW+xl]+field[y*GW+xr]+field[yu*GW+x]+field[yd*GW+x]-4*field[y*GW+x];
+}
+/* climate-selected material palettes — same material varies with temperature, moisture, elevation */
+function grassCol(T,M,r,t){ let c; if(T<4) c=mix(ramp3(GRASS_BOREAL,t),ramp3(GRASS_TEMP,t),clamp01(M)); else if(T>22&&M<0.4) c=mix(ramp3(GRASS_SAV,t),ramp3(GRASS_DRY,t),clamp01(M*2)); else c=mix(ramp3(GRASS_DRY,t),ramp3(GRASS_TEMP,t),clamp01(M)); const d=1-r*0.16; return [c[0]*d,c[1]*d,c[2]*d]; }
+function forestCol(T,M,t){ if(T<3) return ramp3(WOOD_BOREAL,t); if(T>20&&M>0.45) return ramp3(WOOD_TROP,t); if(M>0.62) return ramp3(WOOD_DENSE,t); return ramp3(WOOD_TEMP,t); }
+function sandCol(T,M,r,t){ if(T>24&&M<0.1) return ramp3(SAND_RED,t); return ramp3(SAND_DESERT,t); }
+function rockCol(T,M,r,t){ if(r>0.82) return ramp3(ROCK_SCREE,t); if(T>18&&M<0.32) return ramp3(ROCK_SANDSTONE,t); return ramp3(ROCK_GRANITE,t); }
+function snowCol(T,t){ return T<-12?ramp3(SNOW_GLAC,t):T<-4?ramp3(SNOW_PERM,t):ramp3(SNOW_SEAS,t); }
+/* Wetland colour: mangrove (tropical coastal) vs inland marsh/swamp */
+function wetlandCol(T,mg,t){ return mg?ramp3(MANGROVE,t):ramp3(T>20?WETLAND_TROP:WETLAND_TEMP,t); }
+/* Meso-scale hillshade — samples at ±step pixels to capture medium hill-mass structure
+   without the fine-grained cliff detail that the macro scale already handles.
+   Combined with macro (1-px) and micro (noise), produces doc §14 multi-scale formula.  */
+function shadeFactor2(x,y){
+  const s=3, xl=Math.max(0,x-s), xr=Math.min(GW-1,x+s), yu=Math.max(0,y-s), yd=Math.min(GH-1,y+s);
+  const L=field[y*GW+xl], R=field[y*GW+xr], U=field[yu*GW+x], D=field[yd*GW+x];
+  const ex=state.exag/s, dzdx=(R-L)*ex, dzdy=(D-U)*ex;  // /s keeps slope magnitude consistent with 1-px sample
+  let nx=-dzdx, ny=-dzdy, nz=1; const il=1/Math.hypot(nx,ny,nz); nx*=il; ny*=il; nz*=il;
+  const az=state.sunAz*Math.PI/180, alt=40*Math.PI/180;
+  const lx=Math.cos(alt)*Math.sin(az), ly=-Math.cos(alt)*Math.cos(az), lz=Math.sin(alt);
+  return Math.max(0, nx*lx+ny*ly+nz*lz);
+}
+/* material weight fractions — doc §2, §3, §7, §8, §11, §12
+   Inputs: T (°C), M (raw moisture [0,1]), slope, r (land elevation frac), twi (topographic
+   wetness index), asp (aspect: +1=sun-facing, −1=shaded), curv (Laplacian, raw).
+   Two-pass canopy closure + aspect/curvature nudge + fire disturbance. Σ=1.           */
+function materialWeights(T,M,slope,r,twi,asp,curv){
+  /* ── aspect: equator-facing = drier; pole-facing = wetter (doc §12) ── */
+  const slopeStr=Math.min(1,slope/0.04);
+  const aspDry  =clamp01( asp*slopeStr*0.22);   // sun-facing → reduce M (up to 0.22)
+  const aspWet  =clamp01(-asp*slopeStr*0.12);   // shaded    → increase M (up to 0.12)
+
+  /* ── curvature: concave basins trap water; convex ridges shed it (doc §12) ── */
+  const curvNorm=clamp01(Math.abs(curv)*300);   // Laplacian is tiny; scale to [0,1]
+  const concave =curv>0?curvNorm:0;             // bowl  → wet
+  const convex  =curv<0?curvNorm:0;             // ridge → dry / exposed
+
+  const M_adj=clamp01(M-aspDry+aspWet+concave*0.12);  // moisture after topographic correction
+
+  /* ── fire proxy disturbance (doc §3.3): warm + seasonally dry → open canopy ── */
+  const fire=smoothstep(18,26,T)*smoothstep(0.45,0.15,M_adj)*smoothstep(0.08,0.30,M_adj);
+
+  /* ── pass 1: initial canopy closure from adjusted M ── */
+  const Tn  =clamp01((T+5)/35);
+  const sl  =Math.min(1,slope/0.08);
+  const sD0 =Math.exp(-1.5*sl)*(0.4+0.6*M_adj);
+  const Vp0 =Math.pow(clamp01(M_adj),0.7)*Math.pow(Tn,0.5)*Math.pow(Math.max(0,sD0),0.8);
+  const C0  =1-Math.exp(-2.0*Vp0);
+
+  /* ── pass 2: effective moisture + recycling, final V and C ── */
+  const recycle=clamp01(0.1+Math.max(0,T-10)/50);
+  const Meff   =clamp01(M_adj+C0*recycle*0.5);
+  const soilD  =Math.exp(-1.5*sl)*(0.4+0.6*Meff);
+  const Vp_raw =Math.pow(clamp01(Meff),0.7)*Math.pow(Tn,0.5)*Math.pow(Math.max(0,soilD),0.8);
+  const Vp     =Vp_raw*(1-fire*0.40);           // fire suppresses vegetation density
+  const C      =1-Math.exp(-2.0*Vp);            // rainforest attractor at C>0.85
+
+  const snow=smoothstep(3,-5,T); let bud=1-snow;
+
+  /* ── rock: doc §8 + convex ridge bonus ── */
+  const Rexp=Math.pow(sl,1.8)*(1-Vp)*(1-Meff)+convex*0.25;
+  const rock=clamp01(Rexp*0.8+smoothstep(0.7,0.95,r)*0.35)*bud; bud-=rock;
+
+  /* ── sand: arid + hot ── */
+  const sand=smoothstep(17,26,T)*smoothstep(0.24,0.05,Meff)*(1-Vp*0.7)*bud; bud-=sand;
+
+  /* ── wetland: TWI valley floors + curvature basins + mangrove coast (doc §4.12, §4.16) ── */
+  const mangroveFrac=smoothstep(18,24,T)*smoothstep(0.08,0.0,r)*smoothstep(0.10,0.32,M_adj)*bud*0.55;
+  const wetBase     =smoothstep(-1,2,twi)*smoothstep(0.08,0.28,M_adj)*smoothstep(0.06,0.01,slope)*bud*0.50;
+  const wetCurv     =concave*smoothstep(0.08,0.28,M_adj)*bud*0.22;
+  const wetland     =Math.min(bud,Math.max(mangroveFrac,wetBase+wetCurv)); bud-=wetland;
+  const isMangrove  =mangroveFrac>wetBase+wetCurv;
+
+  /* ── canopy/grass split by closure C ── */
+  const canopy=C*bud; bud-=canopy;
+  const grass =Math.max(0,bud);
+
+  return {snow,rock,sand,wetland,canopy,grass, C,Meff,Vp,fire,isMangrove};
+}
+/* landColorCore: resolution-independent colour synthesis.
+   Accepts macro (sh) and meso (shM) hillshade, TWI for wetland detection, and pixel coords
+   for atmospheric perspective. Implements doc §14 multi-scale hillshade and doc §13 haze. */
+function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py){
+  /* noise-jitter the climate driving material edges → organic ecotone boundaries */
+  const Te=T+(nBio-0.5)*7+(nLow-0.5)*2.5, Me=clamp01(M+(nBio-0.5)*0.15+(nHi-0.5)*0.05);
+  const twiE=twi+(nBio-0.5)*0.7;                                             // jitter wetland boundary
+  const aspE=asp*(1+(nLow-0.5)*0.3);                                         // slight noise on aspect (avoid straight shadow lines)
+  const w=materialWeights(Te,Me,slope,r,twiE,aspE,curv);
+  const t=clamp01(0.5+(nLow-0.5)*1.1+(nHi-0.5)*0.5);
+
+  /* colour mix — each material by its climate-appropriate palette */
+  let col=[0,0,0]; const add=(c,k)=>{ col[0]+=c[0]*k; col[1]+=c[1]*k; col[2]+=c[2]*k; };
+  add(snowCol(Te,t),          w.snow);
+  add(rockCol(Te,Me,r,t),     w.rock);
+  add(sandCol(Te,Me,r,t),     w.sand);
+  add(wetlandCol(Te,w.isMangrove,t), w.wetland);
+
+  /* multi-layer canopy stacking (doc §4.1, §10): when C>0.75 (approaching closed canopy),
+     add a dark understory shadow layer — the light extinction beneath a closed tropical
+     forest crown is one of the strongest visual signals of a true rainforest.           */
+  if(w.canopy>0){
+    const understory=smoothstep(0.70,0.94,w.C)*w.canopy*0.28;
+    add([20,43,25], understory);                                              // deep shadow understory
+    add(forestCol(Te,w.Meff,t), w.canopy-understory);
+  }
+
+  add(grassCol(Te,Me,r,t), w.grass);
+
+  /* tan coastal rim */
+  const beachT=smoothstep(0.03,0,r)*0.6; if(beachT>0){ const bc=ramp3(Te>22?SAND_TROP:SAND_BEACH,t); col=mix(col,bc,beachT); }
+
+  /* fine-grain noise texture */
+  const g=(nHi-0.5)*9; col=[col[0]+g,col[1]+g,col[2]+g];
+
+  /* multi-scale hillshade (doc §14): 0.4·macro + 0.4·meso + 0.2·micro */
+  const shMicro=clamp01(sh+(nHi-0.5)*0.20);
+  const shCombined=0.40*sh+0.40*shM+0.20*shMicro;
+  const light=0.45+1.02*Math.pow(clamp01(shCombined),0.85);
+  let lit=[col[0]*light,col[1]*light,col[2]*light];
+  if(blend<1){ const grey=185*light; lit=mix([grey,grey,grey],lit,blend); }
+
+  /* atmospheric perspective (doc §13): fade to sky-blue toward map edge */
+  if(px!==undefined){
+    const dx=px/(GW||1)-0.5, dy=py/(GH||1)-0.5;
+    const haze=Math.pow(clamp01(Math.hypot(dx,dy)*1.9),2.2)*0.18;
+    lit=mix(lit,[208,218,230],haze);
+  }
+
+  return [lit[0]*vig,lit[1]*vig,lit[2]*vig];
+}
+function seaColorCore(depth,T,nLow,sh,vig){
+  let wc; if(depth<0.2) wc=ramp3(W_SHELF,nLow); else if(depth<0.55) wc=mix(ramp3(W_SHELF,nLow),ramp3(W_DEEP,nLow),(depth-0.2)/0.35); else wc=mix(ramp3(W_DEEP,nLow),ramp3(W_ABYSS,nLow),(depth-0.55)/0.45);
+  if(T>22) wc=mix(wc,ramp3(W_TROP,nLow),smoothstep(22,28,T)*(1-depth)*0.8);                  // warm shallows
+  if(T<5)  wc=mix(wc,ramp3(W_GLAC,nLow),smoothstep(5,-3,T)*0.7);                              // cold pale water
+  if(T<-2) wc=mix(wc,[226,233,239],clamp01((-2-T)/6)*0.85);                                   // sea ice
+  const surf=smoothstep(0.03,0,depth); if(surf>0) wc=mix(wc,[176,214,221],surf*0.5);          // surf line (depth-based)
+  const tex=(nLow-0.5)*5, sh2=0.82+0.18*clamp01(sh);
+  return [(wc[0]+tex)*sh2*vig,(wc[1]+tex)*sh2*vig,(wc[2]+tex)*sh2*vig];
+}
+function surfaceColor(x,y,i){
+  const T=tempField[i], M=rainField[i], r=(1-state.seaLevel)<=0?0:(field[i]-state.seaLevel)/(1-state.seaLevel);
+  const sl=slopeAt(x,y);
+  /* TWI = ln(a / tan β) — drainage area over slope angle (doc §11) */
+  const a=Math.max(1e-4,flowField[i]/(GW*GH)), beta=Math.max(0.002,sl);
+  const twi=Math.log(a/beta);
+  /* aspect = equator-facing factor; curvature = Laplacian (doc §12) */
+  const asp=aspectFactor(x,y), curv=curvatureAt(x,y);
+  const c=landColorCore(T,M,sl,r, vnoise(x*0.06,y*0.06,11),vnoise(x*0.45,y*0.45,23),vnoise(x/GW*40,y/GW*40,31),
+    shadeFactor(x,y), shadeFactor2(x,y), twi, asp, curv, state.bioBlend, vignetteAt(x,y), x, y);
+  /* river overlay — blue-grey over terrain where flow accumulation is significant */
+  if(state.showRivers){
+    const fl=flowField[i], thresh=GW*GH*0.0004;
+    if(fl>thresh){ const s=clamp01(Math.log(fl/thresh)/Math.log(GW*GH*0.05))*0.65;
+      c[0]=c[0]*(1-s)+55*s; c[1]=c[1]*(1-s)+130*s; c[2]=c[2]*(1-s)+210*s; }
+  }
+  return c;
+}
+function seaColor(x,y,i){
+  const T=tempField[i], depth=state.seaLevel<=0?0:clamp01((state.seaLevel-field[i])/state.seaLevel);
+  return seaColorCore(depth,T,vnoise(x*0.05,y*0.05,5),shadeFactor(x,y),vignetteAt(x,y));
+}
+function tempColor(tC){ const stops=[[40,60,150],[90,170,210],[235,235,200],[225,150,60],[200,60,50]];
+  const f=Math.max(0,Math.min(1,(tC+30)/65))*(stops.length-1), i=Math.min(stops.length-2,f|0), k=f-i;
+  return [lerp(stops[i][0],stops[i+1][0],k),lerp(stops[i][1],stops[i+1][1],k),lerp(stops[i][2],stops[i+1][2],k)]; }
+function rainColor(m){ const stops=[[200,180,120],[180,190,120],[110,180,150],[50,140,170],[30,90,160]];
+  const f=Math.max(0,Math.min(1,m))*(stops.length-1), i=Math.min(stops.length-2,f|0), k=f-i;
+  return [lerp(stops[i][0],stops[i+1][0],k),lerp(stops[i][1],stops[i+1][1],k),lerp(stops[i][2],stops[i+1][2],k)]; }
+
+/* ===================== colour ===================== */
+function lerp(a,b,t){ return a+(b-a)*t; }
+function mix(c1,c2,t){ return [lerp(c1[0],c2[0],t),lerp(c1[1],c2[1],t),lerp(c1[2],c2[2],t)]; }
+const SEA=[[10,28,46],[26,86,140],[70,140,196]];
+const LAND=[[0,[47,122,68]],[0.18,[111,154,58]],[0.38,[201,178,74]],[0.58,[150,112,72]],[0.78,[140,140,140]],[1,[248,248,250]]];
+function hypso(v){
+  if(v<state.seaLevel){ const d=state.seaLevel<=0?0:(state.seaLevel-v)/state.seaLevel; return d<0.5?mix(SEA[2],SEA[1],d/0.5):mix(SEA[1],SEA[0],(d-0.5)/0.5); }
+  const r=(1-state.seaLevel)<=0?0:(v-state.seaLevel)/(1-state.seaLevel);
+  for(let i=0;i<LAND.length-1;i++){ if(r<=LAND[i+1][0]){ const t=(r-LAND[i][0])/((LAND[i+1][0]-LAND[i][0])||1); return mix(LAND[i][1],LAND[i+1][1],t); } }
+  return LAND[LAND.length-1][1];
+}
+function divColor(v){ if(v>=0) return [lerp(40,205,v), lerp(46,72,v), lerp(56,52,v)]; const t=-v; return [lerp(40,66,t), lerp(46,120,t), lerp(56,190,t)]; }
+function hsl(h,s,l){ if(s===0){ const c=l*255; return [c,c,c]; } const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q; const f=(t)=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }; return [f(h+1/3)*255, f(h)*255, f(h-1/3)*255]; }
+
+/* ===================== hillshade ===================== */
+function shadeFactor(x,y){
+  const L=(x>0?field[y*GW+x-1]:field[y*GW+x]), R=(x<GW-1?field[y*GW+x+1]:field[y*GW+x]);
+  const U=(y>0?field[(y-1)*GW+x]:field[y*GW+x]), D=(y<GH-1?field[(y+1)*GW+x]:field[y*GW+x]);
+  const ex=state.exag, dzdx=(R-L)*ex, dzdy=(D-U)*ex;
+  let nx=-dzdx, ny=-dzdy, nz=1; const il=1/Math.hypot(nx,ny,nz); nx*=il; ny*=il; nz*=il;
+  const az=state.sunAz*Math.PI/180, alt=40*Math.PI/180;
+  const lx=Math.cos(alt)*Math.sin(az), ly=-Math.cos(alt)*Math.cos(az), lz=Math.sin(alt);
+  return Math.max(0, nx*lx+ny*ly+nz*lz);
+}
+
+/* ===================== render ===================== */
+function isWater(v){ return v<state.seaLevel; }
+/* renderNow: the actual pixel loop. Called by the RAF wrapper or directly after heavy ops. */
+function renderNow(){
+  if(suspendRender) return;
+  const px=img.data, dbg=state.debug;
+  let pcol=null, flow=null, logMax=1;
+  if(dbg==='plates') pcol=plates.map((p,i)=>hsl(((i*137.508)%360)/360, p.base<0?0.40:0.5, p.base<0?0.42:0.6));
+  if(dbg==='flow'){ flow=computeFlow(true); let mx=1; for(let i=0;i<flow.length;i++) if(flow[i]>mx)mx=flow[i]; logMax=Math.log(1+mx); }
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x, v=field[i]; let r,g,b;
+    if(dbg==='plates'){ const c=pcol[plateId[i]]; r=c[0];g=c[1];b=c[2]; if(boundaryMask[i]){ r*=0.5;g*=0.5;b*=0.5; } }
+    else if(dbg==='bounds'){ if(boundaryMask[i]){ const s=stressField[i]; if(s>=0){r=205;g=72;b=52;}else{r=66;g=120;b=190;} } else { r=22;g=24;b=30; } }
+    else if(dbg==='stress'){ const c=divColor(stressField[i]); r=c[0];g=c[1];b=c[2]; }
+    else if(dbg==='age'){ const c=30+ageField[i]*205; r=c*0.92;g=c*0.97;b=c; }
+    else if(dbg==='temp'){ const c=tempColor(tempField[i]); r=c[0];g=c[1];b=c[2]; }
+    else if(dbg==='rain'){ if(isWater(v)){ r=18;g=34;b=64; } else { const c=rainColor(rainField[i]); r=c[0];g=c[1];b=c[2]; } }
+    else if(dbg==='flow'){ if(isWater(v)){ const c=hypso(v); r=c[0]*0.7;g=c[1]*0.75;b=c[2]; } else { const a=Math.log(1+flow[i])/logMax; const land=60+v*120; const t=Math.min(1,Math.pow(a,1.6)*2.4); r=land*(1-t)+28*t; g=land*(1-t)+96*t; b=land*(1-t)+205*t; } }
+    else if(state.mode==='gray'){ const c=v*255; r=g=b=c; }
+    else if(state.mode==='shade'){ const s=0.15+0.85*shadeFactor(x,y); let c=s*235; r=g=b=c; if(isWater(v)){ r=c*0.45;g=c*0.6;b=Math.min(255,c*0.9+40); } }
+    else if(state.mode==='biome'){ const c = isWater(v) ? seaColor(x,y,i) : surfaceColor(x,y,i); r=c[0];g=c[1];b=c[2]; }
+    else { let col=hypso(v); if(state.shadeHypso){ const s=0.4+0.6*shadeFactor(x,y); col=[col[0]*s,col[1]*s,col[2]*s]; } if(!isWater(v)){ const wn=(x>0&&isWater(field[i-1]))||(x<GW-1&&isWater(field[i+1]))||(y>0&&isWater(field[i-GW]))||(y<GH-1&&isWater(field[i+GW])); if(wn) col=[col[0]*0.55+20,col[1]*0.55+25,col[2]*0.55+10]; } r=col[0];g=col[1];b=col[2]; }
+    const p=i*4; px[p]=r; px[p+1]=g; px[p+2]=b; px[p+3]=255;
+  }
+  vctx.putImageData(img,0,0);
+  if(dbg==='plates' && plates.length){
+    vctx.lineWidth=Math.max(0.6,GW/520); const dotR=Math.max(1.3,GW/220), len=15*state.tect.vel, aw=Math.max(2.5,GW/170);
+    for(const p of plates){ const Ln=Math.hypot(p.vx,p.vy)||1, ux=p.vx/Ln, uy=p.vy/Ln, ax=p.x+ux*len, ay=p.y+uy*len;
+      vctx.strokeStyle='rgba(12,14,19,.92)'; vctx.beginPath(); vctx.moveTo(p.x,p.y); vctx.lineTo(ax,ay); vctx.stroke();
+      vctx.fillStyle='rgba(12,14,19,.92)'; vctx.beginPath(); vctx.moveTo(ax,ay); vctx.lineTo(ax-ux*aw-uy*aw*0.55, ay-uy*aw+ux*aw*0.55); vctx.lineTo(ax-ux*aw+uy*aw*0.55, ay-uy*aw-ux*aw*0.55); vctx.closePath(); vctx.fill();
+      vctx.fillStyle='rgba(255,255,255,.95)'; vctx.beginPath(); vctx.arc(p.x,p.y,dotR,0,7); vctx.fill(); }
+  }
+  updateReadout(); updateLegend();
+}
+/* Public render(): view-param changes use the RAF scheduler; heavy ops call renderNow() directly */
+function render(){ scheduleRender(); }
+
+/* ===================== sculpt ===================== */
+let _prevGx=NaN, _prevGy=NaN;
+const STAMP_BRUSHES = new Set(['mesa','volcano']);
+const STROKE_BRUSHES = new Set(['cliff','ridge','canyon']);
+function sculpt(gx,gy){
+  const rad=state.radius, r2=rad*rad, str=state.strength, br=state.brush;
+  const x0=Math.max(0,(gx-rad)|0), x1=Math.min(GW-1,(gx+rad)|0), y0=Math.max(0,(gy-rad)|0), y1=Math.min(GH-1,(gy+rad)|0);
+  /* stroke direction (cliff / ridge) — perpendicular normal */
+  let nx=0,ny=1;                                                         // default: vertical cliff face
+  if(STROKE_BRUSHES.has(br)){
+    const sdx=gx-_prevGx, sdy=gy-_prevGy, sL=Math.hypot(sdx,sdy);
+    if(sL<1){ _prevGx=gx; _prevGy=gy; return; }                          // too short to resolve direction; skip this tick
+    nx=-sdy/sL; ny=sdx/sL;                                                // unit normal (perpendicular to stroke)
+  }
+  /* stamp brushes: pre-compute reference height at brush center */
+  const ci=(Math.round(gy)*GW+Math.round(gx))|0;
+  const centerH = (ci>=0 && ci<GW*GH) ? field[ci] : 0.5;
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const dx=x-gx, dy=y-gy, d2=dx*dx+dy*dy; if(d2>r2) continue;
+    const dN=Math.sqrt(d2)/rad, f=Math.pow(1-dN,1.6), i=y*GW+x;
+    if(br==='raise')       field[i]+=0.02*str*f;
+    else if(br==='lower')  field[i]-=0.02*str*f;
+    else if(br==='smooth'){const L=x>0?field[i-1]:field[i],R=x<GW-1?field[i+1]:field[i],U=y>0?field[i-GW]:field[i],D=y<GH-1?field[i+GW]:field[i]; field[i]+=((L+R+U+D)*0.25-field[i])*str*f; }
+    else if(br==='cliff'){                                                // stroke → scarp: one side raised, other lowered
+      const proj=dx*nx+dy*ny; const edge=proj/(rad*0.12);                  // sharp sigmoid-ish across the stroke line
+      const step=edge/Math.sqrt(1+edge*edge);                             // fast approx tanh, ∈ (-1,1)
+      field[i]+=0.03*str*f*step;
+    }
+    else if(br==='ridge'){                                                // stroke → raised crest along path
+      const proj=dx*nx+dy*ny, perpFall=Math.exp(-proj*proj/(rad*rad*0.08));
+      field[i]+=0.04*str*perpFall*f;
+    }
+    else if(br==='canyon'){                                               // stroke → narrow deep V-channel with raised walls
+      const proj=dx*nx+dy*ny, cW=rad*0.18, wW=rad*0.45;
+      if(Math.abs(proj)<cW) field[i]-=str*0.07*(1-Math.abs(proj)/cW)*f; // deep cut
+      else if(Math.abs(proj)<wW) field[i]+=str*0.025*(1-(Math.abs(proj)-cW)/(wW-cW))*f; // raised canyon walls
+    }
+    else if(br==='mesa'){                                                 // stamp → flat-top plateau with steep rim
+      const mesaH=centerH+str*0.15;
+      if(dN<0.6) field[i]=Math.max(field[i], mesaH);
+      else { const t=(dN-0.6)/0.4; field[i]=Math.max(field[i], mesaH*(1-t*t)+field[i]*t*t); }
+    }
+    else if(br==='volcano'){                                              // stamp → conical peak
+      field[i]+=str*0.2*Math.pow(Math.max(0,1-dN),1.8);
+    }
+    if(field[i]<0)field[i]=0; if(field[i]>1)field[i]=1;
+  }
+  _prevGx=gx; _prevGy=gy;
+  render();
+}
+let painting=false;
+
+/* ===================== polyline sculpt ===================== */
+let polyPoints=[]; let polyDrawMode=false; let polyBrush='canyon'; let polyRadius=22; let polyStrength=0.35;
+let _polyHoverX=NaN, _polyHoverY=NaN;   // current mouse position in draw mode (for live preview)
+const POLY_BRUSH_INT={raise:0,lower:1,ridge:2,canyon:3,cliff:4};
+
+/* Centripetal Catmull-Rom spline through all control points.
+   Returns an array of {x,y} sampled along the smooth curve.
+   Identical to the algorithm used in Cartalith for ways.
+   Alpha=0.5 prevents self-intersections and handles unequal spacing well. */
+function catmullRomSample(pts, step){
+  if(pts.length<2) return pts.slice();
+  /* synthetic phantom endpoints: reflect P0 around P1 and P_{n-1} around P_{n-2} */
+  const p=[
+    {x:2*pts[0].x-pts[1].x, y:2*pts[0].y-pts[1].y},
+    ...pts,
+    {x:2*pts[pts.length-1].x-pts[pts.length-2].x, y:2*pts[pts.length-1].y-pts[pts.length-2].y}
+  ];
+  const out=[];
+  const dist=(a,b)=>Math.hypot(b.x-a.x,b.y-a.y);
+  for(let s=0; s<pts.length-1; s++){
+    const P0=p[s],P1=p[s+1],P2=p[s+2],P3=p[s+3];
+    const t0=0, t1=t0+Math.sqrt(dist(P0,P1));
+    const t2=t1+Math.sqrt(dist(P1,P2));
+    const t3=t2+Math.sqrt(dist(P2,P3));
+    if(t2-t1<1e-6) continue;
+    /* sample at ~step-pixel intervals along this segment */
+    const segLen=dist(P1,P2), n=Math.max(2,Math.ceil(segLen/step));
+    const addPt=(s<pts.length-2)?n:n+1; // include endpoint only on last seg
+    for(let i=0; i<addPt; i++){
+      const t=t1+(t2-t1)*i/(n);
+      const A1={x:P0.x+(P1.x-P0.x)*(t-t0)/(t1-t0),y:P0.y+(P1.y-P0.y)*(t-t0)/(t1-t0)};
+      const A2={x:P1.x+(P2.x-P1.x)*(t-t1)/(t2-t1),y:P1.y+(P2.y-P1.y)*(t-t1)/(t2-t1)};
+      const A3={x:P2.x+(P3.x-P2.x)*(t-t2)/(t3-t2),y:P2.y+(P3.y-P2.y)*(t-t2)/(t3-t2)};
+      const B1={x:A1.x+(A2.x-A1.x)*(t-t0)/(t2-t0),y:A1.y+(A2.y-A1.y)*(t-t0)/(t2-t0)};
+      const B2={x:A2.x+(A3.x-A2.x)*(t-t1)/(t3-t1),y:A2.y+(A3.y-A2.y)*(t-t1)/(t3-t1)};
+      out.push({x:B1.x+(B2.x-B1.x)*(t-t1)/(t2-t1), y:B1.y+(B2.y-B1.y)*(t-t1)/(t2-t1)});
+    }
+  }
+  return out;
+}
+
+function renderPolyOverlay(){
+  const oc=document.getElementById('polyOverlay'); if(!oc) return;
+  const ctx=oc.getContext('2d');
+  ctx.clearRect(0,0,oc.width,oc.height);
+  if(!polyPoints.length) return;
+  const sx=oc.width/GW, sy=oc.height/GH, r=polyRadius;
+  /* smooth curve through control points (Catmull-Rom, ~4px sample step) */
+  const curve=polyPoints.length>=2 ? catmullRomSample(polyPoints,4) : polyPoints;
+  // radius tube
+  if(curve.length>1){
+    ctx.strokeStyle='rgba(217,164,91,0.18)'; ctx.lineWidth=2*r*sx; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath(); ctx.moveTo(curve[0].x*sx,curve[0].y*sy);
+    for(let i=1;i<curve.length;i++) ctx.lineTo(curve[i].x*sx,curve[i].y*sy);
+    ctx.stroke();
+  }
+  // smooth path line
+  ctx.strokeStyle='rgba(217,164,91,0.90)'; ctx.lineWidth=1.5; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath(); ctx.moveTo(curve[0].x*sx,curve[0].y*sy);
+  for(let i=1;i<curve.length;i++) ctx.lineTo(curve[i].x*sx,curve[i].y*sy);
+  ctx.stroke();
+  // control point dots (where user tapped)
+  ctx.fillStyle='#d9a45b';
+  for(const p of polyPoints){ ctx.beginPath(); ctx.arc(p.x*sx,p.y*sy,3.5,0,Math.PI*2); ctx.fill(); }
+  // live cursor preview: dashed line from last point to current mouse position
+  if(polyDrawMode && polyPoints.length>0 && !isNaN(_polyHoverX)){
+    const last=polyPoints[polyPoints.length-1];
+    ctx.strokeStyle='rgba(217,164,91,0.45)'; ctx.lineWidth=1.5; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(last.x*sx,last.y*sy); ctx.lineTo(_polyHoverX*sx,_polyHoverY*sy); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function applyPolylineCPU(pts, r, str, br){
+  for(let seg=0;seg<pts.length-1;seg++){
+    const p0=pts[seg], p1=pts[seg+1];
+    const dx=p1.x-p0.x, dy=p1.y-p0.y, len=Math.hypot(dx,dy)||1;
+    const steps=Math.max(1,Math.ceil(len/Math.max(1,r*0.3)));
+    for(let k=0;k<=steps;k++){
+      const t=k/steps, cx=p0.x+t*dx|0, cy=p0.y+t*dy|0;
+      const dirx=dx/len, diry=dy/len, perpx=-diry, perpy=dirx;
+      const ri=r|0;
+      for(let oy=-ri;oy<=ri;oy++) for(let ox=-ri;ox<=ri;ox++){
+        const gx=cx+ox, gy=cy+oy;
+        if(gx<0||gy<0||gx>=GW||gy>=GH) continue;
+        const dist=Math.hypot(ox,oy); if(dist>=r) continue;
+        const fall=1-dist/r, i=gy*GW+gx;
+        const pd=ox*perpx+oy*perpy;  // perpendicular offset from segment axis
+        let h=field[i];
+        if(br==='raise')       h+=str*fall*0.06;
+        else if(br==='lower')  h-=str*fall*0.06;
+        else if(br==='ridge'){ const w=r*0.28; h+=str*0.05*Math.exp(-pd*pd/(w*w))*fall; }
+        else if(br==='canyon'){ const cW=r*0.18,wW=r*0.45;
+          if(Math.abs(pd)<cW)    h-=str*0.07*(1-Math.abs(pd)/cW)*fall;
+          else if(Math.abs(pd)<wW) h+=str*0.025*(1-(Math.abs(pd)-cW)/(wW-cW))*fall; }
+        else if(br==='cliff'){ const sp=1/(1+Math.exp(-pd/(r*0.10)));
+          h+=str*sp*(pd>0?-0.055:0.055)*fall; }
+        field[i]=Math.max(0,Math.min(1,h));
+      }
+    }
+  }
+}
+
+function applyPolyline(pts, r, str, br){
+  /* sample smooth curve at ~r/3 pixel intervals so the brush covers it continuously */
+  const curve = pts.length>=2 ? catmullRomSample(pts, Math.max(1, r/3)) : pts;
+  const t0=performance.now();
+  const bi=POLY_BRUSH_INT[br]??0;
+  if(GPU.enabled && GPU.polylineOK && curve.length>=2){
+    try{ GPU.polyline(curve,r,str,bi); const ms=(performance.now()-t0).toFixed(0); const ps=document.getElementById('polyStats'); if(ps)ps.textContent='Applied GPU · '+ms+' ms · '+curve.length+' curve pts'; return; }
+    catch(e){ console.warn('GPU polyline→CPU',e); GPU.polylineOK=false; }
+  }
+  applyPolylineCPU(curve,r,str,br);
+  const ps=document.getElementById('polyStats'); if(ps)ps.textContent='Applied CPU · '+(performance.now()-t0).toFixed(0)+' ms';
+}
+
+/* ===================== undo ===================== */
+const MAX_UNDO=5; const undoStack=[];
+function pushUndo(){
+  undoStack.push(field.slice());
+  if(undoStack.length>MAX_UNDO) undoStack.shift();
+  updateUndoUI();
+}
+function undoLast(){
+  if(!undoStack.length) return;
+  field.set(undoStack.pop()); updateUndoUI();
+  computeFlow(true); refreshClimate(); renderNow();
+}
+function updateUndoUI(){
+  const el=document.getElementById('undoBtn'), ml=document.getElementById('undoMem'); if(!el)return;
+  el.disabled=undoStack.length===0;
+  if(!ml) return;
+  const mb=(undoStack.length*field.byteLength/1048576).toFixed(0);
+  ml.textContent=undoStack.length?undoStack.length+' step'+(undoStack.length>1?'s':'')+' saved · '+mb+' MB':'Up to '+MAX_UNDO+' steps saved in memory';
+  ml.className='hint'+(undoStack.length>=MAX_UNDO?' undo-warn':'');
+}
+function evtToGrid(e){ const r=view.getBoundingClientRect(); return [(e.clientX-r.left)/r.width*GW, (e.clientY-r.top)/r.height*GH]; }
+view.addEventListener('pointerdown',e=>{
+  if(polyDrawMode){ const[gx,gy]=evtToGrid(e); polyPoints.push({x:gx,y:gy}); renderPolyOverlay(); const pa=document.getElementById('polyApplyBtn'); if(pa)pa.disabled=polyPoints.length<2; const ps=document.getElementById('polyStats'); if(ps)ps.textContent=polyPoints.length+' waypoint'+(polyPoints.length>1?'s':''); return; }
+  if(state.debug!=='off')return; painting=true; view.setPointerCapture(e.pointerId); const[gx,gy]=evtToGrid(e); _prevGx=gx; _prevGy=gy; if(STAMP_BRUSHES.has(state.brush)){pushUndo();} sculpt(gx,gy); });
+view.addEventListener('pointermove',e=>{
+  if(polyDrawMode && polyPoints.length>0){ /* live cursor preview */
+    const[gx,gy]=evtToGrid(e); _polyHoverX=gx; _polyHoverY=gy; renderPolyOverlay(); return; }
+  if(!painting)return; if(STAMP_BRUSHES.has(state.brush))return; const[gx,gy]=evtToGrid(e); sculpt(gx,gy); });
+view.addEventListener('pointerup',()=>{ if(painting){ painting=false; _prevGx=NaN; _prevGy=NaN; if(!STAMP_BRUSHES.has(state.brush))pushUndo(); recomputeClimate(); render(); } });
+view.addEventListener('pointercancel',()=>{ painting=false; _prevGx=NaN; _prevGy=NaN; });
+
+/* ===================== readout + legend ===================== */
+function fmt(n){ return Math.round(n).toLocaleString(); }
+function fmtK(n){ return n>=1000 ? (Math.round(n/100)/10)+'k' : ''+n; }
+function sw(c){ return `<span class="sw" style="background:rgb(${c[0]|0},${c[1]|0},${c[2]|0})"></span>`; }
+function updateReadout(){
+  const mpu=metersPerUnit(), lo=elevM(0), hi=elevM(1), cellKm=state.mapWidthKm/GW, grade=maxGrade();
+  let tmn=Infinity,tmx=-Infinity; for(let i=0;i<tempField.length;i++){ const t=tempField[i]; if(t<tmn)tmn=t; if(t>tmx)tmx=t; }
+  document.getElementById('readout').innerHTML=
+    `Elevation Foundation <b>v${VERSION}</b><br>`+
+    `Grid <b>${GW}×${GH}</b> · ${fmt(GW*GH)} cells<br>`+
+    `Plates <b>${plates.length}</b> · warp <b>${state.tect.warp.toFixed(2)}</b> · seed <b>${state.tect.seed}</b><br>`+
+    `Volc <b>${state.volc.count}</b>${state.volc.provinces?' · prov':''} · craters <b>${state.crater.count}</b><br>`+
+    `Latitude <b>${state.climate.latN}°→${state.climate.latS}°</b> · temp <b>${tmn.toFixed(0)}→${tmx.toFixed(0)} °C</b><br>`+
+    `Altitude <b class="big">${fmt(lo)} → ${fmt(hi)} m</b><br>`+
+    `Cell width <b>${cellKm.toFixed(2)} km</b> · max grade <b>${(grade*100).toFixed(1)}%</b>`;
+}
+function updateLegend(){
+  const el=document.getElementById('legend');
+  if(state.debug==='stress'){ el.innerHTML=`${sw([205,72,52])}uplift · convergent<br>${sw([40,46,56])}neutral<br>${sw([66,120,190])}rift · divergent`; return; }
+  if(state.debug==='bounds'){ el.innerHTML=`${sw([205,72,52])}convergent<br>${sw([66,120,190])}divergent`; return; }
+  if(state.debug==='plates'){ el.innerHTML='plate partition · arrows = drift'; return; }
+  if(state.debug==='age'){ el.innerHTML='dark = young (near boundary)<br>light = old / eroded'; return; }
+  if(state.debug==='temp'){ el.innerHTML=`${sw(tempColor(35))}+35 °C<br>${sw(tempColor(12))}+12 °C<br>${sw(tempColor(0))}0 °C<br>${sw(tempColor(-25))}−25 °C`; return; }
+  if(state.debug==='rain'){ el.innerHTML=`${sw(rainColor(1))}wet<br>${sw(rainColor(0.45))}moderate<br>${sw(rainColor(0))}arid`; return; }
+  if(state.debug==='flow'){ el.innerHTML='blue = drainage / rivers<br>(brightness ∝ upstream area)'; return; }
+  if(state.mode==='biome'){ el.innerHTML=
+    `${sw(SNOW_SEAS[1])}snow / ice<br>${sw(ROCK_GRANITE[1])}rock / scree<br>${sw(WOOD_TEMP[2])}forest<br>`+
+    `${sw(GRASS_TEMP[1])}grass / steppe<br>${sw(SAND_DESERT[1])}sand / desert<br>${sw(SAND_BEACH[1])}coast<br>`+
+    `${sw(W_SHELF[0])}shallows<br>${sw(W_DEEP[1])}deep<br>${sw(W_ABYSS[0])}abyss`; return; }
+  const hi=elevM(1), lo=elevM(0);
+  el.innerHTML=`${sw(hypso(1))}peak  ${fmt(hi)} m<br>${sw(hypso(state.seaLevel+(1-state.seaLevel)*0.3))}upland<br>${sw(hypso(state.seaLevel+0.001))}sea level  0 m<br>${sw(hypso(state.seaLevel*0.4))}deep  ${fmt(lo)} m`;
+}
+
+/* ===================== wiring ===================== */
+const busy=document.getElementById('busy');
+/* ===================== save · bake · export ===================== */
+const microtask=()=>new Promise(r=>setTimeout(r,0));
+/* device canvas capability — iOS/Safari caps total area (~16.7 MP); probe each candidate size, cache */
+const _canvasOK={};
+function canvasWorks(w,h){ const k=w+'x'+h; if(k in _canvasOK) return _canvasOK[k];
+  let ok=false; try{ const c=document.createElement('canvas'); c.width=w; c.height=h; const cx=c.getContext('2d');
+    if(cx){ cx.fillStyle='#fff'; cx.fillRect(w-2,h-2,2,2); ok=cx.getImageData(w-2,h-2,1,1).data[0]>0; } }catch(e){ ok=false; }
+  _canvasOK[k]=ok; return ok; }
+function bakeDims(W){ return {W, H:Math.round(W*GH/GW)}; }
+function sampleArr(a,fx,fy){ if(fx<0)fx=0; else if(fx>GW-1)fx=GW-1; if(fy<0)fy=0; else if(fy>GH-1)fy=GH-1;
+  const x0=fx|0, y0=fy|0, x1=x0<GW-1?x0+1:x0, y1=y0<GH-1?y0+1:y0, tx=fx-x0, ty=fy-y0;
+  return (a[y0*GW+x0]*(1-tx)+a[y0*GW+x1]*tx)*(1-ty)+(a[y1*GW+x0]*(1-tx)+a[y1*GW+x1]*tx)*ty; }
+function buildGridFields(){ gridSlope=new Float32Array(GW*GH); gridShade=new Float32Array(GW*GH); gridShadeMeso=new Float32Array(GW*GH);
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const i=y*GW+x; gridSlope[i]=slopeAt(x,y); gridShade[i]=shadeFactor(x,y); gridShadeMeso[i]=shadeFactor2(x,y); } }
+function bakePixel(gx,gy){
+  const h=sampleArr(field,gx,gy), T=sampleArr(tempField,gx,gy), M=sampleArr(rainField,gx,gy);
+  const sl=sampleArr(gridSlope,gx,gy), shd=sampleArr(gridShade,gx,gy), shdM=sampleArr(gridShadeMeso,gx,gy);
+  const fl=sampleArr(flowField,gx,gy);
+  const nLow=vnoise(gx*0.06,gy*0.06,11), nHi=vnoise(gx*0.45,gy*0.45,23), nBio=vnoise(gx/GW*40,gy/GW*40,31), vig=vignetteAt(gx,gy);
+  if(h<state.seaLevel){ const depth=state.seaLevel<=0?0:clamp01((state.seaLevel-h)/state.seaLevel); return seaColorCore(depth,T,nLow,shd,vig); }
+  const r=(1-state.seaLevel)<=0?0:(h-state.seaLevel)/(1-state.seaLevel);
+  const a=Math.max(1e-4,fl/(GW*GH)), beta=Math.max(0.002,sl), twi=Math.log(a/beta);
+  const asp=aspectFactor(Math.round(gx),Math.round(gy)), curv=curvatureAt(Math.round(gx),Math.round(gy));
+  return landColorCore(T,M,sl,r,nLow,nHi,nBio,shd,shdM,twi,asp,curv,state.bioBlend,vig,gx,gy);
+}
+async function bakeSingle(W,onP){ const {W:w,H}=bakeDims(W);
+  const oc=document.createElement('canvas'); oc.width=w; oc.height=H; const ox=oc.getContext('2d');
+  const sx=(GW-1)/Math.max(1,w-1), sy=(GH-1)/Math.max(1,H-1), STRIP=Math.max(1,Math.min(H,Math.floor(2000000/w)));
+  for(let y0=0;y0<H;y0+=STRIP){ const hh=Math.min(STRIP,H-y0), id=ox.createImageData(w,hh), d=id.data;
+    for(let yy=0;yy<hh;yy++){ const gy=(y0+yy)*sy; for(let x=0;x<w;x++){ const c=bakePixel(x*sx,gy), p=(yy*w+x)*4; d[p]=c[0];d[p+1]=c[1];d[p+2]=c[2];d[p+3]=255; } }
+    ox.putImageData(id,0,y0); if(onP)onP((y0+hh)/H); await microtask(); }
+  return await new Promise(res=>oc.toBlob(res,'image/png')); }
+async function bakeTiled(W,onP){ const {W:w,H}=bakeDims(W), TS=1024, cols=Math.ceil(w/TS), rows=Math.ceil(H/TS);
+  const sx=(GW-1)/Math.max(1,w-1), sy=(GH-1)/Math.max(1,H-1), oc=document.createElement('canvas'), ox=oc.getContext('2d'), images=[]; let done=0; const tot=cols*rows;
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){ const tw=Math.min(TS,w-c*TS), th=Math.min(TS,H-r*TS); oc.width=tw; oc.height=th;
+    const id=ox.createImageData(tw,th), d=id.data;
+    for(let yy=0;yy<th;yy++){ const gy=(r*TS+yy)*sy; for(let xx=0;xx<tw;xx++){ const col=bakePixel((c*TS+xx)*sx,gy), p=(yy*tw+xx)*4; d[p]=col[0];d[p+1]=col[1];d[p+2]=col[2];d[p+3]=255; } }
+    ox.putImageData(id,0,0);
+    const bytes=await new Promise(res=>oc.toBlob(b=>b.arrayBuffer().then(ab=>res(new Uint8Array(ab))),'image/png'));
+    images.push({name:`tiles/tile_${r}_${c}.png`,data:bytes}); done++; if(onP)onP(done/tot); await microtask(); }
+  return {images, index:{tileSize:TS,cols,rows,width:w,height:H}}; }
+
+/* minimal stored (uncompressed) ZIP — no dependencies, works offline */
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(entries){ const enc=new TextEncoder(), u16=v=>[v&255,(v>>8)&255], u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>24)&255];
+  const parts=[], central=[]; let off=0, n=0;
+  for(const e of entries){ const nm=enc.encode(e.name), data=e.data instanceof Uint8Array?e.data:new Uint8Array(e.data), crc=crc32(data);
+    parts.push(new Uint8Array([0x50,0x4b,0x03,0x04,...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0)]),nm,data);
+    central.push(new Uint8Array([0x50,0x4b,0x01,0x02,...u16(20),...u16(20),...u16(0),...u16(0),...u16(0),...u16(0x21),...u32(crc),...u32(data.length),...u32(data.length),...u16(nm.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(off)]),nm);
+    off+=30+nm.length+data.length; n++; }
+  const cdStart=off; for(const c of central) off+=c.length; const cdSize=off-cdStart;
+  const eocd=new Uint8Array([0x50,0x4b,0x05,0x06,...u16(0),...u16(0),...u16(n),...u16(n),...u32(cdSize),...u32(cdStart),...u16(0)]);
+  return new Blob([...parts,...central,eocd],{type:'application/zip'}); }
+function unzipStore(ab){ const dv=new DataView(ab), u8=new Uint8Array(ab), out={}; let p=0;
+  while(p+30<=u8.length && dv.getUint32(p,true)===0x04034b50){ const comp=dv.getUint16(p+8,true), csize=dv.getUint32(p+18,true), nlen=dv.getUint16(p+26,true), elen=dv.getUint16(p+28,true);
+    const name=new TextDecoder().decode(u8.subarray(p+30,p+30+nlen)), ds=p+30+nlen+elen; out[name]= comp===0 ? u8.slice(ds,ds+csize) : null; p=ds+csize; }
+  return out; }
+
+function serializeState(){ return { v:VERSION, GW, GH, state:JSON.parse(JSON.stringify(state)) }; }
+function f32bytes(a){ return new Uint8Array(a.buffer.slice(0, a.length*4)); }
+async function layerBytes(mode,debug){ const sm=state.mode, sd=state.debug; state.mode=mode; state.debug=debug; renderNow();
+  const oc=document.createElement('canvas'); oc.width=GW; oc.height=GH; oc.getContext('2d').putImageData(img,0,0); state.mode=sm; state.debug=sd;
+  return await new Promise(res=>oc.toBlob(b=>b.arrayBuffer().then(ab=>res(new Uint8Array(ab))),'image/png')); }
+function setProg(f){ const v=Math.round(f*100), p=document.getElementById('bakeProg'), t=document.getElementById('bakeProgV'); if(p)p.value=v; if(t)t.textContent=v+'%'; }
+function readme(W,tiled){ const {W:w,H}=bakeDims(W); return [
+  'Cartalith — Elevation Foundation export · v'+VERSION,'',
+  'params.json     all generation, climate and view settings — load to restore the world',
+  'heightmap.f32   raw 32-bit float elevation, '+GW+'×'+GH+' row-major (lossless master layer)',
+  'temperature.f32 raw 32-bit float, degrees C','rainfall.f32    raw 32-bit float, relative moisture 0..1',
+  'layers/*.png    biome / hillshade / temperature / rainfall, each at '+GW+'×'+GH,
+  tiled?('tiles/          final map '+w+'×'+H+' as 1024px PNG tiles + index.json'):('map.png         final rendered map, '+w+'×'+H+' (lossless PNG)') ].join('\n'); }
+async function exportZip(){
+  let W=+document.getElementById('bakeRes').value||4096, tiled=document.getElementById('bakeTiles').checked; const btn=document.getElementById('exportBtn');
+  if(!tiled){ const d=bakeDims(W); if(!canvasWorks(d.W,d.H)){            // chosen size won't allocate here (iOS) — degrade gracefully
+      const opts=[...document.getElementById('bakeRes').options].map(o=>+o.value).sort((a,b)=>a-b); let fit=0;
+      for(const o of opts){ const dd=bakeDims(o); if(canvasWorks(dd.W,dd.H)) fit=o; }
+      if(fit){ W=fit; } else { tiled=true; }                            // nothing fits as one image → tiles
+  } }
+  btn.disabled=true; busy.textContent='baking…'; busy.style.display='flex'; const row=document.getElementById('bakeProgRow'); if(row)row.style.display='flex'; setProg(0);
+  try{ buildGridFields(); const E=[];
+    E.push({name:'params.json',data:new TextEncoder().encode(JSON.stringify(serializeState(),null,2))});
+    E.push({name:'heightmap.f32',data:f32bytes(field)}); E.push({name:'temperature.f32',data:f32bytes(tempField)}); E.push({name:'rainfall.f32',data:f32bytes(rainField)});
+    E.push({name:'biome_raster.bin',data:buildBiomeRaster()}); E.push({name:'biome_index.json',data:new TextEncoder().encode(JSON.stringify(biomeIndexManifest(),null,2))});
+    E.push({name:'layers/biome.png',data:await layerBytes('biome','off')}); E.push({name:'layers/hillshade.png',data:await layerBytes('shade','off')});
+    E.push({name:'layers/temperature.png',data:await layerBytes('biome','temp')}); E.push({name:'layers/rainfall.png',data:await layerBytes('biome','rain')}); renderNow();
+    if(tiled){ const t=await bakeTiled(W,setProg); for(const im of t.images) E.push(im); E.push({name:'tiles/index.json',data:new TextEncoder().encode(JSON.stringify(t.index,null,2))}); }
+    else { const blob=await bakeSingle(W,setProg); E.push({name:'map.png',data:new Uint8Array(await blob.arrayBuffer())}); }
+    E.push({name:'README.txt',data:new TextEncoder().encode(readme(W,tiled))});
+    const url=URL.createObjectURL(zipStore(E)), a=document.createElement('a'); a.href=url; a.download=`world_${state.tect.seed}_${tiled?'tiles':(W/1024)+'k'}.zip`; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }catch(e){ alert('Export failed: '+e.message); }
+  finally{ btn.disabled=false; busy.style.display='none'; if(row)row.style.display='none'; }
+}
+async function loadZip(file){ busy.textContent='loading…'; busy.style.display='flex';
+  try{ const z=unzipStore(await file.arrayBuffer()); if(!z['params.json']) throw new Error('not an Elevation Foundation save');
+    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; state.stream=Object.assign({deposit:0.3,climateK:0.5},state.stream); if(typeof state.showRivers!=='boolean')state.showRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; state.resW=GW; allocate();
+    if(z['heightmap.f32']){ const fa=new Float32Array(z['heightmap.f32'].buffer); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }
+    if(z['temperature.f32']){ const fa=new Float32Array(z['temperature.f32'].buffer); tempField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else computeTemperature();
+    if(z['rainfall.f32']){ const fa=new Float32Array(z['rainfall.f32'].buffer); rainField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else simulateWeather(state.climate.wIters);
+    plates=[]; syncUI(); renderNow();
+  }catch(e){ alert('Load failed: '+e.message); }
+  finally{ busy.style.display='none'; }
+}
+function syncUI(){ suspendRender=true;
+  const v=(id,val)=>{ const e=document.getElementById(id); if(e)e.value=val; }, lab=(id,txt)=>{ const e=document.getElementById(id); if(e)e.textContent=txt; };
+  const t=state.tect, vo=state.volc, cr=state.crater, er=state.erosion, st=state.stream, cl=state.climate;
+  v('plates',t.plates); lab('platesV',t.plates); v('vel',Math.round(t.vel*50)); lab('velV','×'+t.vel.toFixed(2));
+  v('warp',Math.round(t.warp*100)); lab('warpV',t.warp.toFixed(2)); v('sigma',Math.round((t.blurR-2)/40*100)); lab('sigmaV',Math.round(t.blurR)+'px');
+  v('alpha',Math.round(t.alpha/1.2*100)); lab('alphaV',t.alpha.toFixed(2)); v('beta',Math.round(t.beta/0.6*100)); lab('betaV',t.beta.toFixed(2));
+  v('age',Math.round(t.age*100)); lab('ageV',t.age.toFixed(2)); const rg=document.getElementById('ridged'); if(rg)rg.checked=t.ridged; v('seedN',t.seed);
+  v('flexure',Math.round((t.flexure||0)/0.6*100)); lab('flexureV',(t.flexure||0).toFixed(2));
+  v('hetero',Math.round((t.hetero||0)/0.4*100)); lab('heteroV',(t.hetero||0).toFixed(2));
+  v('resist',Math.round((t.resist||0)*100)); lab('resistV',(t.resist||0).toFixed(2));
+  v('volc',vo.count); lab('volcV',vo.count); v('volca',Math.round(vo.age*100)); lab('volcaV',vo.age.toFixed(2)); const vp=document.getElementById('volcProv'); if(vp)vp.checked=vo.provinces;
+  v('crat',Math.round(cr.count/2)); lab('cratV',cr.count); v('crata',Math.round(cr.age*100)); lab('crataV',cr.age.toFixed(2));
+  v('latN',cl.latN); lab('latNV',cl.latN+'°'); v('latS',cl.latS); lab('latSV',cl.latS+'°'); v('teq',cl.equatorTemp); lab('teqV',cl.equatorTemp+'°C');
+  v('tpo',cl.poleTemp); lab('tpoV',(cl.poleTemp<0?'−'+(-cl.poleTemp):''+cl.poleTemp)+'°C'); v('lapse',Math.round(cl.lapseRate*10)); lab('lapseV',cl.lapseRate.toFixed(1)+'°C/km');
+  v('rainK',Math.round(cl.rainK*100)); lab('rainKV','×'+cl.rainK.toFixed(2)); v('rainDep',Math.round(cl.rainDep*100)); lab('rainDepV',cl.rainDep.toFixed(2));
+  v('evap',Math.round((cl.evap||0)/0.3*100)); lab('evapV',(cl.evap||0).toFixed(2)); v('ocean',Math.round((cl.ocean!=null?cl.ocean:1)*100)); lab('oceanV','×'+(cl.ocean!=null?cl.ocean:1).toFixed(2)); v('wIters',cl.wIters||70); lab('wItersV',''+(cl.wIters||70)); v('windDir',cl.windDir||0); lab('windDirV',(cl.windDir||0)+'°');
+  v('pressK',Math.round((cl.pressK==null?0.6:cl.pressK)*100)); lab('pressKV',(cl.pressK==null?0.6:cl.pressK).toFixed(2));
+  v('zonalK',Math.round((cl.zonalK==null?0.5:cl.zonalK)*100)); lab('zonalKV',(cl.zonalK==null?0.5:cl.zonalK).toFixed(2));
+  v('drops',Math.round(er.droplets/1500)); lab('dropsV',fmtK(er.droplets)); v('estr',Math.round(er.erode*100)); lab('estrV',er.erode.toFixed(2));
+  v('edep',Math.round(er.deposit*100)); lab('edepV',er.deposit.toFixed(2)); v('ethr',er.thermalPasses); lab('ethrV',''+er.thermalPasses); v('etal',Math.round(er.talus*1000)); lab('etalV',er.talus.toFixed(3)); v('edD',Math.round((er.diffuseD||0.15)/0.2*100)); lab('edDV',(er.diffuseD||0.15).toFixed(3)); v('edPas',er.diffusePasses||6); lab('edPasV',''+(er.diffusePasses||6));
+  v('sUp',Math.round(st.uplift/0.4*100)); lab('sUpV',st.uplift.toFixed(2)); v('sK',Math.round(st.k/0.03*100)); lab('sKV',st.k.toFixed(3)); v('sIt',st.iters); lab('sItV',''+st.iters); v('sDep',Math.round((st.deposit||0)*100)); lab('sDepV',(st.deposit||0).toFixed(2)); v('sClim',Math.round((st.climateK!=null?st.climateK:0.5)*100)); lab('sClimV',(st.climateK!=null?st.climateK:0.5).toFixed(2));
+  const gl=state.glacial||{}; v('gSnow',Math.round((gl.snowline||0.65)*100)); lab('gSnowV',(gl.snowline||0.65).toFixed(2)); v('gKg',Math.round((gl.kg||0.15)*100)); lab('gKgV',(gl.kg||0.15).toFixed(2)); v('gUF',Math.round((gl.uFactor||0.6)*100)); lab('gUFV',(gl.uFactor||0.6).toFixed(2)); v('gPas',gl.passes||8); lab('gPasV',''+(gl.passes||8));
+  { const el=document.getElementById('showRivers'); if(el) el.checked=state.showRivers!==false; }
+  const co=state.coastal||{}; v('cWave',Math.round((co.waveStr||0.5)*100)); lab('cWaveV',(co.waveStr||0.5).toFixed(2)); v('cEst',Math.round((co.estuaryDepth||0.08)/0.2*100)); lab('cEstV',(co.estuaryDepth||0.08).toFixed(3)); v('cMar',Math.round((co.marshBand||0.03)/0.1*100)); lab('cMarV',(co.marshBand||0.03).toFixed(3)); v('cPas',co.passes||4); lab('cPasV',''+(co.passes||4));
+  v('sea',Math.round(state.seaLevel*100)); lab('seaV',Math.round(state.seaLevel*100)+'%'); v('peak',state.peakM); v('mapw',state.mapWidthKm);
+  { const p=state.planet||{}; const pg=p.g==null?1:p.g, pr=p.rotationHours==null?24:p.rotationHours, pt=p.axialTiltDeg==null?23.4:p.axialTiltDeg;
+    v('pg',Math.round(pg*100)); lab('pgV',pg.toFixed(2)+' g'); v('prot',pr); lab('protV',pr+' h'); v('ptilt',pt); lab('ptiltV',pt.toFixed(1)+'\u00b0'); }
+  v('exag',Math.round((state.exag-0.4)/7*100)); lab('exagV','×'+state.exag.toFixed(1)); v('sun',state.sunAz); lab('sunV',state.sunAz+'°');
+  v('bioBlend',Math.round(state.bioBlend*100)); lab('bioBlendV',state.bioBlend.toFixed(2)); v('brad',state.radius); lab('bradV',state.radius);
+  v('bstr',Math.round(state.strength*100)); lab('bstrV',Math.round(state.strength*100)+'%'); const sh=document.getElementById('shadeOnHypso'); if(sh)sh.checked=state.shadeHypso;
+  const segOn=(sel,fn)=>document.querySelectorAll(sel+' button').forEach(b=>b.classList.toggle('on',fn(b)));
+  segOn('#resSeg',b=>+b.dataset.w===state.resW); segOn('#extentSeg',b=>(b.dataset.world==='1')===state.world); segOn('#modeSeg',b=>b.dataset.mode===state.mode); segOn('#debugSeg',b=>b.dataset.d===state.debug); segOn('#brushSeg',b=>b.dataset.brush===state.brush);
+  segOn('#windModeSeg',b=>b.dataset.wm===(cl.windMode||'auto'));
+  { const ws=state.world_structure; const el=document.getElementById('wsEnabled'); if(el)el.checked=ws.enabled; const panel=document.getElementById('wsPanel'); if(panel)panel.style.display=ws.enabled?'block':'none'; segOn('#archetypeSeg',b=>b.dataset.arc===ws.archetype); syncWSSliders(); }
+  ['latN','latS'].forEach(id=>{ const el=document.getElementById(id); if(el)el.disabled=state.world; });
+  { const wd=document.getElementById('windDir'); if(wd)wd.disabled=state.world||(cl.windMode||'auto')!=='manual'; }
+  suspendRender=false;
+}
+
+function withBusy(label,fn){ busy.textContent=label; busy.style.display='flex'; setTimeout(()=>{ fn(); busy.style.display='none'; }, 20); }
+function bind(id,fn){ document.getElementById(id).addEventListener('input',fn); }
+/* sea level: purely visual threshold — biome colours shift but no simulation reruns (doc §11) */
+bind('sea',e=>{ state.seaLevel=+e.target.value/100; document.getElementById('seaV').textContent=e.target.value+'%'; render(); });
+/* peak/mapw: affects temperature lapse scaling → invalidate temperature only, not full weather */
+bind('peak',e=>{ state.peakM=Math.max(1,+e.target.value||1); invalidate('temperature'); recomputeClimate(); render(); });
+/* planet (G1): gravity regenerates; rotation/tilt are stored for weather v2 */
+{ const el=document.getElementById('pg'), vl=document.getElementById('pgV');
+  if(el){ el.addEventListener('input',()=>{ if(vl)vl.textContent=(+el.value/100).toFixed(2)+' g'; });
+    el.addEventListener('change',()=>{ const gOld=state.planet.g||1, gNew=Math.max(0.3,+el.value/100);
+      state.planet.g=gNew;
+      state.peakM=Math.max(1,Math.round(state.peakM*gOld/gNew));   /* max relief ~ 1/g: rescale, preserving user intent */
+      v('peak',state.peakM);
+      withBusy('generating…',generate); }); } }
+bind('prot',e=>{ state.planet.rotationHours=Math.max(1,+e.target.value||24); lab('protV',state.planet.rotationHours+' h'); });
+bind('ptilt',e=>{ state.planet.axialTiltDeg=+e.target.value; lab('ptiltV',state.planet.axialTiltDeg.toFixed(1)+'\u00b0'); });
+bind('mapw',e=>{ state.mapWidthKm=Math.max(0,+e.target.value||0); invalidate('temperature'); recomputeClimate(); render(); });
+/* exag/sun: pure view — no simulation whatsoever */
+bind('exag',e=>{ state.exag=0.4+(+e.target.value/100)*7; document.getElementById('exagV').textContent='×'+state.exag.toFixed(1); render(); });
+bind('sun',e=>{ state.sunAz=+e.target.value; document.getElementById('sunV').textContent=e.target.value+'°'; render(); });
+document.getElementById('shadeOnHypso').addEventListener('change',e=>{ state.shadeHypso=e.target.checked; render(); });
+bind('brad',e=>{ state.radius=+e.target.value; document.getElementById('bradV').textContent=e.target.value; });
+bind('bstr',e=>{ state.strength=+e.target.value/100; document.getElementById('bstrV').textContent=e.target.value+'%'; });
+
+/* world params: label live, regenerate on release */
+function tparam(id, apply, label){
+  const el=document.getElementById(id), vEl=document.getElementById(id+'V');
+  el.addEventListener('input',()=>{ if(vEl&&label) vEl.textContent=label(+el.value); });
+  el.addEventListener('change',()=>{ apply(+el.value); withBusy('generating…',generate); });
+}
+tparam('plates', v=>state.tect.plates=v, v=>v);
+tparam('vel',    v=>state.tect.vel=v/50,           v=>'×'+(v/50).toFixed(2));
+tparam('warp',   v=>state.tect.warp=v/100,         v=>(v/100).toFixed(2));
+tparam('sigma',  v=>state.tect.blurR=2+(v/100)*40, v=>Math.round(2+(v/100)*40)+'px');
+tparam('alpha',  v=>state.tect.alpha=v/100*1.2,    v=>(v/100*1.2).toFixed(2));
+tparam('beta',   v=>state.tect.beta=v/100*0.6,     v=>(v/100*0.6).toFixed(2));
+tparam('age',    v=>state.tect.age=v/100,          v=>(v/100).toFixed(2));
+tparam('flexure',v=>state.tect.flexure=v/100*0.6,  v=>(v/100*0.6).toFixed(2));
+tparam('hetero', v=>state.tect.hetero=v/100*0.4,   v=>(v/100*0.4).toFixed(2));
+tparam('resist', v=>state.tect.resist=v/100,        v=>(v/100).toFixed(2));
+tparam('volc',   v=>state.volc.count=v,            v=>v);
+tparam('volca',  v=>state.volc.age=v/100,          v=>(v/100).toFixed(2));
+tparam('crat',   v=>state.crater.count=v*2,        v=>v*2);
+tparam('crata',  v=>state.crater.age=v/100,        v=>(v/100).toFixed(2));
+document.getElementById('volcProv').addEventListener('change',e=>{ state.volc.provinces=e.target.checked; withBusy('generating…',generate); });
+document.getElementById('ridged').addEventListener('change',e=>{ state.tect.ridged=e.target.checked; withBusy('generating…',generate); });
+document.getElementById('seedN').addEventListener('change',e=>{ state.tect.seed=(+e.target.value)|0; withBusy('generating…',generate); });
+
+/* droplet-erosion params: update state only */
+function eparam(id, apply, label){ const el=document.getElementById(id), vEl=document.getElementById(id+'V'); el.addEventListener('input',()=>{ apply(+el.value); if(vEl&&label) vEl.textContent=label(+el.value); }); }
+eparam('drops', v=>state.erosion.droplets=Math.round(v*1500), v=>fmtK(Math.round(v*1500)));
+eparam('estr',  v=>state.erosion.erode=v/100,    v=>(v/100).toFixed(2));
+eparam('edep',  v=>state.erosion.deposit=v/100,  v=>(v/100).toFixed(2));
+eparam('ethr',  v=>state.erosion.thermalPasses=v, v=>''+v);
+eparam('etal',  v=>state.erosion.talus=v/1000,   v=>(v/1000).toFixed(3));
+eparam('edD',   v=>state.erosion.diffuseD=v/100*0.2,   v=>(v/100*0.2).toFixed(3));
+eparam('edPas', v=>state.erosion.diffusePasses=v,        v=>''+v);
+/* stream-power params: update state only */
+eparam('sUp', v=>state.stream.uplift=v/100*0.4, v=>(v/100*0.4).toFixed(2));
+eparam('sK',  v=>state.stream.k=v/100*0.03,     v=>(v/100*0.03).toFixed(3));
+eparam('sIt', v=>state.stream.iters=v,          v=>''+v);
+eparam('sDep',v=>state.stream.deposit=v/100,    v=>(v/100).toFixed(2));
+eparam('sClim',v=>state.stream.climateK=v/100, v=>(v/100).toFixed(2));
+eparam('gSnow',v=>state.glacial.snowline=v/100, v=>(v/100).toFixed(2));
+eparam('gKg',  v=>state.glacial.kg=v/100,       v=>(v/100).toFixed(2));
+eparam('gUF',  v=>state.glacial.uFactor=v/100,  v=>(v/100).toFixed(2));
+eparam('gPas', v=>state.glacial.passes=v,        v=>''+v);
+eparam('cWave',v=>state.coastal.waveStr=v/100,      v=>(v/100).toFixed(2));
+eparam('cEst', v=>state.coastal.estuaryDepth=v/100*0.2,v=>(v/100*0.2).toFixed(3));
+eparam('cMar', v=>state.coastal.marshBand=v/100*0.1,  v=>(v/100*0.1).toFixed(3));
+eparam('cPas', v=>state.coastal.passes=v,             v=>''+v);
+{ const el=document.getElementById('showRivers'); if(el){ el.addEventListener('change',()=>{ state.showRivers=el.checked; render(); }); } }
+/* climate params: update state, recompute climate fields live, re-render (terrain unchanged) */
+function cparam(id, apply, label){ const el=document.getElementById(id), vEl=document.getElementById(id+'V'); el.addEventListener('input',()=>{ apply(+el.value); if(vEl&&label) vEl.textContent=label(+el.value); recomputeClimate(); render(); }); }
+cparam('latN',   v=>state.climate.latN=v,        v=>v+'°');
+cparam('latS',   v=>state.climate.latS=v,        v=>v+'°');
+cparam('teq',    v=>state.climate.equatorTemp=v, v=>v+'°C');
+cparam('tpo',    v=>state.climate.poleTemp=v,    v=>(v<0?'−'+(-v):''+v)+'°C');
+cparam('lapse',  v=>state.climate.lapseRate=v/10,v=>(v/10).toFixed(1)+'°C/km');
+/* weather-sim params: update state + label only; apply on the Simulate weather button (like erosion) */
+eparam('rainK',  v=>state.climate.rainK=v/100,    v=>'×'+(v/100).toFixed(2));
+eparam('evap',   v=>state.climate.evap=v/100*0.3, v=>(v/100*0.3).toFixed(2));
+eparam('rainDep',v=>state.climate.rainDep=v/100,  v=>(v/100).toFixed(2));
+eparam('ocean',  v=>state.climate.ocean=v/100,    v=>'×'+(v/100).toFixed(2));
+eparam('wIters', v=>state.climate.wIters=v,       v=>''+v);
+eparam('windDir',v=>state.climate.windDir=v,      v=>v+'°');
+{ const segEl=document.getElementById('windModeSeg');
+  if(segEl){ segEl.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return;
+    [...segEl.children].forEach(x=>x.classList.toggle('on',x===b));
+    state.climate.windMode=b.dataset.wm;
+    const wd=document.getElementById('windDir'); if(wd)wd.disabled=state.world||state.climate.windMode!=='manual';
+    withBusy('simulating weather…',()=>{ simulateWeather(state.climate.wIters); applyClimateMoistureCorrectors(); render(); }); }); } }
+cparam('pressK',v=>state.climate.pressK=v/100, v=>(v/100).toFixed(2));
+cparam('zonalK',v=>state.climate.zonalK=v/100, v=>(v/100).toFixed(2));
+document.getElementById('weatherBtn').onclick=()=>withBusy('simulating weather…',()=>{ simulateWeather(state.climate.wIters); render(); });
+/* biome blend: pure render control (no recompute) */
+bind('bioBlend',e=>{ state.bioBlend=+e.target.value/100; document.getElementById('bioBlendV').textContent=(+e.target.value/100).toFixed(2); render(); });
+
+function seg(segId,key,attr,after){ document.getElementById(segId).addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b)); state[key]=b.dataset[attr]; if(after)after(); }); }
+seg('modeSeg','mode','mode',render);
+seg('brushSeg','brush','brush');
+seg('debugSeg','debug','d',render);
+document.getElementById('resSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b)); state.resW=+b.dataset.w; GW=state.resW; GH=gridH(GW); allocate(); withBusy('generating…',generate); });
+document.getElementById('extentSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b)); state.world=b.dataset.world==='1'; GW=state.resW; GH=gridH(GW); ['latN','latS'].forEach(id=>{ const el=document.getElementById(id); if(el)el.disabled=state.world; }); { const wd=document.getElementById('windDir'); if(wd)wd.disabled=state.world||state.climate.windMode!=='manual'; } allocate(); withBusy('generating…',generate); });
+
+document.getElementById('loadBtn').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').addEventListener('change',e=>{ if(e.target.files[0]) loadImage(e.target.files[0]); });
+document.getElementById('genBtn').onclick=()=>withBusy('generating…',generate);
+document.getElementById('reseedBtn').onclick=()=>{ state.tect.seed=(Math.random()*99999)|0; document.getElementById('seedN').value=state.tect.seed; withBusy('generating…',generate); };
+document.getElementById('erodeBtn').onclick=()=>{ pushUndo(); erodeAsync(); };
+document.getElementById('diffuseBtn').onclick=()=>{ pushUndo(); withBusy('diffusing slopes…',hillslopeDiffuse); };
+document.getElementById('resetBtn').onclick=()=>withBusy('generating…',generate);
+document.getElementById('streamBtn').onclick=()=>{ pushUndo(); withBusy('carving rivers…',streamPowerErode); };
+document.getElementById('glacBtn').onclick=()=>{ pushUndo(); withBusy('carving glaciers…',glacialErode); };
+document.getElementById('coastBtn').onclick=()=>{ pushUndo(); withBusy('shaping coastline…',coastalProcess); };
+
+/* ---- tab switching ---- */
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
+  const tp=b.dataset.tab;
+  document.getElementById('terrainPanel').style.display=tp==='terrain'?'block':'none';
+  document.getElementById('sculptPanel').style.display=tp==='sculpt'?'block':'none';
+}));
+
+/* ---- polyline sculpt ---- */
+document.querySelectorAll('#polyBrushSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#polyBrushSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  polyBrush=b.dataset.pb;
+}));
+{ const pr=document.getElementById('polyRad'),prv=document.getElementById('polyRadV'); if(pr){ pr.addEventListener('input',()=>{ polyRadius=+pr.value; if(prv)prv.textContent=pr.value; renderPolyOverlay(); }); } }
+{ const ps_=document.getElementById('polyStr'),psv=document.getElementById('polyStrV'); if(ps_){ ps_.addEventListener('input',()=>{ polyStrength=+ps_.value/100; if(psv)psv.textContent=(+ps_.value/100).toFixed(2); }); } }
+document.getElementById('polyDrawBtn').addEventListener('click',()=>{
+  polyDrawMode=!polyDrawMode;
+  document.getElementById('polyDrawBtn').classList.toggle('on',polyDrawMode);
+  document.getElementById('polyDrawBtn').textContent=polyDrawMode?'Done placing':'Draw path';
+  view.style.cursor=polyDrawMode?'crosshair':'';
+});
+document.getElementById('polyApplyBtn').addEventListener('click',()=>{
+  if(polyPoints.length<2) return;
+  const pts=polyPoints.slice(), r=polyRadius, str=polyStrength, br=polyBrush;
+  pushUndo(); polyPoints=[]; polyDrawMode=false;
+  document.getElementById('polyDrawBtn').classList.remove('on');
+  document.getElementById('polyDrawBtn').textContent='Draw path';
+  document.getElementById('polyApplyBtn').disabled=true;
+  view.style.cursor=''; renderPolyOverlay();
+  withBusy('applying path…',()=>{ applyPolyline(pts,r,str,br); computeFlow(true); refreshClimate(); renderNow(); });
+});
+document.getElementById('polyClearBtn').addEventListener('click',()=>{
+  polyPoints=[]; _polyHoverX=NaN; _polyHoverY=NaN; renderPolyOverlay(); polyDrawMode=false;
+  document.getElementById('polyDrawBtn').classList.remove('on');
+  document.getElementById('polyDrawBtn').textContent='Draw path';
+  document.getElementById('polyApplyBtn').disabled=true; view.style.cursor='';
+  const ps=document.getElementById('polyStats'); if(ps)ps.textContent='';
+});
+
+/* ---- undo ---- */
+document.getElementById('undoBtn').addEventListener('click',undoLast);
+updateUndoUI();
+
+/* ---- mobile zoom ---- */
+let zoomLvl=1.0;
+function applyZoom(){
+  view.style.transform=`scale(${zoomLvl})`; view.style.transformOrigin='top left';
+  const ov=document.getElementById('polyOverlay');
+  if(ov){ ov.style.transform=view.style.transform; ov.style.transformOrigin='top left'; }
+}
+const isMobile=(navigator.maxTouchPoints>1)||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if(isMobile){ const zo=document.getElementById('zoomOverlay'); if(zo)zo.style.display='flex'; }
+document.getElementById('zoomIn').addEventListener('click',()=>{ zoomLvl=Math.min(5,zoomLvl*1.35); applyZoom(); });
+document.getElementById('zoomOut').addEventListener('click',()=>{ zoomLvl=Math.max(0.25,zoomLvl/1.35); applyZoom(); });
+document.getElementById('zoomReset').addEventListener('click',()=>{ zoomLvl=1.0; applyZoom(); });
+
+/* save & export + tiled toggle + lazy device probe */
+(function(){
+  const sel=document.getElementById('bakeRes'), note=document.getElementById('bakeNote'), tiles=document.getElementById('bakeTiles');
+  function refreshRes(){ const tiled=tiles.checked; let capped=false;
+    [...sel.options].forEach(o=>{ const W=+o.value, d=bakeDims(W), ok=tiled||canvasWorks(d.W,d.H); o.disabled=!ok; if(!ok)capped=true; });
+    if(sel.selectedOptions[0] && sel.selectedOptions[0].disabled){ const en=[...sel.options].filter(o=>!o.disabled); if(en.length) sel.value=en[en.length-1].value; }
+    note.textContent = tiled ? 'Tiled: any size, works on every device (1024px PNG tiles + index.json).'
+      : (capped ? 'Greyed sizes exceed this device’s canvas limit (iOS/Safari ≈16.7 MP). Tick “tiles” to export them anyway.' : 'Single lossless PNG. Tick “tiles” for very large maps or on iOS.'); }
+  let probed=false; const ensure=()=>{ if(!probed){ probed=true; refreshRes(); } };
+  sel.addEventListener('pointerdown',ensure); sel.addEventListener('focus',ensure);
+  tiles.addEventListener('change',()=>{ probed=true; refreshRes(); });
+  document.getElementById('exportBtn').onclick=exportZip;
+  document.getElementById('loadZipBtn').onclick=()=>document.getElementById('zipFile').click();
+  document.getElementById('zipFile').addEventListener('change',e=>{ if(e.target.files[0]) loadZip(e.target.files[0]); e.target.value=''; });
+})();
+
+/* mobile control drawer */
+(function(){ const pt=document.getElementById('panelToggle'), sc=document.getElementById('scrim');
+  const set=o=>document.body.classList.toggle('panel-open',o);
+  if(pt) pt.onclick=()=>set(!document.body.classList.contains('panel-open'));
+  if(sc) sc.onclick=()=>set(false);
+})();
+
+/* ===================== init ===================== */
+document.getElementById('seedN').value=state.tect.seed;
+/* ---- world structure wiring ---- */
+(function(){
+  const wsEl=document.getElementById('wsEnabled'), panel=document.getElementById('wsPanel');
+  if(!wsEl) return;
+  wsEl.addEventListener('change',()=>{ state.world_structure.enabled=wsEl.checked; panel.style.display=wsEl.checked?'block':'none'; if(wsEl.checked){ deriveFromWorldStructure(); syncDerivedTectSliders(); } withBusy('generating…',generate); });
+  /* archetype segment */
+  document.getElementById('archetypeSeg').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b)return; const arc=b.dataset.arc;
+    state.world_structure.archetype=arc;
+    [...document.getElementById('archetypeSeg').children].forEach(c=>c.classList.toggle('on',c===b));
+    if(arc!=='custom' && ARCHETYPES[arc]){ Object.assign(state.world_structure,ARCHETYPES[arc]); syncWSSliders(); }
+    deriveFromWorldStructure(); syncDerivedTectSliders(); withBusy('generating…',generate);
+  });
+  /* ws param sliders */
+  function wsp(id,setter,labFn){ const el=document.getElementById(id),lel=document.getElementById(id+'V'); if(!el)return;
+    el.addEventListener('input',()=>{ setter(+el.value); if(lel)lel.textContent=labFn(+el.value); });
+    el.addEventListener('change',()=>{ state.world_structure.archetype='custom'; segOn('#archetypeSeg',b=>b.dataset.arc==='custom'); deriveFromWorldStructure(); syncDerivedTectSliders(); withBusy('generating…',generate); });
+  }
+  wsp('wsCont', v=>state.world_structure.continentality=v/100, v=>(v/100).toFixed(2));
+  wsp('wsFrag', v=>state.world_structure.fragmentation=v/100,  v=>(v/100).toFixed(2));
+  wsp('wsTect', v=>state.world_structure.tectonicEnergy=v/100, v=>(v/100).toFixed(2));
+  wsp('wsOcean',v=>state.world_structure.oceanDepth=v/100,     v=>(v/100).toFixed(2));
+  wsp('wsHot',  v=>state.world_structure.hotspotDensity=v/100, v=>(v/100).toFixed(2));
+})();
+GPU.init(); { const t=document.getElementById('gpuToggle'); if(t){ t.checked=GPU.enabled; t.disabled=!GPU.ok; t.addEventListener('change',()=>{ GPU.enabled=GPU.ok&&t.checked; }); } }
+GW=state.resW; GH=gridH(GW); allocate(); withBusy('generating…',generate);
+</script>
+</body>
+</html>

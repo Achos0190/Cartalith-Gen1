@@ -16,6 +16,10 @@ The generator already has a working grid (`GW×GH`, 512/1K/2K), a tiled PNG bake
 
 ---
 
+## Status (June 2026)
+
+**Stage 3 amplification core shipped in v0.044**: `amplifyRegion()` — pure, worker-ready, proven seamless (seam Δ=0 across adjacent tiles), deterministic, constraint-preserving (78 headless assertions). Remaining (browser-bound): region-selection UI, per-tile OffscreenCanvas/worker rendering, fflate-compressed tiled export + manifest, 16-bit height packing.
+
 ## Architecture: coarse world → selected region → high-res tiles
 
 ### Stage 1 — World map (coarse, fast, the index)

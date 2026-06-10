@@ -4,8 +4,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.043.html` | ~2,700 | **Current** procedural heightmap/terrain/climate generator |
-| `elevation_foundation_v0.036–42.html` | — | Previous versions (kept; don't edit) |
+| `elevation_foundation_v0.044.html` | ~2,700 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036–43.html` | — | Previous versions (kept; don't edit) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
 | `docs/` | — | Research reports, roadmap, unified-tool plan |
@@ -42,6 +42,8 @@ Since v0.041 (W0): droplet erosion lives in **`dropletKernel(fld, rain, W, H, P,
 Since v0.042 (`docs/BIOME_AND_VISUALS_PLAN.md` Part A): `buildBiomeRaster()` emits one Uint8 biome index per cell (0 = ocean, then a **frozen append-only order** `ice…tropWet` = 1…12) via `classifyBiome`; `exportZip()` adds `biome_raster.bin` + `biome_index.json` (decode manifest) for the Cartalith handoff. Index order is save-format-stable — never renumber `BIOME_KEYS`.
 
 Since v0.043 (`docs/research/weather-model-v2.md` W3): opt-in seasons via `climate.seasons` (default off → bit-identical). `simulateWeather(iters, decl)` / `buildWind(...,decl)` shift the thermal equator & circulation bands by solar declination; `computeSeasons()` builds `tempJul/JanField`, `rainJul/JanField`, and a `koppenField` (Köppen–Geiger, `classifyKoppen` from seasonal temp extremes + summer/winter precip, normalized rain→mm via `climate.maxRainMm` default 3000). `KOPPEN_KEYS` is a **frozen 30-code list** (Af…EF); a 'Köppen' debug view and `koppen_raster.bin`/`koppen_index.json` export accompany it. Only the `axialTiltDeg` planet param drives the spread.
+
+Since v0.044 (`docs/WORLD_REGIONAL_TILING_PLAN.md` Stage 3): `amplifyRegion(src, srcW, srcH, region, outW, outH, opts)` is a **pure, worker-ready** primitive (no globals) — upsamples a coarse sub-region (preserves continents/ranges) + adds world-space high-frequency `fbm` detail tapered by local relief and faded out underwater. Because both terms are pure functions of the shared coarse coordinate, adjacent tiles are **seam-Δ=0 exactly** (proven in tests). This is the verifiable core of the world→regional→16k tiling pipeline; the tiled-export/OffscreenCanvas/fflate wiring is the browser-bound follow-up.
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

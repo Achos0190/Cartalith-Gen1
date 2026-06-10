@@ -205,6 +205,44 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' && man.indices[String(BIOME_KEYS.length)].key === 'tropWet');
 }
 
+/* ---------- regional amplification (v0.044+, WORLD_REGIONAL_TILING_PLAN Stage 3) ---------- */
+{
+  const src = field, sW = GW, sH = GH;
+  const opts = { seed: 777, detailFreq: 1.0, detailAmp: 0.14, sea: state.seaLevel };
+  // refine the left and right halves as two adjacent tiles that share an interior column
+  const outW = 96, outH = 96;
+  // tiles share their boundary column: A covers coarse x∈[40,72], B covers [72,104].
+  // With (w-1) scaling, A's last column and B's first column both map to coarse x=72.
+  const A = amplifyRegion(src, sW, sH, { x: 40, y: 30, w: 33, h: 33 }, outW, outH, opts);
+  const B = amplifyRegion(src, sW, sH, { x: 72, y: 30, w: 33, h: 33 }, outW, outH, opts);
+  check('amplifyRegion output finite & in [0,1]', allFinite(A) &&
+    (([mn, mx]) => mn >= -1e-6 && mx <= 1 + 1e-6)(minMax(A)));
+  // seam: A's right column and B's left column map to the same coarse coord (x=72) → must match
+  let maxSeam = 0;
+  for (let oy = 0; oy < outH; oy++) maxSeam = Math.max(maxSeam, Math.abs(A[oy * outW + (outW - 1)] - B[oy * outW + 0]));
+  check('adjacent tiles seamless at shared edge (max Δ=' + maxSeam.toExponential(1) + ')', maxSeam < 1e-5);
+  // determinism: same inputs → identical output
+  const A2 = amplifyRegion(src, sW, sH, { x: 40, y: 30, w: 33, h: 33 }, outW, outH, opts);
+  let identical = true;
+  for (let i = 0; i < A.length; i++) if (A[i] !== A2[i]) { identical = false; break; }
+  check('amplifyRegion deterministic', identical);
+  // constraint preservation: downsampling the amplified tile back to coarse tracks the source region
+  let err = 0, nrm = 0;
+  for (let cy = 0; cy < 32; cy++) for (let cx = 0; cx < 32; cx++){
+    const ox = Math.round(cx / 31 * (outW - 1)), oy = Math.round(cy / 31 * (outH - 1));
+    const refined = A[oy * outW + ox], coarse = src[(30 + cy) * sW + (40 + cx)];
+    err += Math.abs(refined - coarse); nrm++;
+  }
+  check('amplified tile preserves the coarse constraint (mean |Δ|=' + (err / nrm).toFixed(3) + ')', err / nrm < 0.06);
+  // detail actually added somewhere (not a pure upsample)
+  let added = 0;
+  for (let cy = 0; cy < 32; cy++) for (let cx = 0; cx < 32; cx++){
+    const ox = Math.round(cx / 31 * (outW - 1)), oy = Math.round(cy / 31 * (outH - 1));
+    added = Math.max(added, Math.abs(A[oy * outW + ox] - src[(30 + cy) * sW + (40 + cx)]));
+  }
+  check('amplification adds sub-cell detail (max Δ=' + added.toFixed(3) + ')', added > 1e-3);
+}
+
 /* ---------- seasons + Köppen (v0.043+, weather-model-v2 W3) ---------- */
 {
   state.planet.axialTiltDeg = 23.4;

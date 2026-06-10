@@ -46,7 +46,7 @@ Emergence measurement (world mode, 256px, corrector off): zonal-mean land rain p
 - Thermal equator shift from solar declination `δ = 23.44°·sin(2πd/365)` (axial tilt becomes a planet parameter); run 4 seasonal passes; aggregate to climate normals; classify Köppen (Af…EF) as a new render/debug mode feeding `classifyBiome` upgrades.
 - Monsoon falls out of seasonal land–sea temperature contrast, given W1+W2.
 
-**Defer:** cyclones (∇²P minima), jet streams, ocean currents (`C = W + β∇H` — cheap, good candidate for W3.5), Ornstein–Uhlenbeck weather noise, cloud fraction. All additive once W1–W3 land.
+**Shipped W3.5 (v0.045):** wind-driven ocean currents (`applyOceanCurrents`) — meridional heat transport gives warm (poleward) and cold (equatorward, Benguela/Peru→Atacama) coastal climates. **Still deferred:** cyclones (∇²P minima), jet streams, Ornstein–Uhlenbeck weather noise, cloud fraction. All additive.
 
 ## Prior art notes
 

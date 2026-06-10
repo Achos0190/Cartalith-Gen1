@@ -205,6 +205,32 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' && man.indices[String(BIOME_KEYS.length)].key === 'tropWet');
 }
 
+/* ---------- ocean currents (v0.045+, weather-model-v2 W3.5) ---------- */
+{
+  state.world = true; GW = state.resW; GH = gridH(GW); allocate(); generate();   // world mode: full hemispheres for current asymmetry
+  state.climate.currents = false; refreshClimate();
+  const tNo = tempField.slice(), rNo = rainField.slice();
+  state.climate.currents = true; state.climate.currentK = 1.5; refreshClimate();
+  check('currents change ocean SST somewhere', (() => {
+    for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel && Math.abs(tempField[i] - tNo[i]) > 0.05) return true;
+    return false;
+  })());
+  // a cold current must cool AND dry some coast (Benguela/Atacama signature)
+  let coldDryCoast = false, warmCoast = false;
+  for (let i = 0; i < field.length && !(coldDryCoast && warmCoast); i++){
+    if (field[i] < state.seaLevel) continue;
+    const dT = tempField[i] - tNo[i], dR = rainField[i] - rNo[i];
+    if (dT < -0.1 && dR < -1e-4) coldDryCoast = true;
+    if (dT > 0.1) warmCoast = true;
+  }
+  check('cold current produces a cooler, drier coast (Benguela/Atacama)', coldDryCoast);
+  check('warm current produces a warmer coast (Gulf-Stream)', warmCoast);
+  check('temp/rain finite after currents', allFinite(tempField) && allFinite(rainField) &&
+    (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(rainField)));
+  state.climate.currents = false;
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();   // restore region mode for later checks
+}
+
 /* ---------- regional amplification (v0.044+, WORLD_REGIONAL_TILING_PLAN Stage 3) ---------- */
 {
   const src = field, sW = GW, sH = GH;

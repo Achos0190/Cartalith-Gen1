@@ -83,3 +83,12 @@ flow(area) → climate(T, wind, rain) → flow(discharge) →
  each followed by: isostatic rebound → flow(discharge) → climate refresh] →
 sea level/geoid → render (materials/biomes last)
 ```
+
+
+## Addendum (v0.046) — stream-power artefacts found in use
+
+User-reported and reproduced numerically: with the original solver, channel cells **rose** on net (mean incision −0.0028 at 512px) — relief inversion (ridges where rivers should be) — and channels ran in straight 45° lines. Three causes, three fixes:
+1. **D8 single-flow receiver from the flood-fill order** → straight diagonal channels on smooth slopes. Fix: steepest-descent receivers + **multiple-flow-direction drainage area** (Freeman 1991, slope^1.1 weights) so flow fans over the real terrain.
+2. **Unbounded deposition into channels**: sediment routed downstream deposited into channel cells with no ceiling, overfilling them above the surrounding land. Fix: deposition clamped to the cell's own pre-incision (uplifted) surface — refill yes, ridge-building no.
+3. **Stress-scaled uplift along boundary lines** grew tall linear ridges that dominated the carve. Fix: uplift normalised to a clean 0..rate and **defaulted to 0** — "Stream-power carve" now purely incises; orogeny is opt-in.
+Regression tests: channels must net-incise downward and sit below neighbour mean (valleys:ridges > 2:1).

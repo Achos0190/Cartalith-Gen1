@@ -315,7 +315,31 @@ erode();                 fieldsFinite('dropletErode');
 state.erosion.droplets = savedDroplets;
 erodeThermal(2);         fieldsFinite('thermal');
 hillslopeDiffuse();      fieldsFinite('diffuse');
-streamPowerErode();      fieldsFinite('streamPower');
+/* stream-power must carve valleys, not build ridges (v0.046 fix) */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  const before = field.slice();
+  streamPowerErode();
+  fieldsFinite('streamPower');
+  const flow = computeFlow(true);
+  let mx = 1; for (let i = 0; i < flow.length; i++) if (flow[i] > mx) mx = flow[i];
+  const thresh = mx * 0.02;
+  let chanN = 0, localLow = 0, localHigh = 0, inciseSum = 0;
+  for (let y = 1; y < GH - 1; y++) for (let x = 1; x < GW - 1; x++){
+    const i = y * GW + x;
+    if (before[i] < state.seaLevel || flow[i] < thresh) continue;      // land channels only
+    const nbMean = (field[i - 1] + field[i + 1] + field[i - GW] + field[i + GW]) * 0.25;
+    chanN++;
+    if (field[i] <= nbMean + 1e-5) localLow++; else localHigh++;
+    inciseSum += (before[i] - field[i]);                              // +ve = carved DOWN
+  }
+  // the bug raised channels (net incision NEGATIVE → ridges); the fix carves them DOWN
+  check('stream-power channels net-incise downward (mean ' + (inciseSum / Math.max(1, chanN)).toFixed(4) + ' > 0)',
+    chanN > 20 && inciseSum > 0);
+  // and channels sit below their surroundings (valleys, not ridges)
+  check('stream-power channels are valleys, not ridges (' + localLow + ' low vs ' + localHigh + ' high)',
+    localLow > localHigh * 2);
+}
 glacialErode();          fieldsFinite('glacial');
 coastalProcess();        fieldsFinite('coastal');
 computeFlow();           check('flow after erosion finite', allFinite(flowField));

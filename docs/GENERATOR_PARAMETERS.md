@@ -105,10 +105,10 @@ Run in geological order: hydraulic/thermal carving → stream-power channels →
 | **Diffusivity D** | `edD` | `v/100·0.2` | Hillslope (soil-creep) diffusion coefficient `∂z/∂t = D∇²z`. High = rounded, soil-mantled hills. |
 | **Passes** | `edPas` | count | Diffusion iterations. More = smoother hillslopes. |
 
-### Stream-power (channel incision — implicit Braun & Willett solver)
+### Stream-power (channel incision — implicit Braun & Willett solver, MFD drainage since v0.046)
 | Modifier | id | Value mapping | Effect |
 |----------|-----|--------------|--------|
-| **Uplift** | `sUp` | `v/100·0.4` | Tectonic uplift rate competing against incision. High = terrain regrows as rivers cut → steep, sustained relief (active orogen look). |
+| **Uplift** | `sUp` | `v/100·0.4` | Tectonic uplift rate competing against incision (normalised 0..rate). **Default 0 — the button purely carves rivers.** Raise it only to grow active-orogen ranges that fight the incision. |
 | **Channeling** | `sK` | `v/100·0.03` | Erodibility constant K in `E = K·Q^m·S^n`, **×planet gravity**. High = rivers incise deep, dense valley networks. |
 | **Iterations** | `sIt` | 4–40 | Solver steps toward equilibrium. More = closer to a mature, graded river profile. |
 | **Deposition** | `sDep` | `v/100` | Sediment deposition in low-gradient reaches & below sea level → floodplains, fans. |

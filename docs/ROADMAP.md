@@ -14,7 +14,6 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Later
 
-6. **W3 — Seasons + Köppen** (4 seasonal passes, climate normals, Köppen debug/render mode).
 7. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
 8. **R32F GPU migration** (handoff pending #3) with RGBA8 fallback tier.
 9. **G2 — Geoid sea-level field** (J2 + low-order harmonics + mantle noise; toggle, off by default).
@@ -34,6 +33,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Done
 
+- 2026-06: **v0.043 — W3 seasons + Köppen**: opt-in `climate.seasons`; `simulateWeather`/`buildWind` take a solar-declination arg so summer/winter passes shift the thermal equator by axial tilt; `computeSeasons()` builds seasonal temp/precip + a `koppenField` via a full Köppen–Geiger classifier (30 frozen codes, normalized-rain→mm scale). Köppen debug view + raster/manifest export. 73 assertions green (incl. one world → 22 distinct climates); seasons-off bit-identical to v0.042.
 - 2026-06: **v0.042 — biome raster handoff (A1)**: `buildBiomeRaster()` + frozen `BIOME_INDEX`/`BIOME_KEYS` (0=ocean, 1..12 ice…tropWet); `exportZip` now ships `biome_raster.bin` + `biome_index.json` manifest for Cartalith. Generate output bit-identical to v0.041; 63 assertions green. First brick of the dual-layer biome bridge.
 - 2026-06: **v0.041 — W0 worker droplet erosion**: droplet pass refactored into self-contained `dropletKernel` (no module globals), stringified into a blob-URL Web Worker with progress events and sync fallback; field copied in / transferred back so the live heightmap never detaches. Kernel proven bit-identical to v0.040 (fixed-seed 20k-droplet cross-version diff) and self-containment is regression-tested by rebuilding from `toString()` with shadowed globals. 57 assertions green. Worker path needs one manual browser check.
 - 2026-06: **v0.040 — W2 moisture physics**: bulk-aerodynamic ocean evaporation `E = Ce·U·(qs−q)` (wind-speed + saturation-deficit, `climate.bulkEvap`); ITCZ/dry-belt corrector parametrised as `climate.zonalK`, default halved to 0.5 after measuring that W1 bands already produce emergent equator-max / 25–40° dry-dip / wet-westerlies structure. Legacy saves (zonalK 1, bulkEvap off) bit-identical to v0.039. 53 assertions green incl. emergent zonal-structure regression test.

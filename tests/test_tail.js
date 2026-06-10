@@ -205,6 +205,45 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' && man.indices[String(BIOME_KEYS.length)].key === 'tropWet');
 }
 
+/* ---------- seasons + Köppen (v0.043+, weather-model-v2 W3) ---------- */
+{
+  state.planet.axialTiltDeg = 23.4;
+  computeSeasons();
+  check('seasonal temp fields finite', allFinite(tempJulField) && allFinite(tempJanField));
+  check('seasonal precip fields finite & in [0,1]', allFinite(rainJulField) && allFinite(rainJanField) &&
+    minMax(rainJulField)[0] >= 0 && minMax(rainJulField)[1] <= 1.0001);
+  // axial tilt must actually create a summer/winter temperature spread somewhere
+  let maxSpread = 0;
+  for (let i = 0; i < tempJulField.length; i++) maxSpread = Math.max(maxSpread, Math.abs(tempJulField[i] - tempJanField[i]));
+  check('axial tilt produces seasonal temperature spread (max ' + maxSpread.toFixed(1) + '°C)', maxSpread > 1);
+  // zero tilt ⇒ no seasonal spread (sanity on the declination wiring)
+  const t0 = state.planet.axialTiltDeg; state.planet.axialTiltDeg = 0; computeSeasons();
+  let spread0 = 0;
+  for (let i = 0; i < tempJulField.length; i++) spread0 = Math.max(spread0, Math.abs(tempJulField[i] - tempJanField[i]));
+  check('zero axial tilt ⇒ no seasonal temperature spread', spread0 < 1e-6);
+  state.planet.axialTiltDeg = t0; computeSeasons();
+
+  // Köppen field: valid indices, ocean⇔0, multiple classes, manifest coverage
+  let kvalid = true, koceanOk = true; const kclasses = new Set();
+  for (let i = 0; i < koppenField.length; i++){
+    const v = koppenField[i];
+    if (v < 0 || v > KOPPEN_KEYS.length || (v | 0) !== v){ kvalid = false; break; }
+    kclasses.add(v);
+    if ((field[i] < state.seaLevel) !== (v === 0)) koceanOk = false;
+  }
+  check('Köppen indices valid (0..' + KOPPEN_KEYS.length + ')', kvalid);
+  check('Köppen: index 0 ⇔ ocean', koceanOk);
+  check('Köppen produced multiple climate classes (' + kclasses.size + ')', kclasses.size >= 3);
+  const km = koppenIndexManifest();
+  check('Köppen manifest covers every produced class', [...kclasses].every(v => km.indices[String(v)] !== undefined));
+  check('Köppen order frozen (Af=1, EF=30)', KOPPEN_KEYS[0] === 'Af' && KOPPEN_KEYS[KOPPEN_KEYS.length - 1] === 'EF');
+  // classifier spot-checks
+  const findCell = (pred) => { for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++){ const i = y * GW + x; if (field[i] >= state.seaLevel && pred(i, y)) return [i, y]; } return null; };
+  const hot = findCell(i => tempJulField[i] > 24 && tempJanField[i] > 18);
+  if (hot){ const code = classifyKoppen(hot[0], hot[1]); check('hot wet lowland classifies as tropical/arid (got ' + code + ')', /^[AB]/.test(code || '')); }
+  else console.log('skip - no tropical test cell this seed');
+}
+
 /* ---------- erosion pipeline keeps field finite ---------- */
 const savedDroplets = state.erosion.droplets;
 state.erosion.droplets = 5000;

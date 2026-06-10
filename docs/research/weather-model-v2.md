@@ -25,7 +25,7 @@ The doc describes an intermediate-complexity chain: pressure (hydrostatic `P = P
 
 ## Status (June 2026)
 
-**W1 shipped in v0.039** (planetary bands + pressure/Coriolis winds, manual override kept). **W2 shipped in v0.040** (bulk-aerodynamic evaporation; zonal corrector halved after the emergence measurement below). W3 (seasons + Köppen) open.
+**W1 shipped in v0.039** (planetary bands + pressure/Coriolis winds). **W2 shipped in v0.040** (bulk-aerodynamic evaporation; zonal corrector halved). **W3 shipped in v0.043** (opt-in seasons: declination-shifted summer/winter passes via `simulateWeather(iters,decl)`; full Köppen–Geiger classifier → `koppenField`, 30 frozen codes; normalized-rain→mm via `climate.maxRainMm`). All opt-in, seasons-off bit-identical to v0.042.
 
 Emergence measurement (world mode, 256px, corrector off): zonal-mean land rain peaks 0.37 at 0–5°, dips to 0.17 at 25–40°, rises to 0.42 at 55–60°, dries poleward of 65° — ITCZ/dry-belt/westerlies structure appears from the wind field + Clausius–Clapeyron capacity alone. The corrector (now `zonalK`, default 0.5) only sharpens contrast toward Earth-like ratios, standing in for vertical subsidence that 2-D advection cannot represent.
 

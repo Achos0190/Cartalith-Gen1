@@ -27,6 +27,8 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Research / spikes
 
+- Map-painting & zoom UX (Wonderdraft / World Machine / World Creator takeaways): `docs/research/map-painting-ux.md` → drives v0.048 (plotline feature brushes, zoom/pan + scale bar).
+
 - Rust/WASM SIMD erosion kernel (inline base64) — only if profiling after #3/#8 still shows CPU-bound erosion. Verdict & sources: `docs/research/engine-optimization.md`.
 - WebGPU compute backend — Gen1 v2 candidate.
 - Dirty-rect rendering (handoff pending #5) — when brush latency becomes a complaint.

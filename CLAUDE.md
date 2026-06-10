@@ -4,8 +4,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.046.html` | ~2,800 | **Current** procedural heightmap/terrain/climate generator |
-| `elevation_foundation_v0.036–45.html` | — | Previous versions (kept; don't edit) |
+| `elevation_foundation_v0.047.html` | ~2,800 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036–46.html` | — | Previous versions (kept; don't edit) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
 | `docs/` | — | Research reports, roadmap, unified-tool plan |
@@ -48,6 +48,8 @@ Since v0.044 (`docs/WORLD_REGIONAL_TILING_PLAN.md` Stage 3): `amplifyRegion(src,
 Since v0.045 (W3.5): opt-in `climate.currents` adds wind-driven ocean surface currents — `applyOceanCurrents()` (coarse grid) transports heat meridionally (poleward flow → warm SST anomaly → mild wet coasts; equatorward flow → cold SST → cool fog-dry coasts, Benguela/Peru→Atacama), shifting ocean `tempField` and nearby coastal temp/rain. Runs after the moisture correctors, before `computeSeasons`. Off → bit-identical to v0.044.
 
 Since v0.046 (user bug report — ridges instead of rivers): `streamPowerErode` rewritten — **MFD drainage** (Freeman 1991, slope^1.1-weighted spread to all lower neighbours; kills the straight 45° D8 channel artefact), **steepest-descent receivers** on the sink-filled surface, an **anti-ridge deposition clamp** (a channel cell can never be raised above its own pre-incision uplifted surface — this was the relief-inversion bug: routed-in upstream sediment overfilled channels), and **uplift normalised + default 0** (the button carves rivers; uplift is opt-in orogeny). Regression-tested: channels must net-incise downward and sit below their neighbours. The sidebar follows the planetary-formation cascade: Source → Planet → Calibrate → World Structure → Tectonics → Volcanism → Climate → Weather → Erosion → Glacial → Coastal → View → Save/Performance.
+
+Since v0.047: a **Wind** debug view visualises the W1 prevailing-wind field — `currentWindField()` (read-only; rebuilds the coarse `tc` like `simulateWeather` then calls `buildWind` at decl=0) feeds a per-pixel hue=bearing/brightness=speed map plus coarse arrow glyphs (reusing the plate-arrow `vctx` idiom). Render-only → bit-identical to v0.046.
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

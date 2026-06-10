@@ -379,5 +379,28 @@ fieldsFinite('generate(world)');
   }
 }
 
+/* ---------- wind debug view (v0.047+) ---------- */
+{
+  state.world = true; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  const wf = currentWindField();
+  check('currentWindField finite with non-zero speed', allFinite(wf.u) && allFinite(wf.v) && wf.maxSpeed > 1e-3);
+  // world mode: surface zonal wind reverses between the tropics (easterly/trades) and mid-latitudes (westerly)
+  const rowU = (latAbs) => {
+    // find the coarse row nearest |lat|=latAbs and return mean u there
+    let bestY = 0, bestD = 1e9;
+    for (let y = 0; y < wf.WH; y++){ const lat = Math.abs(90 - (y / (wf.WH - 1)) * 180); if (Math.abs(lat - latAbs) < bestD){ bestD = Math.abs(lat - latAbs); bestY = y; } }
+    let s = 0; for (let x = 0; x < wf.WW; x++) s += wf.u[bestY * wf.WW + x];
+    return s / wf.WW;
+  };
+  const uTrop = rowU(15), uMid = rowU(45);
+  check('zonal wind reverses tropics↔mid-lat (trades ' + uTrop.toFixed(2) + ' vs westerlies ' + uMid.toFixed(2) + ')',
+    Math.sign(uTrop) !== Math.sign(uMid) && Math.abs(uTrop) > 1e-3 && Math.abs(uMid) > 1e-3);
+  // selecting the wind view renders a full opaque buffer
+  state.debug = 'wind'; renderNow();
+  check('wind debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
+  state.debug = 'off';
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+}
+
 console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
 process.exit(__fail ? 1 : 0);

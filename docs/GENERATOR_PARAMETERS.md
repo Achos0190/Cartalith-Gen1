@@ -157,7 +157,7 @@ Run in geological order: hydraulic/thermal carving → stream-power channels →
 | Modifier | id | Effect |
 |----------|-----|--------|
 | **Render mode** (seg) | `mode` | Biome (full color) · Relief (grayscale hillshade) · Height (hypsometric tint) · Shade. |
-| **Debug** (seg) | `debug` | Overlays: plates, boundaries, stress, age, temperature, rainfall, flow — for inspecting any field directly. |
+| **Debug** (seg) | `debug` | Overlays: plates, boundaries, stress, age, temperature, rainfall, **wind** (prevailing-wind arrows + hue=bearing/brightness=speed), Köppen, flow — for inspecting any field directly. |
 | **Relief ↔ biome** | `bioBlend` | Blend between pure relief shading (0) and full biome color (1). |
 | **Relief** | `exag` | Vertical exaggeration for hillshade (`0.4 + (v/100)·7`). Higher = more dramatic shadows; pure visual. |
 | **Sun** | `sun` | Hillshade sun azimuth (0–360°). Controls shadow direction. |

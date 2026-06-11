@@ -312,6 +312,53 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     added = Math.max(added, Math.abs(A[oy * outW + ox] - src[(30 + cy) * sW + (40 + cx)]));
   }
   check('amplification adds sub-cell detail (max Δ=' + added.toFixed(3) + ')', added > 1e-3);
+
+  /* ---- refineTile: full cols×rows split must be seam-Δ=0 at every internal join (v0.052) ---- */
+  {
+    const region = { x: 8, y: 6, w: 48, h: 30 }, cols = 3, rows = 2, ts = 24;
+    const T = [];
+    for (let r = 0; r < rows; r++){ T[r] = []; for (let c = 0; c < cols; c++) T[r][c] = refineTile(src, sW, sH, region, cols, rows, c, r, ts, opts); }
+    let vSeam = 0, hSeam = 0, fin = true;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){ if (!allFinite(T[r][c])) fin = false; }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols - 1; c++)
+      for (let y = 0; y < ts; y++) vSeam = Math.max(vSeam, Math.abs(T[r][c][y * ts + (ts - 1)] - T[r][c + 1][y * ts]));
+    for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols; c++)
+      for (let x = 0; x < ts; x++) hSeam = Math.max(hSeam, Math.abs(T[r][c][(ts - 1) * ts + x] - T[r + 1][c][x]));
+    check('refineTile tiles finite', fin);
+    check('refineTile vertical seams Δ=0 (max ' + vSeam.toExponential(1) + ')', vSeam < 1e-6);
+    check('refineTile horizontal seams Δ=0 (max ' + hSeam.toExponential(1) + ')', hSeam < 1e-6);
+    const single = amplifyRegion(src, sW, sH, { x: region.x, y: region.y, w: region.w / cols + 1, h: region.h / rows + 1 }, ts, ts, opts);
+    let m = 0; for (let i = 0; i < ts * ts; i++) m = Math.max(m, Math.abs(single[i] - T[0][0][i]));
+    check('refineTile(0,0) matches a direct amplifyRegion of that sub-bounds (Δ=' + m.toExponential(1) + ')', m < 1e-6);
+  }
+
+  /* ---- 16-bit height pack/unpack round-trip (v0.052) ---- */
+  {
+    const n = 500, fld = new Float32Array(n);
+    for (let i = 0; i < n; i++) fld[i] = i / (n - 1);            // sweep [0,1]
+    fld[0] = -0.3; fld[1] = 1.7;                                  // out-of-range clamps
+    const rg = packHeight16(fld, n), back = unpackHeight16(rg, n);
+    let maxErr = 0; for (let i = 2; i < n; i++) maxErr = Math.max(maxErr, Math.abs(fld[i] - back[i]));
+    check('packHeight16 RGBA length & opaque', rg.length === n * 4 && rg[3] === 255 && rg[2] === 0);
+    check('16-bit height round-trip within 1 LSB (max Δ=' + maxErr.toExponential(1) + ')', maxErr <= 0.5 / 65535 + 1e-9);
+    check('packHeight16 clamps out-of-range', back[0] === 0 && back[1] === 1);
+  }
+
+  /* ---- tile manifest v2 (v0.052) ---- */
+  {
+    const man = buildTileManifest({ cols: 4, rows: 4, tileSize: 4096, width: 16384, height: 16384,
+      seed: 12345, world: true, bounds: { x: 10, y: 20, w: 64, h: 64 }, heightEncoding: 'rg16', compression: 'gzip' });
+    check('manifest schema 2 + back-compat flat fields', man.schema === 2 && man.cols === 4 && man.rows === 4 && man.tileSize === 4096 && man.width === 16384);
+    check('manifest lists every tile', man.tiles.length === 16 && man.tiles[0].file === 'tiles/tile_0_0.png');
+    check('manifest carries world seed + encoding', man.worldSeed === 12345 && man.world === true && man.heightEncoding === 'rg16' && man.compression === 'gzip');
+    // coarse bounds: adjacent tiles share their seam edge (col c right edge == col c+1 left edge)
+    const at = (r, c) => man.tiles[r * 4 + c].coarse;
+    let edgeOK = true;
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++){ const a = at(r, c), b = at(r, c + 1); if (Math.abs((a.x + a.w - 1) - b.x) > 1e-9) edgeOK = false; }
+    check('manifest tile coarse bounds share seam edges', edgeOK);
+    const m1 = buildTileManifest({ cols: 2, rows: 1, tileSize: 1024, width: 2048, height: 1024 });
+    check('manifest defaults: no bounds → no per-tile coarse', m1.bounds === null && m1.tiles[0].coarse === undefined && m1.heightEncoding === 'none');
+  }
 }
 
 /* ---------- seasons + Köppen (v0.043+, weather-model-v2 W3) ---------- */

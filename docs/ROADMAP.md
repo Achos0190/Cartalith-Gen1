@@ -26,6 +26,10 @@ User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → 
 
 (G2 geoid and G3 moons/tides moved up into Now → item 3, per the user's June 2026 sequencing.)
 
+## Bigger workstreams (planned)
+
+- **Tectonic feature graph** (`docs/research/tectonic-feature-graph.md`, user proposal June 2026): the largest realism gap — ranges are currently `stress → blur → height` (smooth blobs). Add the missing layer between plate interaction and height: tangential **shear** field, **boundary-type matrix** (crust A×B × convergence × shear), boundary **polyline graph**, and feature synthesis along segments (multi-ridge orogenic kernel, fold belts `sin(k√|C|·d)`, trench+arc, foreland basin, transform offsets). ~6 phased versions (T0 shear/metadata → T1 graph → T2 uplift kernel → T3 boundary-type features → T4 transforms → T5 tuning), each opt-in/gated + bit-identical at defaults + headless-verifiable. Reuses `distanceToBoundary`, `applyFeatureAlongCurve` (distance-field stamp), `rdpSimplify`, and the existing erosion. Independent of the asset/visual work; world-res only (16k tiles inherit it via `amplifyRegion`). Refs: Cortial 2019, Cordonnier 2016.
+
 ## Bigger workstreams (planned, post-merge)
 
 - **Biome handoff + visuals** (`docs/BIOME_AND_VISUALS_PLAN.md`): dual raster + 14-index paint grid with lock flags → procedural realistic base (parchment grain) → texture splatting (CC0 pack) → togglable Nortantis-style icon mountains.

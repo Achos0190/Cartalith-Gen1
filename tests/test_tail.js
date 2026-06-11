@@ -691,6 +691,51 @@ fieldsFinite('generate(world)');
   check('tile render distinguishes water from land', (top[0] !== bot[0] || top[1] !== bot[1] || top[2] !== bot[2]) && top[2] > top[0]);
 }
 
+/* ---------- G2 geoid sea-level field (v0.054, gravity-influence.md) ---------- */
+{
+  // buildGeoid pure math
+  const W = 120, H = 60;
+  const g1 = buildGeoid(W, H, { seed: 5, rotK: 1, harmK: 0, mantleK: 0, amp: 0.02, lat0: 90, lat1: -90 });
+  check('geoid finite', allFinite(g1));
+  let mx = 0, mean = 0; for (let i = 0; i < g1.length; i++){ mx = Math.max(mx, Math.abs(g1[i])); mean += g1[i]; }
+  check('geoid peak equals amp (' + mx.toFixed(4) + ')', Math.abs(mx - 0.02) < 1e-6);
+  check('geoid ~zero-mean (' + (mean / g1.length).toExponential(1) + ')', Math.abs(mean / g1.length) < 1e-4);
+  // pure-J2: sea stands higher at the equator than the poles
+  const eq = g1[(H >> 1) * W + 10], pole = g1[0 * W + 10];
+  check('J2 bulge: equator sea level > pole (' + eq.toFixed(4) + ' vs ' + pole.toFixed(4) + ')', eq > pole + 0.01);
+  const g2 = buildGeoid(W, H, { seed: 5, rotK: 1, harmK: 0, mantleK: 0, amp: 0.02, lat0: 90, lat1: -90 });
+  check('geoid deterministic', g1.every((v, i) => v === g2[i]));
+  const g3 = buildGeoid(W, H, { seed: 6, rotK: 0.2, harmK: 0.8, mantleK: 0.8, amp: 0.02, lat0: 90, lat1: -90 });
+  check('different seed/mix differs', g3.some((v, i) => v !== g1[i]));
+
+  // toggle neutrality + live effect on the real pipeline
+  state.planet.geoid = state.planet.geoid || { enabled: false, amp: 0.015 };
+  refreshGeoid();
+  check('geoid off → geoidField null', geoidField === null);
+  state.mode = 'biome'; state.debug = 'off';
+  refreshClimate(); renderNow();
+  const basePx = Uint8ClampedArray.from(img.data), baseTemp = tempField.slice(), baseField0 = field.slice();
+  state.planet.geoid.enabled = true; state.planet.geoid.amp = 0.03;
+  refreshGeoid();
+  check('geoid on → field built', geoidField instanceof Float32Array && allFinite(geoidField));
+  // ocean mask actually shifts somewhere
+  let flips = 0;
+  for (let i = 0; i < field.length; i++){
+    if ((field[i] < state.seaLevel) !== (field[i] - geoidField[i] < state.seaLevel)) flips++;
+  }
+  check('geoid shifts the coastline (' + flips + ' cells flip)', flips > 0);
+  refreshClimate(); renderNow();
+  check('climate finite with geoid on', allFinite(tempField) && allFinite(rainField));
+  check('terrain itself untouched by geoid', field.every((v, i) => v === baseField0[i]));
+  let pxDiff = 0; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== basePx[i]) pxDiff++;
+  check('geoid on changes the render (' + pxDiff + ' bytes)', pxDiff > 100);
+  // off again → climate AND render bit-identical (the gate works)
+  state.planet.geoid.enabled = false; refreshGeoid(); refreshClimate(); renderNow();
+  check('geoid off again → temp bit-identical', tempField.every((v, i) => v === baseTemp[i]));
+  let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== basePx[i]){ same = false; break; }
+  check('geoid off again → render bit-identical', same);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

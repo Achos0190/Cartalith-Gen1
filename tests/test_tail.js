@@ -835,6 +835,52 @@ fieldsFinite('generate(world)');
   state.viz.icons = false; assetPack = null; renderNow();
 }
 
+/* ---------- T0 tectonic boundary classification (v0.058, tectonic-feature-graph.md) ---------- */
+{
+  // pure matrix: crust A × crust B × convergence × shear
+  check('classifyBoundary: C–C convergent → collision', classifyBoundary(false, false, 1.0, 0.1) === BTYPE.collision);
+  check('classifyBoundary: O–C convergent → subduction', classifyBoundary(true, false, 1.0, 0.1) === BTYPE.subductionOC &&
+    classifyBoundary(false, true, 1.0, 0.1) === BTYPE.subductionOC);
+  check('classifyBoundary: O–O convergent → island arc', classifyBoundary(true, true, 1.0, 0.1) === BTYPE.arcOO);
+  check('classifyBoundary: divergent → rift (any crust)', classifyBoundary(false, false, -1.0, 0.1) === BTYPE.rift &&
+    classifyBoundary(true, true, -0.2, 0.0) === BTYPE.rift);
+  check('classifyBoundary: shear-dominant → transform (any crust, any sign)',
+    classifyBoundary(false, false, 0.2, 1.0) === BTYPE.transform && classifyBoundary(true, false, -0.1, 0.9) === BTYPE.transform);
+  check('BTYPE order frozen', BTYPE_KEYS.join(',') === 'none,collision,subductionOC,arcOO,rift,transform');
+
+  // synthetic two-plate worlds: head-on convergence vs pure shear
+  const savedPlates = plates, savedSeed = state.tect.seed;
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate();
+  // two plates split left/right at x=GW/2; assign plateId directly
+  plates = [
+    { x: GW * 0.25, y: GH * 0.5, vx: 1, vy: 0, base: 0.3 },     // continental, moving right
+    { x: GW * 0.75, y: GH * 0.5, vx: -1, vy: 0, base: 0.3 },    // continental, moving left → head-on
+  ];
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) plateId[y * GW + x] = x < GW / 2 ? 0 : 1;
+  computeStress();
+  let convTypes = new Set(), shearMax = 0;
+  for (let i = 0; i < boundaryType.length; i++){ if (boundaryMask[i]) convTypes.add(boundaryType[i]); shearMax = Math.max(shearMax, Math.abs(shearField[i])); }
+  check('head-on C–C boundary classifies as collision', convTypes.has(BTYPE.collision) && !convTypes.has(BTYPE.transform));
+  plates[0].vx = 0; plates[0].vy = 1; plates[1].vx = 0; plates[1].vy = -1;   // pure tangential motion
+  computeStress();
+  let transTypes = new Set();
+  for (let i = 0; i < boundaryType.length; i++) if (boundaryMask[i]) transTypes.add(boundaryType[i]);
+  check('pure tangential motion classifies as transform', transTypes.has(BTYPE.transform) && !transTypes.has(BTYPE.collision));
+  check('shearField finite + normalized to |max|=1', allFinite(shearField) && Math.abs(Math.max(...Array.from(shearField).map(Math.abs)) - 1) < 1e-6);
+  let typedOffBoundary = 0;
+  for (let i = 0; i < boundaryType.length; i++) if (!boundaryMask[i] && boundaryType[i] !== 0) typedOffBoundary++;
+  check('boundaryType only on boundary cells', typedOffBoundary === 0);
+
+  // restore a real world and check the debug view + that real geometry produces shear somewhere
+  plates = savedPlates; state.tect.seed = savedSeed; generate();
+  check('real world: shearField finite, nonzero somewhere', allFinite(shearField) && shearField.some(v => Math.abs(v) > 1e-3));
+  let realTypes = new Set(); for (let i = 0; i < boundaryType.length; i++) if (boundaryMask[i]) realTypes.add(boundaryType[i]);
+  check('real world produces ≥3 distinct boundary types (' + [...realTypes].join(',') + ')', realTypes.size >= 3);
+  state.debug = 'btype'; renderNow();
+  check('Tect debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
+  state.debug = 'off'; renderNow();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

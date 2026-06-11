@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. v0.048–0.057 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
-- Current engine file: **`elevation_foundation_v0.057.html`** (older `v0.036–0.056` kept, never edited in place — new version = new file).
-- Headless suite: **205 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. v0.048–0.058 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.058.html`** (older `v0.036–0.057` kept, never edited in place — new version = new file).
+- Headless suite: **218 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -24,7 +24,8 @@
 **Shipped this branch:** v0.048 (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z), v0.049 (W0b worker stream-power/glacial carve), v0.050–0.051 (parchment, icons, waves — zero-asset visuals tier), v0.052–0.053 (16k tiling: pure core + region-refine export) — see the `CLAUDE.md` "Since v0.0XX" paragraphs and ROADMAP Done entries. The zero-asset procedural visuals tier is now complete.
 
 **Next build steps (user-set order, June 2026):**
-1. **Visuals asset tier**: **in-app ZIP/CSV importer + Style tab + icon sprites + sample pack SHIPPED in v0.056** (`docs/ASSET_PACK_FORMAT.md`). Remaining: **B2 texture splatting** (wire pack textures into `landColorCore` via `viz.splat` — bumped to **v0.058** after the v0.057 ocean-currents view) and optionally dropping real CC0 art (`docs/research/asset-candidates.md`) into the sample-pack format.
+0. **Tectonic feature graph — ACTIVE workstream** (`docs/research/tectonic-feature-graph.md`, user-prioritised): T0 shear field + boundary-type matrix + Tect debug view SHIPPED in v0.058. Next: **T1** boundary polyline graph (trace boundary pixels → segments with length/curvature/branch nodes, pure + testable, debug overlay) → **T2** orogenic multi-ridge uplift kernel (gated behind `state.tect.tectonicGraph`, off ⇒ bit-identical) → T3 boundary-type features (trench/arc/fold/foreland) → T4 transform offsets → T5 tuning/archetypes.
+1. **Visuals asset tier**: **in-app ZIP/CSV importer + Style tab + icon sprites + sample pack SHIPPED in v0.056** (`docs/ASSET_PACK_FORMAT.md`). Remaining: **B2 texture splatting** (wire pack textures into `landColorCore` via `viz.splat` — design ready, parked behind the tectonic workstream) and optionally dropping real CC0 art (`docs/research/asset-candidates.md`) into the sample-pack format.
 2. **16k tiling pipeline**: DONE through v0.053; v0.055 made the region export take explicit **cols × rows + tile resolution** (was fixed N×N) with aspect-preserving tile pixels so non-square selections aren't squished. Optional follow-ups: per-tile erosion at refine time, fflate vendoring, 16k device memory test.
 3. **Gravity completion**: G2 geoid sea-level field DONE in v0.054 (`buildGeoid`: J2 bulge + harmonics + mantle fbm, local sea level threads through water mask/climate/erosion/render + Geoid debug view; off ⇒ bit-identical). Remaining: **G3** moons & tidal-range overlay → coastal hazard zones.
 4. **River painting / stream-carving quality pass** (user wants to re-check this — not now).
@@ -39,9 +40,9 @@
 - Tiling: continuous zoom on the current map now; tiled 16k + region refine later.
 - Stream-power "carve" defaults to pure incision; uplift is opt-in (v0.046 fix).
 
-## Engine capability summary (v0.037→v0.057)
+## Engine capability summary (v0.037→v0.058)
 
-Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen + Ocean-current debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z · parchment grain + stylized icon layer + coastal wave lines (zero-asset visual tier) · tiling core + region-refine export (`refineTile` seam-Δ=0, 16-bit `packHeight16`, manifest v2, drag-select → gzip-d tile ZIP) · G2 geoid sea-level field (local sea level, opt-in) · region export with explicit cols×rows + aspect-preserving tile resolution · Style tab + in-app asset-pack import (ZIP/CSV, sprites + sample pack). Sidebar follows the planetary-formation cascade.
+Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen + Ocean-current debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z · parchment grain + stylized icon layer + coastal wave lines (zero-asset visual tier) · tiling core + region-refine export (`refineTile` seam-Δ=0, 16-bit `packHeight16`, manifest v2, drag-select → gzip-d tile ZIP) · G2 geoid sea-level field (local sea level, opt-in) · region export with explicit cols×rows + aspect-preserving tile resolution · Style tab + in-app asset-pack import (ZIP/CSV, sprites + sample pack) · T0 tectonic shear field + boundary-type matrix (Tect debug view). Sidebar follows the planetary-formation cascade.
 
 ## Docs map
 

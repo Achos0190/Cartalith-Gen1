@@ -27,7 +27,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Research / spikes
 
-- Map-painting & zoom UX (Wonderdraft / World Machine / World Creator takeaways): `docs/research/map-painting-ux.md` → drives v0.048 (plotline feature brushes, zoom/pan + scale bar).
+- Map-painting & zoom UX (Wonderdraft / World Machine / World Creator takeaways): `docs/research/map-painting-ux.md` → shipped as v0.048 (plotline feature brushes, zoom/pan + scale bar).
 
 - Rust/WASM SIMD erosion kernel (inline base64) — only if profiling after #3/#8 still shows CPU-bound erosion. Verdict & sources: `docs/research/engine-optimization.md`.
 - WebGPU compute backend — Gen1 v2 candidate.
@@ -35,6 +35,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Done
 
+- 2026-06: **v0.048 — plotline feature brushes + pan/zoom UX** (`docs/research/map-painting-ux.md`): waypoint polyline sculpt (and its GPU shader) replaced by freehand guide strokes (RDP-simplified, Catmull-Rom smoothed) + `applyFeatureAlongCurve()` — a pure testable distance-field stamp synthesizing 7 features (mountain range, hills, ridge, plateau, river, canyon, escarpment) with fractal detail along the line. Shared `viewT` pan/zoom: mobile keeps its zoom buttons (+ pan toggle + pinch), desktop gains wheel-zoom-to-cursor + middle/space-drag pan. Dynamic km scale bar; Ctrl/Cmd-Z undo. 105 assertions green; generate() proven bit-identical to v0.047. Gestures/scale-bar/guide-preview = browser check.
 - 2026-06: **v0.047 — Wind debug view**: `currentWindField()` + a `Wind` debug overlay (per-pixel hue=bearing/brightness=speed map + coarse arrow glyphs) makes the W1 planetary wind field visible. Read-only; bit-identical to v0.046. 87 assertions green (incl. tropics-easterly↔mid-latitude-westerly reversal). Arrow legibility = browser check.
 - 2026-06: **v0.046 — stream-power fix + menu cascade** (user bug report): relief inversion (ridges-for-rivers) and 45° line artefacts fixed via MFD drainage (Freeman 1991), steepest-descent receivers, anti-ridge deposition clamp, normalised uplift defaulting to 0 (carve-only). Old solver proven to net-RAISE channels (−0.0028), new net-incises (+0.0023); 84 assertions green incl. valleys-not-ridges regression. Sidebar reordered to the planetary-formation cascade (Planet/Calibrate before structure/climate/erosion; Save/Performance last).
 - 2026-06: **v0.045 — W3.5 ocean currents**: opt-in `climate.currents`; wind-driven surface currents transport heat meridionally (poleward→warm SST→mild wet coast; equatorward→cold SST→fog-dry coast). Cold-current cooler/drier-coast (Benguela/Atacama) and warm-coast (Gulf-Stream) signatures both verified; 82 assertions green; currents-off bit-identical to v0.044.

@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`, work branch **`claude/weather-gravity-cartalith-c4u12t`**, draft **PR #1** (base `main`). All work lives on the branch; push there, never to `main`.
-- Current engine file: **`elevation_foundation_v0.047.html`** (older `v0.036–0.046` kept, never edited in place — new version = new file).
-- Headless suite: **87 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. v0.048 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.048.html`** (older `v0.036–0.047` kept, never edited in place — new version = new file).
+- Headless suite: **105 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -19,19 +19,17 @@
 3. GPU shaders, Web Worker glue, and canvas interaction (zoom/pan/paint) **cannot be verified headlessly** — implement, then flag explicitly for a manual browser pass.
 4. Commit messages end with the session URL line (see existing commits). Push to the work branch; PR #1 already exists.
 
-## Immediate next task — v0.048 (approved, specced)
+## Immediate next task — manual browser pass on v0.048, then pick from Roadmap → Next
 
-Plotline-guided geological feature brushes + freehand strokes + map zoom/pan + scale bar + Ctrl-Z. Full design: the approved plan and **`docs/research/map-painting-ux.md`**. Copy `v0.047` → `v0.048`; `generate()` must stay bit-identical (everything here is stroke/render-triggered).
+**v0.048 shipped** (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z — see `CLAUDE.md` "Since v0.048" and the ROADMAP Done entry). What headless tests could NOT cover needs one manual browser pass:
 
-Reuse what already exists (don't rebuild):
-- `catmullRomSample(pts, step)` — centripetal Catmull-Rom (smooth the drawn guide).
-- Freehand drag is already captured by the direct-paint brushes (`view` pointer handlers, `painting` flag, `evtToGrid`, `sculpt()`); the fixed-waypoint polyline (`polyDrawMode`/`polyPoints`) is what the user wants *replaced* by a hand-drawn guide.
-- `pushUndo()`/`doUndo()` (5-level field snapshots) — bind **Ctrl-Z/Cmd-Z** via a `keydown` listener; undo already works for sculpt/erosion.
-- `fbm`/`ridged` noise + existing brush math in `sculpt()` (`ridge`, `canyon`, `mesa`, `cliff`) — build `applyFeatureAlongCurve(curve, feature, radius, strength, seed)` on top (mountainRange/river/ridge/plateau/hills/escarpment/canyon), tapering by perpendicular distance from the line.
-- Mobile CSS-transform zoom (`zoomLvl`/`applyZoom`) — promote to a general `{scale,panX,panY}` view transform (wheel-zoom-to-cursor, drag-pan, pinch); add a dynamic scale bar from `state.mapWidthKm/GW ÷ scale`. **`evtToGrid` must account for pan/zoom** so painting still lands correctly.
-- `amplifyRegion(...)` exists for the *later* "refine this region at higher fidelity" feature (parked — leave a hook only).
+- Desktop: wheel-zoom keeps the point under the cursor fixed; ctrl-wheel (trackpad pinch) finer; middle-drag and space-drag pan; Ctrl/Cmd-Z undoes (and does NOT fire while typing in inputs).
+- Mobile: zoom buttons (+/−/✋/⟳) appear and work; ✋ toggles one-finger pan; two-finger pinch zooms/pans; one finger still paints.
+- Paint + guide strokes land correctly at zoom ≠ 1 (evtToGrid is transform-invariant — verify, don't assume).
+- Scale bar: sensible 1/2/5×10ⁿ values at two zoom levels and after changing Map width (km).
+- Feature brushes: draw guide → tube preview → Apply for each of the 7 features; rivers carve start→end; GPU tag still reads `active (…)` after the pPoly shader removal.
 
-Headless-testable parts: `applyFeatureAlongCurve` (mountainRange raises a ridge near the line; river carves below neighbours), RDP simplify (fewer points, endpoints preserved), field finite/in-range. Zoom/pan/scale-bar/stroke-capture = browser-only.
+After that, next per `docs/ROADMAP.md`: **W0b** (worker stream-power/glacial kernels) or **P0–P1** (unified tool shell merge).
 
 ## Locked decisions (don't relitigate)
 
@@ -41,9 +39,9 @@ Headless-testable parts: `applyFeatureAlongCurve` (mountainRange raises a ridge 
 - Tiling: continuous zoom on the current map now; tiled 16k + region refine later.
 - Stream-power "carve" defaults to pure incision; uplift is opt-in (v0.046 fix).
 
-## Engine capability summary (v0.037→v0.047)
+## Engine capability summary (v0.037→v0.048)
 
-Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · worker droplet erosion · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views. Sidebar follows the planetary-formation cascade.
+Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · worker droplet erosion · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z. Sidebar follows the planetary-formation cascade.
 
 ## Docs map
 

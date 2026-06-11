@@ -68,6 +68,7 @@ global.document = {
 };
 
 global.window = new Proxy(global, { get: (t, k) => (k === 'devicePixelRatio' ? 1 : t[k]) });
+if (!global.addEventListener){ global.addEventListener = () => {}; global.removeEventListener = () => {}; }
 global.requestAnimationFrame = fn => setTimeout(fn, 0);
 global.cancelAnimationFrame = id => clearTimeout(id);
 global.Image = class { constructor(){ this.onload = null; this.onerror = null; } set src(_){} };

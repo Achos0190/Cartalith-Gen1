@@ -402,5 +402,95 @@ fieldsFinite('generate(world)');
   state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
 }
 
+/* ---------- plotline feature brushes (v0.048) ---------- */
+{
+  const distToPolyline = (p, poly) => {
+    let best = Infinity;
+    for (let s = 0; s < poly.length - 1; s++){
+      const ax = poly[s].x, ay = poly[s].y, dx = poly[s + 1].x - ax, dy = poly[s + 1].y - ay, L2 = dx * dx + dy * dy;
+      let t = L2 > 1e-12 ? ((p.x - ax) * dx + (p.y - ay) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+      best = Math.min(best, Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy)));
+    }
+    return best;
+  };
+
+  // RDP: noisy sine simplifies; endpoints kept; every input point stays near the simplified polyline
+  const raw = []; for (let i = 0; i <= 200; i++){ const x = i * 0.5; raw.push({ x, y: 10 * Math.sin(x * 0.08) + ((i * 2654435761 >>> 16) % 7) * 0.01 }); }
+  const simp = rdpSimplify(raw, 0.5);
+  check('rdp reduces point count (' + raw.length + ' → ' + simp.length + ')', simp.length < raw.length / 2 && simp.length >= 2);
+  check('rdp keeps endpoints', simp[0] === raw[0] && simp[simp.length - 1] === raw[raw.length - 1]);
+  check('rdp output stays within tolerance of input', raw.every(p => distToPolyline(p, simp) <= 0.75));
+  check('rdp collinear → 2 points', rdpSimplify([{x:0,y:0},{x:1,y:1},{x:2,y:2},{x:3,y:3}], 0.1).length === 2);
+
+  // synthetic flat grid for the feature stamps
+  const W = 96, H = 72, flat = () => new Float32Array(W * H).fill(0.5);
+  const curve = catmullRomSample([{x:16,y:36},{x:48,y:30},{x:80,y:40}], 2);
+
+  // mountainRange: raised near the line; cells beyond the radius bit-untouched
+  const a = flat(), R = 10;
+  applyFeatureAlongCurve(a, W, H, curve, 'mountainRange', R, 0.8, 42, { sea: 0.42 });
+  check('mountainRange finite & in [0,1]', allFinite(a) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(a)));
+  let nearSum = 0, nearN = 0, farSame = true;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const d = distToPolyline({ x, y }, curve), i = y * W + x;
+    if (d <= R * 0.5){ nearSum += a[i]; nearN++; }
+    else if (d > R + 1.5 && a[i] !== 0.5) farSame = false;
+  }
+  check('mountainRange raises the near-line band (mean ' + (nearSum / nearN).toFixed(3) + ' > 0.55)', nearSum / nearN > 0.55);
+  check('cells beyond the radius are bit-untouched', farSame);
+
+  // determinism: same seed bit-identical, different seed differs
+  const b = flat();
+  applyFeatureAlongCurve(b, W, H, curve, 'mountainRange', R, 0.8, 42, { sea: 0.42 });
+  let same = true; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]){ same = false; break; }
+  check('feature stamp deterministic (same seed bit-identical)', same);
+  const c = flat();
+  applyFeatureAlongCurve(c, W, H, curve, 'mountainRange', R, 0.8, 43, { sea: 0.42 });
+  let differs = false; for (let i = 0; i < a.length; i++) if (a[i] !== c[i]){ differs = true; break; }
+  check('different seed produces different terrain', differs);
+
+  // river on a flat field: channel carves down, sits below its surroundings, deepens downstream
+  const rv = flat();
+  const rCurve = catmullRomSample([{x:10,y:20},{x:50,y:36},{x:86,y:50}], 2);
+  applyFeatureAlongCurve(rv, W, H, rCurve, 'river', 24, 0.9, 7, { sea: 0.42 });
+  check('river field finite & in [0,1]', allFinite(rv) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(rv)));
+  let low = 0, high = 0;
+  for (let k = Math.floor(rCurve.length * 0.1); k < Math.floor(rCurve.length * 0.9); k++){
+    const x = Math.round(rCurve[k].x), y = Math.round(rCurve[k].y);
+    if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+    const i = y * W + x;
+    const nbMean = (rv[i - 1] + rv[i + 1] + rv[i - W] + rv[i + W]) * 0.25;
+    if (rv[i] < 0.5 && rv[i] < nbMean - 1e-7) low++; else high++;
+  }
+  check('river channel cells carve down below their neighbours (' + low + ' low vs ' + high + ' high)', low > high * 2);
+  const at = f => { const p = rCurve[Math.floor(rCurve.length * f)]; return rv[Math.round(p.y) * W + Math.round(p.x)]; };
+  check('river deepens downstream (u≈0.15: ' + (0.5 - at(0.15)).toFixed(3) + ' < u≈0.85: ' + (0.5 - at(0.85)).toFixed(3) + ')',
+    (0.5 - at(0.85)) > (0.5 - at(0.15)) * 1.3);
+
+  // extremes: every feature at str=1, R=40 stays finite & in range; plateau never lowers
+  let extOk = true, plateauOk = true;
+  for (const ft of ['mountainRange', 'hills', 'ridge', 'plateau', 'river', 'canyon', 'escarpment']){
+    const f = flat();
+    applyFeatureAlongCurve(f, W, H, curve, ft, 40, 1, 99, { sea: 0.42 });
+    if (!allFinite(f) || minMax(f)[0] < 0 || minMax(f)[1] > 1) extOk = false;
+    if (ft === 'plateau') for (let i = 0; i < f.length; i++) if (f[i] < 0.5 - 1e-9){ plateauOk = false; break; }
+  }
+  check('all 7 features finite & in [0,1] at extreme settings', extOk);
+  check('plateau never lowers terrain (mesa semantics)', plateauOk);
+}
+
+/* ---------- feature brush integration (UI call path on real terrain) ---------- */
+{
+  const before = field.slice();
+  const pts = [{x:GW*0.25,y:GH*0.6},{x:GW*0.5,y:GH*0.45},{x:GW*0.75,y:GH*0.55}];
+  const curve = catmullRomSample(pts, 2);
+  applyFeatureAlongCurve(field, GW, GH, curve, 'mountainRange', 28, 0.45, 12345, { sea: state.seaLevel });
+  fieldsFinite('feature brush (UI call path)');
+  let changed = false; for (let i = 0; i < field.length; i++) if (field[i] !== before[i]){ changed = true; break; }
+  check('feature brush changed real terrain', changed);
+  computeFlow(true);
+  check('flow finite after feature brush', allFinite(flowField));
+}
+
 console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
 process.exit(__fail ? 1 : 0);

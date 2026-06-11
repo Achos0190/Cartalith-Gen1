@@ -748,6 +748,85 @@ fieldsFinite('generate(world)');
   check('geoid off again → render bit-identical', same);
 }
 
+/* ---------- asset packs (v0.056, docs/ASSET_PACK_FORMAT.md) ---------- */
+{
+  const fs = require('fs');
+  // parsePackCsv — slots, icon variant ordering, tolerance, unknown-drop
+  const csv = 'type,slot,file,variant\r\ntexture,grass,textures/grass.png,\r\n\r\nicon,mountain,icons/m2.png,2\nicon,mountain,icons/m1.png,1\ntexture,bogus,x.png,\nicon,dragon,d.png,1\n';
+  const pc = parsePackCsv(csv);
+  check('parsePackCsv reads texture slots', pc.textures.grass === 'textures/grass.png' && pc.textures.bogus === undefined);
+  check('parsePackCsv orders icon variants by column', JSON.stringify(pc.icons.mountain) === JSON.stringify(['icons/m1.png', 'icons/m2.png']));
+  check('parsePackCsv drops unknown slots', pc.icons.dragon === undefined);
+
+  // parsePackManifest — JSON wins, string→array, missing-file warning, throw-on-neither
+  const zip = { 'pack.json': new TextEncoder().encode(JSON.stringify({
+      name: 'T', license: 'CC0', textures: { grass: 'g.png', nope: 'n.png' },
+      icons: { mountain: ['m1.png', 'm2.png'], hill: 'h.png', tree_conifer: ['gone.png'] } })),
+    'pack.csv': new TextEncoder().encode('type,slot,file,variant\ntexture,rock,r.png,\n'),
+    'g.png': new Uint8Array(1), 'm1.png': new Uint8Array(1), 'm2.png': new Uint8Array(1), 'h.png': new Uint8Array(1) };
+  const man = parsePackManifest(zip);
+  check('parsePackManifest: JSON wins over CSV', man.textures.grass === 'g.png' && man.textures.rock === undefined);
+  check('parsePackManifest: icon string → array', Array.isArray(man.icons.hill) && man.icons.hill[0] === 'h.png');
+  check('parsePackManifest: missing files dropped + warned', man.icons.tree_conifer === undefined && man.warnings.some(w => /tree_conifer/.test(w)));
+  check('parsePackManifest: unknown slot warned, not kept', man.textures.nope === undefined && man.warnings.some(w => /nope/.test(w)));
+  check('parsePackManifest: name/license carried', man.name === 'T' && man.license === 'CC0');
+  let threw = false; try { parsePackManifest({ 'foo.txt': new Uint8Array(1) }); } catch (e) { threw = true; }
+  check('parsePackManifest throws when no manifest', threw);
+
+  // pickIconVariant — deterministic, in range, hits all variants
+  check('pickIconVariant deterministic', pickIconVariant(5, 9, 3, 4) === pickIconVariant(5, 9, 3, 4));
+  check('pickIconVariant n<=1 → 0', pickIconVariant(5, 9, 3, 1) === 0);
+  { const seen = new Set(); let inRange = true; for (let x = 0; x < 60; x++) for (let y = 0; y < 60; y++){ const v = pickIconVariant(x, y, 7, 4); if (v < 0 || v >= 4) inRange = false; seen.add(v); }
+    check('pickIconVariant in [0,n) and hits all variants', inRange && seen.size === 4); }
+
+  // spriteDrawRect — bottom-center anchor, ∝ s, aspect preserved
+  const sr = spriteDrawRect(100, 200, 1, 10, 80, 160);
+  check('spriteDrawRect bottom-center', Math.abs(sr.dx + sr.dw / 2 - 100) < 1e-9 && Math.abs(sr.dy + sr.dh - 200) < 1e-9);
+  check('spriteDrawRect aspect preserved', Math.abs(sr.dw / sr.dh - 80 / 160) < 1e-9);
+  check('spriteDrawRect scales with s', spriteDrawRect(0, 0, 2, 10, 80, 160).dh === sr.dh * 2);
+
+  // finalizePackTexture — inverse channel means
+  const ft = finalizePackTexture(2, 1, new Uint8ClampedArray([100, 50, 200, 255, 100, 150, 0, 255]));
+  check('finalizePackTexture inv = 1/mean', Math.abs(ft.inv[0] - 1 / 100) < 1e-9 && Math.abs(ft.inv[1] - 1 / 100) < 1e-9 && Math.abs(ft.inv[2] - 1 / 100) < 1e-9);
+
+  // serializeState carries scaleBar pref but never the pack
+  const ser = serializeState();
+  check('serializeState has viz.scaleBar, no assetPack', ser.state.viz.scaleBar === true && ser.state.assetPack === undefined);
+
+  // updateScaleBar honours the toggle
+  state.viz.scaleBar = false; updateScaleBar();
+  check('updateScaleBar hides when off', document.getElementById('scaleBar').style.display === 'none');
+  state.viz.scaleBar = true;
+
+  // sample pack on disk — proves STORED (sync unzipStore reads it) + manifest shape + PNG headers
+  {
+    const ab = fs.readFileSync('assets/sample_pack.zip');
+    const z = unzipStore(ab.buffer.slice(ab.byteOffset, ab.byteOffset + ab.byteLength));
+    const allStored = Object.values(z).every(v => v instanceof Uint8Array);
+    check('sample_pack.zip is fully STORED (unzipStore reads every entry)', allStored && z['pack.json'] && z['pack.csv']);
+    const sman = parsePackManifest(z);
+    check('sample pack manifest: 7 textures + 3/2/2/2 icons, CC0', Object.keys(sman.textures).length === 7 &&
+      sman.icons.mountain.length === 3 && sman.icons.hill.length === 2 && sman.icons.tree_conifer.length === 2 &&
+      sman.icons.tree_broadleaf.length === 2 && sman.license === 'CC0' && sman.warnings.length === 0);
+    const pngOK = Object.keys(z).filter(n => n.endsWith('.png')).every(n => { const d = z[n]; return d[0] === 0x89 && d[1] === 0x50 && d[2] === 0x4E && d[3] === 0x47; });
+    check('sample pack PNGs have valid signatures', pngOK);
+  }
+
+  // sprite + neutrality smoke with a synthetic pack (no image decode; drawImage is a stub no-op)
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.mode = 'biome'; state.debug = 'off'; state.viz.icons = false; renderNow();
+  const baseNoPack = Uint8ClampedArray.from(img.data);
+  assetPack = { name: 'syn', license: 'CC0', texAny: false, textures: {},
+    icons: { mountain: [{ w: 64, h: 64, bmp: {} }, { w: 64, h: 64, bmp: {} }], tree_conifer: [{ w: 32, h: 48, bmp: {} }] } };
+  renderNow();   // pack present but icons toggle off → every pack path inert
+  let neutral = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPack[i]) { neutral = false; break; }
+  check('asset pack loaded but icons off → render bit-identical', neutral);
+  state.viz.icons = true;
+  let threw2 = false; try { renderNow(); } catch (e) { threw2 = true; }
+  check('sprite draw path runs without error', !threw2 && img.data[3] === 255);
+  state.viz.icons = false; assetPack = null; renderNow();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)
@@ -783,6 +862,30 @@ fieldsFinite('generate(world)');
     const ref = refineTile(field, GW, GH, sel, cols, rows, 0, 0, td.w, td.h, { seed: state.tect.seed, sea: state.seaLevel, ridged: state.tect.ridged });
     let maxErr = 0; for (let i = 0; i < td.w * td.h; i++) maxErr = Math.max(maxErr, Math.abs(dec[i] - ref[i]));
     check('exported tile round-trips through pack+gzip (max Δ=' + maxErr.toExponential(1) + ' ≤ 1 LSB)', maxErr <= 0.5 / 65535 + 1e-9);
+  }
+
+  // unzipAny (v0.056): central-dir reader handles STORED + DEFLATED entries
+  {
+    const ab = require('fs').readFileSync('assets/sample_pack.zip');
+    const z = await unzipAny(ab.buffer.slice(ab.byteOffset, ab.byteOffset + ab.byteLength));
+    check('unzipAny reads the STORED sample pack via central dir', !!z['pack.json'] && Object.keys(z).filter(n => n.endsWith('.png')).length === 16);
+    if (typeof DecompressionStream !== 'undefined'){
+      // hand-build a 1-entry DEFLATED zip (Node zlib) and confirm unzipAny inflates it
+      const zlib = require('zlib');
+      const payload = new TextEncoder().encode('hello deflate world '.repeat(20));
+      const comp = zlib.deflateRawSync(Buffer.from(payload));
+      const crc = zlib.crc32 ? zlib.crc32(Buffer.from(payload)) : require('zlib').crc32;
+      const name = Buffer.from('a.txt');
+      const u16 = v => Buffer.from([v & 255, (v >> 8) & 255]);
+      const u32 = v => Buffer.from([v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255]);
+      const crcB = u32(crc >>> 0);
+      const lh = Buffer.concat([u32(0x04034b50), u16(20), u16(0), u16(8), u16(0), u16(0), crcB, u32(comp.length), u32(payload.length), u16(name.length), u16(0), name, comp]);
+      const cd = Buffer.concat([u32(0x02014b50), u16(20), u16(20), u16(0), u16(8), u16(0), u16(0), crcB, u32(comp.length), u32(payload.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(0), name]);
+      const eo = Buffer.concat([u32(0x06054b50), u16(0), u16(0), u16(1), u16(1), u32(cd.length), u32(lh.length), u16(0)]);
+      const zipBuf = Buffer.concat([lh, cd, eo]);
+      const z2 = await unzipAny(zipBuf.buffer.slice(zipBuf.byteOffset, zipBuf.byteOffset + zipBuf.byteLength));
+      check('unzipAny inflates a DEFLATED entry', !!z2['a.txt'] && new TextDecoder().decode(z2['a.txt']) === 'hello deflate world '.repeat(20));
+    } else { console.log('skip - DecompressionStream unavailable'); }
   }
 
   console.log('\n' + __pass + ' passed, ' + __fail + ' failed');

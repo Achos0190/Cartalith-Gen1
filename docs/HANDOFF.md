@@ -24,7 +24,7 @@
 **Shipped this branch:** v0.048 (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z), v0.049 (W0b worker stream-power/glacial carve), v0.050–0.051 (parchment, icons, waves — zero-asset visuals tier), v0.052–0.053 (16k tiling: pure core + region-refine export) — see the `CLAUDE.md` "Since v0.0XX" paragraphs and ROADMAP Done entries. The zero-asset procedural visuals tier is now complete.
 
 **Next build steps (user-set order, June 2026):**
-1. **Visuals asset tier (gated)**: B2 texture splatting + B3 sprite icons need a CC0 pack the user approves on look — assemble a Poly Haven/ambientCG/K.M. Alexander candidate set (needs network access; check the env policy). Not a blocker for the rest of the sequence.
+1. **Visuals asset tier (gated — awaiting user approval)**: a curated CC0 candidate shortlist is in **`docs/research/asset-candidates.md`** (ambientCG ground textures mapped to the renderer's material channels + K.M. Alexander #NoBadMaps CC0 sprite sets). User reviews the view-links and picks a subset → then vendor into `assets/` + wire B2 texture splatting and B3 sprite icons (procedural fallback stays when the folder is absent). Note: the asset CDNs block this env's web-fetch UA, so vendoring needs the user to drop files in or a normal-network context.
 2. **16k tiling pipeline**: DONE through v0.053 (pure core + region-select drag + tile-by-tile gzip'd rg16+PNG export with manifest v2). Optional follow-ups: per-tile erosion at refine time, fflate vendoring, 16k device memory test.
 3. **Gravity completion**: G2 geoid sea-level field (J2 + harmonics + mantle noise, toggle off by default), G3 moons/tidal-range overlay → coastal hazard zones.
 4. **River painting / stream-carving quality pass** (user wants to re-check this — not now).
@@ -45,7 +45,7 @@ Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity sc
 
 ## Docs map
 
-`CLAUDE.md` (architecture, 11 invariants, verification) · `docs/ROADMAP.md` (priority order + Done log) · `docs/UNIFIED_TOOL_PLAN.md` · `docs/GENERATOR_PARAMETERS.md` (every modifier) · `docs/BIOME_AND_VISUALS_PLAN.md` · `docs/WORLD_REGIONAL_TILING_PLAN.md` · `docs/SESSION_LOG_2026-06-10.md` · `docs/research/` (ui-unified-tool, weather-model-v2, gravity-influence, engine-optimization, pipeline-order-audit, **map-painting-ux**).
+`CLAUDE.md` (architecture, 11 invariants, verification) · `docs/ROADMAP.md` (priority order + Done log) · `docs/UNIFIED_TOOL_PLAN.md` · `docs/GENERATOR_PARAMETERS.md` (every modifier) · `docs/BIOME_AND_VISUALS_PLAN.md` · `docs/WORLD_REGIONAL_TILING_PLAN.md` · `docs/SESSION_LOG_2026-06-10.md` · `docs/research/` (ui-unified-tool, weather-model-v2, gravity-influence, engine-optimization, pipeline-order-audit, map-painting-ux, **asset-candidates** [CC0 shortlist awaiting approval]).
 
 ## Watch-outs
 

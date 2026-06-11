@@ -4,21 +4,27 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Now
 
+User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → then a river-painting / stream-carving quality pass**.
+
+1. **Visuals, asset tier** (`docs/BIOME_AND_VISUALS_PLAN.md`): B1 parchment + B3 procedural icons shipped in v0.050. Next visual increments: **B2 texture splatting** (blocked on user approving a CC0 ground-texture pack — assemble a Poly Haven/ambientCG candidate set), B3 sprite icons (same gate), B4 coastline/water styling (procedural, ungated).
+2. **World→regional→16k tiling pipeline** (`docs/WORLD_REGIONAL_TILING_PLAN.md`): browser wiring on top of the proven `amplifyRegion` — region select UI, per-tile OffscreenCanvas/workers, fflate-compressed tiled export + manifest.
+3. **Gravity completion**: **G2** geoid sea-level field (J2 + low-order harmonics + mantle noise; toggle, off by default), **G3** moons & tidal-range overlay → coastal hazard zones.
+4. **River painting / stream-carving quality pass** (user request): revisit the river feature brush + stream-power carve interplay after the above land.
+
 ## Next
 
-3. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`)
-   Stream-power and glacial carve are now in Workers (v0.049). Remaining: JS micro-opts in the stencil loops (hoist bounds, flatten neighbour offsets) — only if profiling shows a need.
-4. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`)
+5. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`)
    Namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel.
-5. **P2 — Save schema v10** with both legacy importers.
+6. **P2 — Save schema v10** with both legacy importers.
+7. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`): JS micro-opts in the stencil loops — only if profiling shows a need.
 
 ## Later
 
 7. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
 8. **R32F GPU migration** (handoff pending #3) with RGBA8 fallback tier.
-9. **G2 — Geoid sea-level field** (J2 + low-order harmonics + mantle noise; toggle, off by default).
-10. **G3 — Moons & tidal-range overlay** → coastal hazard zones.
-11. **Disturbance model completion** (handoff pending #2): wind-throw from W1 wind field, flood proxy from flowField/TWI.
+9. **Disturbance model completion** (handoff pending #2): wind-throw from W1 wind field, flood proxy from flowField/TWI.
+
+(G2 geoid and G3 moons/tides moved up into Now → item 3, per the user's June 2026 sequencing.)
 
 ## Bigger workstreams (planned, post-merge)
 
@@ -35,6 +41,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Done
 
+- 2026-06: **v0.050 — B1 parchment + B3 stylized icon layer** (`docs/BIOME_AND_VISUALS_PLAN.md` Part B, zero-asset tier): `state.viz={parchment,icons}` (both default off → field AND rendered pixels proven bit-identical to v0.049). Parchment = two-octave paper-fibre grain multiplied into the biome/relief modes + warm tint, slider 0–1. Icon layer = `placeMapIcons()` (pure primitive: land-relative elevation thresholds 0.58/0.53, greedy largest-first spacing via grid buckets — Nortantis algorithm studied, no AGPL code copied; forest stipple from the frozen biome raster on closed-canopy classes) + `drawMapIcons()` procedural vector glyphs (peaked mountains with shaded east flank, hill arcs, conifer/broadleaf trees), painter-ordered north→south. Render-only; bakes/exports unchanged. 126 assertions green. Glyph aesthetics = browser check.
 - 2026-06: **v0.049 — W0b worker stream-power + glacial carve** (`docs/research/engine-optimization.md`): both ops refactored into self-contained `streamPowerKernel`/`glacialKernel` (inline MinHeap + priority-flood routing, all inputs via args) shipped to blob-URL Workers via a generic `runErosionWorker` runner (progress %, sync fallback, shared `_eroBusy` lock); main-thread `eroFinish` (rebound→flow→climate→render) stays off-worker. Invariant 11 (self-containment) now covers all three kernels — rebuilt-from-`toString` bit-identical asserted for each. Proven bit-identical to v0.047 (seed 12345, 256px: stream + glacial outputs `cmp`-clean). 113 assertions green. Worker paths = browser check.
 - 2026-06: **v0.048 — plotline feature brushes + pan/zoom UX** (`docs/research/map-painting-ux.md`): waypoint polyline sculpt (and its GPU shader) replaced by freehand guide strokes (RDP-simplified, Catmull-Rom smoothed) + `applyFeatureAlongCurve()` — a pure testable distance-field stamp synthesizing 7 features (mountain range, hills, ridge, plateau, river, canyon, escarpment) with fractal detail along the line. Shared `viewT` pan/zoom: mobile keeps its zoom buttons (+ pan toggle + pinch), desktop gains wheel-zoom-to-cursor + middle/space-drag pan. Dynamic km scale bar; Ctrl/Cmd-Z undo. 105 assertions green; generate() proven bit-identical to v0.047. Gestures/scale-bar/guide-preview = browser check.
 - 2026-06: **v0.047 — Wind debug view**: `currentWindField()` + a `Wind` debug overlay (per-pixel hue=bearing/brightness=speed map + coarse arrow glyphs) makes the W1 planetary wind field visible. Read-only; bit-identical to v0.046. 87 assertions green (incl. tropics-easterly↔mid-latitude-westerly reversal). Arrow legibility = browser check.

@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. v0.048–0.049 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
-- Current engine file: **`elevation_foundation_v0.049.html`** (older `v0.036–0.048` kept, never edited in place — new version = new file).
-- Headless suite: **113 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. v0.048–0.050 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.050.html`** (older `v0.036–0.049` kept, never edited in place — new version = new file).
+- Headless suite: **126 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -19,18 +19,17 @@
 3. GPU shaders, Web Worker glue, and canvas interaction (zoom/pan/paint) **cannot be verified headlessly** — implement, then flag explicitly for a manual browser pass.
 4. Commit messages end with the session URL line (see existing commits). Push to the work branch; PR #1 already exists.
 
-## Immediate next task — manual browser pass on v0.048/0.049, then pick from Roadmap → Next
+## Immediate next task — per the user's sequence: visuals → 16k tiling → gravity → river/stream pass
 
-**v0.048 + v0.049 shipped** (v0.048: plotline feature brushes, pan/zoom, scale bar, Ctrl-Z; v0.049: W0b — stream-power & glacial carve moved into Workers — see `CLAUDE.md` "Since v0.048"/"Since v0.049" and the ROADMAP Done entries). What headless tests could NOT cover needs one manual browser pass:
+**Shipped this branch:** v0.048 (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z), v0.049 (W0b worker stream-power/glacial carve), v0.050 (B1 parchment grain + B3 stylized icon layer, zero-asset tier) — see the `CLAUDE.md` "Since v0.0XX" paragraphs and ROADMAP Done entries.
 
-- **v0.049 worker carve**: click **Stream-power carve** and **Glacial carve** — busy overlay shows `carving rivers…/glaciers… N%` progress, the terrain updates when done, and the UI stays responsive during the run. Only one erosion op runs at a time (shared `_eroBusy`). With Workers disabled (or under odd `file://` setups) it must fall back to the sync path and still carve.
-- Desktop: wheel-zoom keeps the point under the cursor fixed; ctrl-wheel (trackpad pinch) finer; middle-drag and space-drag pan; Ctrl/Cmd-Z undoes (and does NOT fire while typing in inputs).
-- Mobile: zoom buttons (+/−/✋/⟳) appear and work; ✋ toggles one-finger pan; two-finger pinch zooms/pans; one finger still paints.
-- Paint + guide strokes land correctly at zoom ≠ 1 (evtToGrid is transform-invariant — verify, don't assume).
-- Scale bar: sensible 1/2/5×10ⁿ values at two zoom levels and after changing Map width (km).
-- Feature brushes: draw guide → tube preview → Apply for each of the 7 features; rivers carve start→end; GPU tag still reads `active (…)` after the pPoly shader removal.
+**Next build steps (user-set order, June 2026):**
+1. **Visuals asset tier**: assemble the CC0 ground-texture/sprite candidate set (Poly Haven / ambientCG / K.M. Alexander) for the user to eyeball → then B2 texture splatting + sprite icons. B4 coastline styling is ungated procedural work that can ship meanwhile.
+2. **16k tiling pipeline** (`docs/WORLD_REGIONAL_TILING_PLAN.md`): region-select UI + per-tile workers + fflate tiled export on top of the proven `amplifyRegion`.
+3. **Gravity completion**: G2 geoid sea-level field, G3 moons/tidal overlay.
+4. **River painting / stream-carving quality pass** (user wants to re-check this — not now).
 
-After that, next per `docs/ROADMAP.md`: **W0b leftovers** (stencil-loop micro-opts, only if profiling demands) or **P0–P1** (unified tool shell merge).
+**Manual browser pass still owed** (headless can't cover): v0.050 — parchment slider look, icon glyph aesthetics/density at 2048px (mountains on ridges, trees in forests, nothing in oceans), toggles off→on→off leaves the map unchanged. v0.049 — worker carve progress %, responsive UI, sync fallback. v0.048 — zoom/pan gestures desktop+mobile, paint/guide alignment at zoom ≠ 1, scale bar, Ctrl-Z guards, GPU tag, 7 feature brushes.
 
 ## Locked decisions (don't relitigate)
 
@@ -40,9 +39,9 @@ After that, next per `docs/ROADMAP.md`: **W0b leftovers** (stencil-loop micro-op
 - Tiling: continuous zoom on the current map now; tiled 16k + region refine later.
 - Stream-power "carve" defaults to pure incision; uplift is opt-in (v0.046 fix).
 
-## Engine capability summary (v0.037→v0.049)
+## Engine capability summary (v0.037→v0.050)
 
-Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z. Sidebar follows the planetary-formation cascade.
+Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z · parchment grain + stylized icon layer (`placeMapIcons`/`drawMapIcons`, zero-asset). Sidebar follows the planetary-formation cascade.
 
 ## Docs map
 

@@ -21,6 +21,7 @@ function make2dCtx(canvas){
     putImageData(){}, drawImage(){},
     fillRect(){}, strokeRect(){}, clearRect(){},
     beginPath(){}, closePath(){}, moveTo(){}, lineTo(){}, arc(){}, rect(){},
+    quadraticCurveTo(){}, bezierCurveTo(){}, ellipse(){},
     stroke(){}, fill(){}, setLineDash(){},
     save(){}, restore(){}, scale(){}, translate(){}, setTransform(){},
     measureText(){ return { width: 0 }; }, fillText(){}, strokeText(){}

@@ -394,6 +394,60 @@ refreshClimate();        check('climate refresh finite', allFinite(tempField) &&
 renderNow();
 check('render wrote opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
 
+/* ---------- B1/B3 visual layers (v0.050, BIOME_AND_VISUALS_PLAN Part B) ---------- */
+{
+  // icon placement on a synthetic ridge: pure primitive, no globals
+  const W = 96, H = 64, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const ridge = Math.max(0, 1 - Math.abs(y - 32) / 18);          // E–W ridge along y=32
+    fld[y * W + x] = (x >= 8 && x < 88) ? sea + 0.02 + 0.48 * ridge : 0.2;  // flanks → low land, edges → ocean
+  }
+  const biome = new Uint8Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    biome[y * W + x] = (x < 48) ? 5 /* tempForest */ : 9 /* desert */;
+  const opts = { sea, seed: 7 };
+  const icons = placeMapIcons(fld, biome, W, H, opts);
+  check('icons: mountains found on the ridge (' + icons.mountains.length + ')', icons.mountains.length >= 3);
+  check('icons: hills found on the flanks (' + icons.hills.length + ')', icons.hills.length >= 2);
+  const landR = v => (v - sea) / (1 - sea);
+  check('icons: every mountain sits above the mountain threshold',
+    icons.mountains.every(m => landR(fld[m.y * W + m.x]) >= 0.58));
+  check('icons: every hill sits in the hill band',
+    icons.hills.every(h => { const r = landR(fld[h.y * W + h.x]); return r >= 0.53 && r < 0.58; }));
+  const mSpace = Math.max(5, Math.round(W / 90));
+  let minD2 = Infinity;
+  for (let a = 0; a < icons.mountains.length; a++) for (let b = a + 1; b < icons.mountains.length; b++){
+    const dx = icons.mountains[a].x - icons.mountains[b].x, dy = icons.mountains[a].y - icons.mountains[b].y;
+    minD2 = Math.min(minD2, dx * dx + dy * dy);
+  }
+  check('icons: mountain spacing respected (min ' + Math.sqrt(minD2).toFixed(1) + ' ≥ ' + mSpace + ')', minD2 >= mSpace * mSpace);
+  check('icons: trees only on closed-canopy biome cells',
+    icons.trees.length > 5 && icons.trees.every(t => { const b = biome[t.y * W + t.x]; return b === 3 || b === 4 || b === 5 || b === 6 || b === 12; }));
+  check('icons: painter order is north→south', ['mountains', 'hills', 'trees'].every(k =>
+    icons[k].every((p, i, a) => i === 0 || a[i - 1].y <= p.y)));
+  const icons2 = placeMapIcons(fld, biome, W, H, opts);
+  check('icons: placement deterministic', JSON.stringify(icons) === JSON.stringify(icons2));
+  const flat = new Float32Array(n).fill(sea + 0.02);
+  const none = placeMapIcons(flat, null, W, H, opts);
+  check('icons: flat lowland → no mountains or hills', none.mountains.length === 0 && none.hills.length === 0 && none.trees.length === 0);
+
+  // parchment: defaults-off neutrality + visible effect, on the real map
+  const before = Uint8ClampedArray.from(img.data);
+  state.viz.parchment = 0.5; renderNow();
+  let diff = 0; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== before[i]) diff++;
+  check('parchment 0.5 changes pixels (' + diff + ' bytes differ)', diff > 1000);
+  check('parchment render stays opaque', img.data[3] === 255);
+  state.viz.parchment = 0; renderNow();
+  let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== before[i]){ same = false; break; }
+  check('parchment off → bit-identical to before (default neutrality)', same);
+
+  // icon layer toggles without error headless (vector draw is a vctx no-op in the stub)
+  state.viz.icons = true; renderNow();
+  check('icon layer renders without error', img.data[3] === 255);
+  state.viz.icons = false; renderNow();
+}
+
 /* ---------- world (toroidal) mode + seam continuity ---------- */
 state.world = true;
 GW = state.resW; GH = gridH(GW);

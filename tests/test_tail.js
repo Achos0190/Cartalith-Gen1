@@ -448,6 +448,38 @@ check('render wrote opaque pixels', img.data.length === GW * GH * 4 && img.data[
   state.viz.icons = false; renderNow();
 }
 
+/* ---------- B4 coastal wave lines (v0.051) ---------- */
+{
+  // half ocean (x<W/2) / half land split: ocean distance grows toward the left edge
+  const W = 40, H = 24, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = x < W / 2 ? 0.2 : 0.7;
+  const d = computeCoastDistance(fld, W, H, sea);
+  check('coastDist: land cells are zero', (() => { for (let i = 0; i < n; i++){ const x = i % W; if (x >= W / 2 && d[i] !== 0) return false; } return true; })());
+  check('coastDist: shore ocean cell ≈ 1', Math.abs(d[12 * W + (W / 2 - 1)] - 1) < 0.01);
+  const row = 12 * W;
+  check('coastDist: distance increases away from shore',
+    d[row + (W / 2 - 1)] < d[row + (W / 2 - 5)] && d[row + (W / 2 - 5)] < d[row + 0]);
+  check('coastDist: all finite', allFinite(d));
+
+  // render: waves off = bit-identical; on = only WATER pixels change (land untouched)
+  state.viz.parchment = 0; state.viz.icons = false; state.viz.waves = false;
+  state.mode = 'biome'; state.debug = 'off'; renderNow();
+  const base = Uint8ClampedArray.from(img.data);
+  state.viz.waves = true; renderNow();
+  let waterDiff = 0, landChanged = 0;
+  for (let i = 0; i < GW * GH; i++){
+    const p = i * 4, isW = field[i] < state.seaLevel;
+    const changed = img.data[p] !== base[p] || img.data[p + 1] !== base[p + 1] || img.data[p + 2] !== base[p + 2];
+    if (changed){ if (isW) waterDiff++; else landChanged++; }
+  }
+  check('waves on: water pixels change (' + waterDiff + ')', waterDiff > 50);
+  check('waves on: land pixels untouched (' + landChanged + ' changed)', landChanged === 0);
+  state.viz.waves = false; renderNow();
+  let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
+  check('waves off → bit-identical (default neutrality)', same);
+}
+
 /* ---------- world (toroidal) mode + seam continuity ---------- */
 state.world = true;
 GW = state.resW; GH = gridH(GW);

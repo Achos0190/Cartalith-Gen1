@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. v0.048–0.050 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
-- Current engine file: **`elevation_foundation_v0.050.html`** (older `v0.036–0.049` kept, never edited in place — new version = new file).
-- Headless suite: **126 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. v0.048–0.051 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.051.html`** (older `v0.036–0.050` kept, never edited in place — new version = new file).
+- Headless suite: **133 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -21,12 +21,12 @@
 
 ## Immediate next task — per the user's sequence: visuals → 16k tiling → gravity → river/stream pass
 
-**Shipped this branch:** v0.048 (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z), v0.049 (W0b worker stream-power/glacial carve), v0.050 (B1 parchment grain + B3 stylized icon layer, zero-asset tier) — see the `CLAUDE.md` "Since v0.0XX" paragraphs and ROADMAP Done entries.
+**Shipped this branch:** v0.048 (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z), v0.049 (W0b worker stream-power/glacial carve), v0.050 (B1 parchment grain + B3 stylized icon layer), v0.051 (B4 coastal wave lines) — see the `CLAUDE.md` "Since v0.0XX" paragraphs and ROADMAP Done entries. The zero-asset procedural visuals tier is now complete.
 
 **Next build steps (user-set order, June 2026):**
-1. **Visuals asset tier**: assemble the CC0 ground-texture/sprite candidate set (Poly Haven / ambientCG / K.M. Alexander) for the user to eyeball → then B2 texture splatting + sprite icons. B4 coastline styling is ungated procedural work that can ship meanwhile.
-2. **16k tiling pipeline** (`docs/WORLD_REGIONAL_TILING_PLAN.md`): region-select UI + per-tile workers + fflate tiled export on top of the proven `amplifyRegion`.
-3. **Gravity completion**: G2 geoid sea-level field, G3 moons/tidal overlay.
+1. **Visuals asset tier (gated)**: B2 texture splatting + B3 sprite icons need a CC0 pack the user approves on look — assemble a Poly Haven/ambientCG/K.M. Alexander candidate set (needs network access; check the env policy). Not a blocker for the rest of the sequence.
+2. **16k tiling pipeline** (`docs/WORLD_REGIONAL_TILING_PLAN.md`) — **the current non-gated focus**: region-select UI + per-tile OffscreenCanvas/workers + fflate tiled export + manifest on top of the proven `amplifyRegion` (already seam-Δ=0). Plus 16-bit height packing & external 16-bit/.f32 import.
+3. **Gravity completion**: G2 geoid sea-level field (J2 + harmonics + mantle noise, toggle off by default), G3 moons/tidal-range overlay → coastal hazard zones.
 4. **River painting / stream-carving quality pass** (user wants to re-check this — not now).
 
 **Manual browser pass still owed** (headless can't cover): v0.050 — parchment slider look, icon glyph aesthetics/density at 2048px (mountains on ridges, trees in forests, nothing in oceans), toggles off→on→off leaves the map unchanged. v0.049 — worker carve progress %, responsive UI, sync fallback. v0.048 — zoom/pan gestures desktop+mobile, paint/guide alignment at zoom ≠ 1, scale bar, Ctrl-Z guards, GPU tag, 7 feature brushes.
@@ -39,9 +39,9 @@
 - Tiling: continuous zoom on the current map now; tiled 16k + region refine later.
 - Stream-power "carve" defaults to pure incision; uplift is opt-in (v0.046 fix).
 
-## Engine capability summary (v0.037→v0.050)
+## Engine capability summary (v0.037→v0.051)
 
-Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z · parchment grain + stylized icon layer (`placeMapIcons`/`drawMapIcons`, zero-asset). Sidebar follows the planetary-formation cascade.
+Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z · parchment grain + stylized icon layer + coastal wave lines (zero-asset visual tier). Sidebar follows the planetary-formation cascade.
 
 ## Docs map
 

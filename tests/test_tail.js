@@ -588,6 +588,14 @@ fieldsFinite('generate(world)');
   // selecting the wind view renders a full opaque buffer
   state.debug = 'wind'; renderNow();
   check('wind debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
+  // ocean-current debug view (v0.057): coarse field finite, vectors live on water, SST anomaly present
+  const of = currentOceanField();
+  check('currentOceanField finite + flow on water', allFinite(of.u) && allFinite(of.v) && allFinite(of.sst) && of.maxSpeed > 1e-3);
+  let landZero = true, oceanCells = 0; for (let i = 0; i < of.u.length; i++){ if (!of.ocean[i]){ if (of.u[i] !== 0 || of.v[i] !== 0) landZero = false; } else oceanCells++; }
+  check('ocean current vectors are zero on land (' + oceanCells + ' ocean cells)', landZero && oceanCells > 0);
+  check('ocean SST anomaly has warm and cold sides', of.maxAnom > 1e-3);
+  state.debug = 'ocean'; renderNow();
+  check('ocean debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
   state.debug = 'off';
   state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
 }

@@ -835,6 +835,37 @@ fieldsFinite('generate(world)');
   state.viz.icons = false; assetPack = null; renderNow();
 }
 
+/* ---------- B2 texture splatting (v0.059) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.mode = 'biome'; state.debug = 'off'; state.viz.icons = false;
+  state.viz.splat = 0.7; renderNow();
+  const baseNoPack = Uint8ClampedArray.from(img.data);   // no pack ⇒ _splatK gated to 0
+  // synthetic pack covering every material slot with a distinct solid texture
+  const solid = (r, g, b) => { const d = new Uint8ClampedArray(4 * 4 * 4); for (let i = 0; i < 16; i++){ d[i*4]=r; d[i*4+1]=g; d[i*4+2]=b; d[i*4+3]=255; } return finalizePackTexture(4, 4, d); };
+  assetPack = { name: 'syn', license: 'CC0', texAny: true, icons: {},
+    textures: { grass: solid(60,140,60), rock: solid(140,140,140), sand: solid(210,190,140),
+                snow: solid(240,240,245), wetland: solid(70,90,60), canopy: solid(40,80,45) } };
+  // splat=0 with a pack loaded → identical to baseline (strength gate)
+  state.viz.splat = 0; renderNow();
+  let same0 = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPack[i]){ same0 = false; break; }
+  check('splat strength 0 (pack loaded) → render bit-identical', same0);
+  // splat>0 → land pixels change, ocean pixels stay (seaColor has no splat)
+  state.viz.splat = 1; renderNow();
+  let landChanged = 0, oceanChanged = 0;
+  for (let i = 0; i < GW * GH; i++){ const p = i * 4, isW = field[i] < state.seaLevel;
+    const ch = img.data[p] !== baseNoPack[p] || img.data[p+1] !== baseNoPack[p+1] || img.data[p+2] !== baseNoPack[p+2];
+    if (ch){ if (isW) oceanChanged++; else landChanged++; } }
+  check('splat 1 changes land pixels (' + landChanged + ')', landChanged > 100);
+  check('splat leaves ocean pixels untouched (' + oceanChanged + ' changed)', oceanChanged === 0);
+  check('splat render stays finite/opaque', img.data[3] === 255);
+  // splat>0 but assetPack null → identical (pack gate)
+  assetPack = null; renderNow();
+  let sameNull = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPack[i]){ sameNull = false; break; }
+  check('splat 1 with no pack → render bit-identical', sameNull);
+  state.viz.splat = 0.7;
+}
+
 /* ---------- T0 tectonic boundary classification (v0.058, tectonic-feature-graph.md) ---------- */
 {
   // pure matrix: crust A × crust B × convergence × shear

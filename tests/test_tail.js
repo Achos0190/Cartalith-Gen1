@@ -183,6 +183,51 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   }
 }
 
+/* ---------- stream-power / glacial kernel self-containment (v0.048b, W0b worker contract) ---------- */
+{
+  // Same discipline as the droplet kernel: rebuild from source with every module global shadowed
+  // to undefined (the Worker environment). Any closure leak throws or corrupts the output.
+  const shadows = ['field', 'stressField', 'resistanceField', 'rainField', 'tempField', 'GW', 'GH',
+                   'state', 'isostaticRebound', 'computeFlow', 'refreshClimate', 'renderNow',
+                   'gaussBlur', 'mbuf', 'ibuf', 'ubuf', 'MinHeap', 'computeFlowRouting'];
+  const W = 60, H = 44, n = W * H;
+  // a tilted dome so routing, MFD area and incision all have work to do
+  const mk = () => { const a = new Float32Array(n);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+      a[y * W + x] = 0.55 - Math.hypot(x - W / 2, y - H / 2) / W * 0.7 + (x + y) * 0.0008;
+    return a; };
+  const stress = new Float32Array(n), resist = new Float32Array(n).fill(0.5), rain = new Float32Array(n).fill(0.5);
+  for (let i = 0; i < n; i++) stress[i] = Math.max(0, mk()[i] - 0.3);
+
+  for (const [name, fn, callArgs, makeArgs, P] of [
+    ['streamPowerKernel', streamPowerKernel,
+      'fld, stress, resist, rain', () => [stress, resist, rain],
+      { k: 0.6, uplift: 0, deposit: 0.3, climateK: 0.5, iters: 6, resist: 0.5, g: 1, world: false, sea: 0.42 }],
+    ['glacialKernel', glacialKernel,
+      'fld, temp', () => [new Float32Array(n).fill(-12)],
+      { kg: 0.15, mg: 0.4, snowline: 0.02, uFactor: 0.6, passes: 8, g: 1, sea: 0.42, world: false }],
+  ]){
+    let rebuilt = null, evalOk = true;
+    try {
+      rebuilt = new Function(...shadows, 'return (' + fn.toString() + ')').apply(null, shadows.map(() => undefined));
+    } catch (e){ evalOk = false; }
+    check(name + ' rebuilds from source (worker stringification)', evalOk && typeof rebuilt === 'function');
+    if (rebuilt){
+      const a = mk(), b = mk(), orig = mk(), extra = makeArgs();
+      // signature: (fld, ...extraFields, W, H, P, onProgress)
+      rebuilt(a, ...extra, W, H, P);
+      fn(b, ...extra, W, H, P);
+      let identical = true, changed = false;
+      for (let i = 0; i < n; i++){ if (a[i] !== b[i]) identical = false; if (a[i] !== orig[i]) changed = true; }
+      check(name + ' output finite & changed terrain', allFinite(a) && changed);
+      check(name + ' bit-identical to in-module kernel (no closure leaks)', identical);
+      let progCalls = 0;
+      rebuilt(mk(), ...makeArgs(), W, H, P, () => progCalls++);
+      check(name + ' reports progress (' + progCalls + ' callbacks)', progCalls >= 2);
+    }
+  }
+}
+
 /* ---------- biome raster handoff (v0.042+, BIOME_AND_VISUALS_PLAN Part A) ---------- */
 {
   const raster = buildBiomeRaster();

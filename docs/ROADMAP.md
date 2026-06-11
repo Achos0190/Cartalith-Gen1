@@ -6,8 +6,8 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Next
 
-3. **W0b — extend Worker coverage** (`docs/research/engine-optimization.md`)
-   v0.041 moved the droplet pass (heaviest CPU op) into a blob-URL Worker with progress + sync fallback. Remaining candidates: stream-power and glacial kernels (same self-contained-kernel pattern), then JS micro-opts in the stencil loops.
+3. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`)
+   Stream-power and glacial carve are now in Workers (v0.049). Remaining: JS micro-opts in the stencil loops (hoist bounds, flatten neighbour offsets) — only if profiling shows a need.
 4. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`)
    Namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel.
 5. **P2 — Save schema v10** with both legacy importers.
@@ -35,6 +35,7 @@ Priority-ordered. One thing at a time; each item ends with `tests/run.sh` green 
 
 ## Done
 
+- 2026-06: **v0.049 — W0b worker stream-power + glacial carve** (`docs/research/engine-optimization.md`): both ops refactored into self-contained `streamPowerKernel`/`glacialKernel` (inline MinHeap + priority-flood routing, all inputs via args) shipped to blob-URL Workers via a generic `runErosionWorker` runner (progress %, sync fallback, shared `_eroBusy` lock); main-thread `eroFinish` (rebound→flow→climate→render) stays off-worker. Invariant 11 (self-containment) now covers all three kernels — rebuilt-from-`toString` bit-identical asserted for each. Proven bit-identical to v0.047 (seed 12345, 256px: stream + glacial outputs `cmp`-clean). 113 assertions green. Worker paths = browser check.
 - 2026-06: **v0.048 — plotline feature brushes + pan/zoom UX** (`docs/research/map-painting-ux.md`): waypoint polyline sculpt (and its GPU shader) replaced by freehand guide strokes (RDP-simplified, Catmull-Rom smoothed) + `applyFeatureAlongCurve()` — a pure testable distance-field stamp synthesizing 7 features (mountain range, hills, ridge, plateau, river, canyon, escarpment) with fractal detail along the line. Shared `viewT` pan/zoom: mobile keeps its zoom buttons (+ pan toggle + pinch), desktop gains wheel-zoom-to-cursor + middle/space-drag pan. Dynamic km scale bar; Ctrl/Cmd-Z undo. 105 assertions green; generate() proven bit-identical to v0.047. Gestures/scale-bar/guide-preview = browser check.
 - 2026-06: **v0.047 — Wind debug view**: `currentWindField()` + a `Wind` debug overlay (per-pixel hue=bearing/brightness=speed map + coarse arrow glyphs) makes the W1 planetary wind field visible. Read-only; bit-identical to v0.046. 87 assertions green (incl. tropics-easterly↔mid-latitude-westerly reversal). Arrow legibility = browser check.
 - 2026-06: **v0.046 — stream-power fix + menu cascade** (user bug report): relief inversion (ridges-for-rivers) and 45° line artefacts fixed via MFD drainage (Freeman 1991), steepest-descent receivers, anti-ridge deposition clamp, normalised uplift defaulting to 0 (carve-only). Old solver proven to net-RAISE channels (−0.0028), new net-incises (+0.0023); 84 assertions green incl. valleys-not-ridges regression. Sidebar reordered to the planetary-formation cascade (Planet/Calibrate before structure/climate/erosion; Save/Performance last).

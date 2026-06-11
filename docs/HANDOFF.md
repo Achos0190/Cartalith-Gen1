@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. v0.048 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
-- Current engine file: **`elevation_foundation_v0.048.html`** (older `v0.036–0.047` kept, never edited in place — new version = new file).
-- Headless suite: **105 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. v0.048–0.049 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.049.html`** (older `v0.036–0.048` kept, never edited in place — new version = new file).
+- Headless suite: **113 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -19,17 +19,18 @@
 3. GPU shaders, Web Worker glue, and canvas interaction (zoom/pan/paint) **cannot be verified headlessly** — implement, then flag explicitly for a manual browser pass.
 4. Commit messages end with the session URL line (see existing commits). Push to the work branch; PR #1 already exists.
 
-## Immediate next task — manual browser pass on v0.048, then pick from Roadmap → Next
+## Immediate next task — manual browser pass on v0.048/0.049, then pick from Roadmap → Next
 
-**v0.048 shipped** (plotline feature brushes, pan/zoom, scale bar, Ctrl-Z — see `CLAUDE.md` "Since v0.048" and the ROADMAP Done entry). What headless tests could NOT cover needs one manual browser pass:
+**v0.048 + v0.049 shipped** (v0.048: plotline feature brushes, pan/zoom, scale bar, Ctrl-Z; v0.049: W0b — stream-power & glacial carve moved into Workers — see `CLAUDE.md` "Since v0.048"/"Since v0.049" and the ROADMAP Done entries). What headless tests could NOT cover needs one manual browser pass:
 
+- **v0.049 worker carve**: click **Stream-power carve** and **Glacial carve** — busy overlay shows `carving rivers…/glaciers… N%` progress, the terrain updates when done, and the UI stays responsive during the run. Only one erosion op runs at a time (shared `_eroBusy`). With Workers disabled (or under odd `file://` setups) it must fall back to the sync path and still carve.
 - Desktop: wheel-zoom keeps the point under the cursor fixed; ctrl-wheel (trackpad pinch) finer; middle-drag and space-drag pan; Ctrl/Cmd-Z undoes (and does NOT fire while typing in inputs).
 - Mobile: zoom buttons (+/−/✋/⟳) appear and work; ✋ toggles one-finger pan; two-finger pinch zooms/pans; one finger still paints.
 - Paint + guide strokes land correctly at zoom ≠ 1 (evtToGrid is transform-invariant — verify, don't assume).
 - Scale bar: sensible 1/2/5×10ⁿ values at two zoom levels and after changing Map width (km).
 - Feature brushes: draw guide → tube preview → Apply for each of the 7 features; rivers carve start→end; GPU tag still reads `active (…)` after the pPoly shader removal.
 
-After that, next per `docs/ROADMAP.md`: **W0b** (worker stream-power/glacial kernels) or **P0–P1** (unified tool shell merge).
+After that, next per `docs/ROADMAP.md`: **W0b leftovers** (stencil-loop micro-opts, only if profiling demands) or **P0–P1** (unified tool shell merge).
 
 ## Locked decisions (don't relitigate)
 
@@ -39,9 +40,9 @@ After that, next per `docs/ROADMAP.md`: **W0b** (worker stream-power/glacial ker
 - Tiling: continuous zoom on the current map now; tiled 16k + region refine later.
 - Stream-power "carve" defaults to pure incision; uplift is opt-in (v0.046 fix).
 
-## Engine capability summary (v0.037→v0.048)
+## Engine capability summary (v0.037→v0.049)
 
-Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · worker droplet erosion · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z. Sidebar follows the planetary-formation cascade.
+Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity scaling · full planetary weather **W1 winds / W2 moisture / W3 seasons+Köppen / W3.5 ocean currents** · **worker erosion: droplet + stream-power + glacial** (self-contained kernels, shared lock) · biome-raster handoff · seamless `amplifyRegion` (16k-tiling core) · fixed stream-power (MFD, anti-ridge, carve-default) · Wind + Köppen debug views · plotline feature brushes (`applyFeatureAlongCurve` distance-field stamp, 7 features) · shared pan/zoom (`viewT`) + scale bar + Ctrl-Z. Sidebar follows the planetary-formation cascade.
 
 ## Docs map
 
@@ -50,4 +51,4 @@ Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity sc
 ## Watch-outs
 
 - PR #1 has no CI; it merges only when the user merges it. A background monitor watches for merge/external pushes; re-arm it (it times out ~30 min) — don't poll with sleep.
-- Don't edit old `v0.0XX` files. Don't renumber `BIOME_KEYS`/`KOPPEN_KEYS` (save-format-stable). Keep CPU and GPU lapse (`uLapse`) in lockstep. `dropletKernel` must stay self-contained.
+- Don't edit old `v0.0XX` files. Don't renumber `BIOME_KEYS`/`KOPPEN_KEYS` (save-format-stable). Keep CPU and GPU lapse (`uLapse`) in lockstep. The three worker kernels (`dropletKernel`, `streamPowerKernel`, `glacialKernel`) must stay self-contained — no module globals (Invariant 11).

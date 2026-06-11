@@ -317,7 +317,7 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   {
     const region = { x: 8, y: 6, w: 48, h: 30 }, cols = 3, rows = 2, ts = 24;
     const T = [];
-    for (let r = 0; r < rows; r++){ T[r] = []; for (let c = 0; c < cols; c++) T[r][c] = refineTile(src, sW, sH, region, cols, rows, c, r, ts, opts); }
+    for (let r = 0; r < rows; r++){ T[r] = []; for (let c = 0; c < cols; c++) T[r][c] = refineTile(src, sW, sH, region, cols, rows, c, r, ts, ts, opts); }
     let vSeam = 0, hSeam = 0, fin = true;
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){ if (!allFinite(T[r][c])) fin = false; }
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols - 1; c++)
@@ -330,6 +330,18 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     const single = amplifyRegion(src, sW, sH, { x: region.x, y: region.y, w: region.w / cols + 1, h: region.h / rows + 1 }, ts, ts, opts);
     let m = 0; for (let i = 0; i < ts * ts; i++) m = Math.max(m, Math.abs(single[i] - T[0][0][i]));
     check('refineTile(0,0) matches a direct amplifyRegion of that sub-bounds (Δ=' + m.toExponential(1) + ')', m < 1e-6);
+    /* ---- non-square tiles: aspect-preserving dims + seams still Δ=0 (v0.055) ---- */
+    const nsRegion = { x: 4, y: 4, w: 60, h: 20 };   // 3:1 selection
+    const td = tileDims(nsRegion, 2, 2, 30);
+    check('tileDims preserves aspect (' + td.w + '×' + td.h + ')', td.w === 30 && td.h === 10);   // 1.5 cols-span : 0.5 → wait, (60/2)/(20/2)=3 → 30×10
+    const A = refineTile(src, sW, sH, nsRegion, 2, 2, 0, 0, td.w, td.h, opts);
+    const B = refineTile(src, sW, sH, nsRegion, 2, 2, 1, 0, td.w, td.h, opts);
+    check('non-square tile has tw·th cells, finite', A.length === td.w * td.h && allFinite(A));
+    let ns = 0; for (let y = 0; y < td.h; y++) ns = Math.max(ns, Math.abs(A[y * td.w + (td.w - 1)] - B[y * td.w]));
+    check('non-square adjacent tiles seam Δ=0 (max ' + ns.toExponential(1) + ')', ns < 1e-6);
+    // assembled image preserves the selection aspect regardless of grid choice
+    const td2 = tileDims(nsRegion, 5, 1, 40);
+    check('assembled size keeps selection aspect', Math.abs((5 * td2.w) / (1 * td2.h) - nsRegion.w / nsRegion.h) < 0.05);
   }
 
   /* ---- 16-bit height pack/unpack round-trip (v0.052) ---- */
@@ -753,22 +765,23 @@ fieldsFinite('generate(world)');
 
   // exportRegionTiles end-to-end on the real field (PNGs absent headless; binary path asserted)
   {
-    const sel = normRegion(10, 10, 58, 42, GW, GH), grid = 2, ts = 24;
-    const E = await exportRegionTiles(sel, grid, ts, true);
+    const sel = normRegion(10, 10, 58, 42, GW, GH), cols = 3, rows = 2, ts = 24;   // non-square grid + selection
+    const td = tileDims(sel, cols, rows, ts);
+    const E = await exportRegionTiles(sel, cols, rows, ts, true);
     const names = E.map(e => e.name);
     check('region export emits a manifest', names.includes('tiles/index.json'));
     const man = JSON.parse(new TextDecoder().decode(E.find(e => e.name === 'tiles/index.json').data));
-    check('region manifest schema 2 with bounds + rg16', man.schema === 2 && man.cols === grid && man.tileSize === ts &&
-      man.bounds && man.bounds.x === sel.x && man.heightEncoding === 'rg16');
+    check('region manifest schema 2 with cols×rows + tile dims + rg16', man.schema === 2 && man.cols === cols && man.rows === rows &&
+      man.tileW === td.w && man.tileH === td.h && man.bounds && man.bounds.x === sel.x && man.heightEncoding === 'rg16');
     const binNames = names.filter(n => /rg16\.bin(\.gz)?$/.test(n));
-    check('region export emits one height bin per tile (' + binNames.length + ')', binNames.length === grid * grid);
+    check('region export emits one height bin per tile (' + binNames.length + ')', binNames.length === cols * rows);
     check('manifest compression matches entries', (man.compression === 'gzip') === binNames.every(n => n.endsWith('.gz')));
-    // decode tile (0,0) and compare against a direct refineTile
+    // decode tile (0,0) and compare against a direct refineTile (non-square dims)
     let bin = E.find(e => e.name === binNames.find(n => n.includes('_0_0'))).data;
     if (man.compression === 'gzip') bin = await gunzipBytes(bin);
-    const dec = unpackHeight16(bin, ts * ts);
-    const ref = refineTile(field, GW, GH, sel, grid, grid, 0, 0, ts, { seed: state.tect.seed, sea: state.seaLevel, ridged: state.tect.ridged });
-    let maxErr = 0; for (let i = 0; i < ts * ts; i++) maxErr = Math.max(maxErr, Math.abs(dec[i] - ref[i]));
+    const dec = unpackHeight16(bin, td.w * td.h);
+    const ref = refineTile(field, GW, GH, sel, cols, rows, 0, 0, td.w, td.h, { seed: state.tect.seed, sea: state.seaLevel, ridged: state.tect.ridged });
+    let maxErr = 0; for (let i = 0; i < td.w * td.h; i++) maxErr = Math.max(maxErr, Math.abs(dec[i] - ref[i]));
     check('exported tile round-trips through pack+gzip (max Δ=' + maxErr.toExponential(1) + ' ≤ 1 LSB)', maxErr <= 0.5 / 65535 + 1e-9);
   }
 

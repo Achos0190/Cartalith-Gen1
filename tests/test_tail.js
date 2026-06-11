@@ -670,5 +670,63 @@ fieldsFinite('generate(world)');
   check('flow finite after feature brush', allFinite(flowField));
 }
 
-console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
-process.exit(__fail ? 1 : 0);
+/* ---------- region refine wiring (v0.053): sync parts ---------- */
+{
+  // normRegion: order-independent, clamped, min-size
+  const a = normRegion(50.7, 30.2, 10.3, 60.9, 100, 80);
+  check('normRegion orders + snaps corners', a.x === 10 && a.y === 30 && a.w === 41 && a.h === 31);
+  const b = normRegion(-20, -10, 250, 200, 100, 80);
+  check('normRegion clamps to grid', b.x === 0 && b.y === 0 && b.w === 100 && b.h === 80);
+  const c = normRegion(50, 50, 51, 51, 100, 80);
+  check('normRegion enforces min size', c.w >= 8 && c.h >= 8 && c.x + c.w <= 100 && c.y + c.h <= 80);
+  const d = normRegion(98, 78, 99, 79, 100, 80);
+  check('normRegion min-size near edge stays in bounds', d.x + d.w <= 100 && d.y + d.h <= 80 && d.w >= 8 && d.h >= 8);
+
+  // renderHeightTileRGBA: opaque, finite, water vs land tinted differently
+  const ts = 16, tile = new Float32Array(ts * ts);
+  for (let i = 0; i < tile.length; i++) tile[i] = i < tile.length / 2 ? 0.2 : 0.8;   // top water, bottom land
+  const rgba = renderHeightTileRGBA(tile, ts, ts);
+  check('tile RGBA full + opaque', rgba.length === ts * ts * 4 && rgba[3] === 255 && rgba[rgba.length - 1] === 255);
+  const top = [rgba[0], rgba[1], rgba[2]], bot = [rgba[(ts * ts - 1) * 4], rgba[(ts * ts - 1) * 4 + 1], rgba[(ts * ts - 1) * 4 + 2]];
+  check('tile render distinguishes water from land', (top[0] !== bot[0] || top[1] !== bot[1] || top[2] !== bot[2]) && top[2] > top[0]);
+}
+
+/* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
+(async () => {
+  // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)
+  if (typeof CompressionStream !== 'undefined'){
+    const n = 4096, src = new Uint8Array(n);
+    for (let i = 0; i < n; i++) src[i] = (i % 64 < 32) ? 7 : (i & 255);
+    const z = await gzipBytes(src);
+    check('gzipBytes produces smaller output (' + (z ? z.length : 'null') + ' < ' + n + ')', !!z && z.length < n);
+    const back = await gunzipBytes(z);
+    check('gzip round-trip bit-exact', !!back && back.length === n && back.every((v, i) => v === src[i]));
+  } else {
+    console.log('skip - CompressionStream unavailable in this runtime');
+    check('gzipBytes returns null when unsupported', (await gzipBytes(new Uint8Array(8))) === null);
+  }
+
+  // exportRegionTiles end-to-end on the real field (PNGs absent headless; binary path asserted)
+  {
+    const sel = normRegion(10, 10, 58, 42, GW, GH), grid = 2, ts = 24;
+    const E = await exportRegionTiles(sel, grid, ts, true);
+    const names = E.map(e => e.name);
+    check('region export emits a manifest', names.includes('tiles/index.json'));
+    const man = JSON.parse(new TextDecoder().decode(E.find(e => e.name === 'tiles/index.json').data));
+    check('region manifest schema 2 with bounds + rg16', man.schema === 2 && man.cols === grid && man.tileSize === ts &&
+      man.bounds && man.bounds.x === sel.x && man.heightEncoding === 'rg16');
+    const binNames = names.filter(n => /rg16\.bin(\.gz)?$/.test(n));
+    check('region export emits one height bin per tile (' + binNames.length + ')', binNames.length === grid * grid);
+    check('manifest compression matches entries', (man.compression === 'gzip') === binNames.every(n => n.endsWith('.gz')));
+    // decode tile (0,0) and compare against a direct refineTile
+    let bin = E.find(e => e.name === binNames.find(n => n.includes('_0_0'))).data;
+    if (man.compression === 'gzip') bin = await gunzipBytes(bin);
+    const dec = unpackHeight16(bin, ts * ts);
+    const ref = refineTile(field, GW, GH, sel, grid, grid, 0, 0, ts, { seed: state.tect.seed, sea: state.seaLevel, ridged: state.tect.ridged });
+    let maxErr = 0; for (let i = 0; i < ts * ts; i++) maxErr = Math.max(maxErr, Math.abs(dec[i] - ref[i]));
+    check('exported tile round-trips through pack+gzip (max Δ=' + maxErr.toExponential(1) + ' ≤ 1 LSB)', maxErr <= 0.5 / 65535 + 1e-9);
+  }
+
+  console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
+  process.exit(__fail ? 1 : 0);
+})();

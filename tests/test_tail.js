@@ -912,6 +912,66 @@ fieldsFinite('generate(world)');
   state.debug = 'off'; renderNow();
 }
 
+/* ---------- T1 boundary polyline graph (v0.060, tectonic-feature-graph.md) ---------- */
+{
+  // synthetic straight diagonal line → one open polyline, ~zero curvature
+  const W = 24, H = 24, line = new Uint8Array(W * H);
+  for (let i = 3; i < 20; i++) line[i * W + i] = 1;
+  const gLine = traceBoundaries(line, W, H);
+  check('straight line → exactly one polyline', gLine.polylines.length === 1);
+  check('straight line → not closed', !gLine.polylines[0].closed);
+  check('straight line → curvature ≈ 0', gLine.polylines[0].curvature < 1e-6);
+  check('straight line length ≈ √2·span', Math.abs(gLine.polylines[0].length - Math.hypot(16, 16)) < 1.5);
+
+  // synthetic diamond ring (diagonal edges → thins cleanly, no corner triangles) → one closed loop, no junctions
+  const ring = new Uint8Array(W * H);
+  for (let i = 0; i <= 6; i++){
+    ring[(4 + i) * W + (10 + i)] = 1;   // top→right
+    ring[(10 + i) * W + (16 - i)] = 1;  // right→bottom
+    ring[(16 - i) * W + (10 - i)] = 1;  // bottom→left
+    ring[(10 - i) * W + (4 + i)] = 1;   // left→top
+  }
+  const gRing = traceBoundaries(ring, W, H);
+  check('diamond ring → one polyline, closed', gRing.polylines.length === 1 && gRing.polylines[0].closed);
+  check('diamond ring → no junction nodes', gRing.nodes.length === 0);
+  const ringLen = gRing.polylines.reduce((s, p) => s + p.length, 0);
+  check('diamond perimeter ≈ 24·√2 (' + ringLen.toFixed(1) + ')', ringLen > 30 && ringLen < 38);
+
+  // T-junction → a degree-3 node + ≥3 chains meeting there
+  const tee = new Uint8Array(W * H);
+  for (let x = 4; x <= 19; x++) tee[10 * W + x] = 1;   // horizontal bar
+  for (let y = 4; y <= 10; y++) tee[y * W + 12] = 1;   // stem up to the bar
+  const gTee = traceBoundaries(tee, W, H);
+  check('T-junction → at least one junction node', gTee.nodes.length >= 1);
+  check('T-junction → ≥3 polylines', gTee.polylines.length >= 3);
+
+  // determinism
+  const gA = traceBoundaries(tee, W, H), gB = traceBoundaries(tee, W, H);
+  check('traceBoundaries deterministic', gA.polylines.length === gB.polylines.length &&
+    gA.polylines.every((p, i) => p.pts.length === gB.polylines[i].pts.length));
+
+  // thinning reduces a 2-px-thick bar to 1-px
+  const thick = new Uint8Array(W * H);
+  for (let x = 4; x <= 18; x++){ thick[9 * W + x] = 1; thick[10 * W + x] = 1; }
+  const thinned = thinMask(thick, W, H);
+  let beforeN = 0, afterN = 0; for (let i = 0; i < thick.length; i++){ beforeN += thick[i]; afterN += thinned[i]; }
+  check('thinMask thins a 2-px bar (' + beforeN + '→' + afterN + ')', afterN > 0 && afterN < beforeN * 0.7);
+
+  // real world: graph is non-trivial, finite, typed, and cached
+  generate();
+  const Gr = currentBoundaryGraph();
+  check('real world: ≥1 boundary polyline', Gr.polylines.length >= 1);
+  const totalLen = Gr.polylines.reduce((s, p) => s + p.length, 0);
+  let bcells = 0; for (let i = 0; i < boundaryMask.length; i++) if (boundaryMask[i]) bcells++;
+  check('traced length sane vs boundary-cell count (' + totalLen.toFixed(0) + ' vs ' + bcells + ')',
+    totalLen > 0 && totalLen < bcells * 2);
+  check('every polyline finite + typed (1..5)', Gr.polylines.every(p =>
+    isFinite(p.length) && isFinite(p.curvature) && p.type >= 1 && p.type <= 5));
+  check('currentBoundaryGraph caches (same object until generate)', currentBoundaryGraph() === Gr);
+  generate();
+  check('generate() invalidates the cache', currentBoundaryGraph() !== Gr);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

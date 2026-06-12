@@ -972,6 +972,75 @@ fieldsFinite('generate(world)');
   check('generate() invalidates the cache', currentBoundaryGraph() !== Gr);
 }
 
+/* ---------- T2 orogenic uplift kernel (v0.061, tectonic-feature-graph.md) ---------- */
+{
+  // synthetic straight collision margin: vertical line, uniform stress 1
+  const W = 128, H = 96, stress = new Float32Array(W * H), pts = [];
+  for (let y = 10; y <= 85; y++){ pts.push([60, y]); stress[y * W + 60] = 1; }
+  const opts = { blurR: 18, seed: 7, jitter: 0 };
+  const U = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, W, H, opts);
+  check('orogeny finite, nonzero', allFinite(U) && U.some(v => v > 0.5));
+
+  // the research-doc T2 acceptance test: >=3 parallel ridges with valleys between
+  const row = 48, prof = [];
+  for (let x = 0; x < W; x++) prof.push(U[row * W + x]);
+  const maxima = [];
+  for (let x = 1; x < W - 1; x++)
+    if (prof[x] > 0.1 && prof[x] > prof[x - 1] && prof[x] >= prof[x + 1]) maxima.push(x);
+  check('convergent margin → ≥3 parallel ridges (' + maxima.length + ' at x=' + maxima.join(',') + ')', maxima.length >= 3);
+  let valleysOk = maxima.length >= 3;
+  for (let k = 0; k + 1 < maxima.length && valleysOk; k++){
+    let lo = Infinity;
+    for (let x = maxima[k]; x <= maxima[k + 1]; x++) lo = Math.min(lo, prof[x]);
+    valleysOk = lo < 0.75 * Math.min(prof[maxima[k]], prof[maxima[k + 1]]);
+  }
+  check('valleys between the ridges (cols <75% of peaks)', valleysOk);
+
+  // asymmetric flanks: 0.5A side vs 0.3A side (band sums average out the fbm vigor jitter)
+  let left = 0, right = 0;
+  for (let y = 20; y <= 70; y++) for (let dx = 10; dx <= 25; dx++){ left += U[y * W + (60 - dx)]; right += U[y * W + (60 + dx)]; }
+  check('flanking ridges asymmetric (' + (left / right).toFixed(2) + ':1)', Math.abs(left - right) / Math.max(left, right) > 0.15);
+
+  // kernel support: cells beyond the radius are bit-untouched (exactly 0)
+  const RAD = 18 * 1.0 + 3 * 18 * 0.30;
+  let outside = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    if (Math.abs(x - 60) > RAD + 1.5 && U[y * W + x] !== 0) outside++;
+  check('cells beyond kernel radius exactly 0', outside === 0);
+
+  // non-convergent types produce no orogeny
+  const Ur = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, W, H, opts);
+  const Ut = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, W, H, opts);
+  check('rift/transform polylines → zero orogeny', Ur.every(v => v === 0) && Ut.every(v => v === 0));
+
+  // amplitude linear in margin stress
+  const halfStress = Float32Array.from(stress, v => v * 0.5);
+  const Uh = buildOrogenyField([{ pts, type: BTYPE.collision }], halfStress, W, H, opts);
+  let linOk = true;
+  for (let i = 0; i < U.length; i++) if (Math.abs(Uh[i] - 0.5 * U[i]) > 1e-6){ linOk = false; break; }
+  check('orogeny amplitude linear in stress', linOk);
+
+  // deterministic
+  const U2 = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, W, H, opts);
+  check('buildOrogenyField deterministic', U.every((v, i) => v === U2[i]));
+
+  // live-engine gate: off → on → off must round-trip bit-exactly (Invariant-10 style)
+  generate();
+  const base = Float32Array.from(field);
+  check('gate off → orogenyField null', orogenyField === null);
+  state.tect.tectonicGraph = true; generate();
+  check('gate on → orogenyField built + finite', orogenyField !== null && allFinite(orogenyField));
+  check('gate on → field finite', allFinite(field));
+  let diff = 0; for (let i = 0; i < field.length; i++) if (field[i] !== base[i]) diff++;
+  check('gate on changes the heightmap (' + diff + ' cells)', diff > 100);
+  state.debug = 'oro'; renderNow();
+  check('Orogeny debug view renders opaque pixels', img.data[3] === 255);
+  state.debug = 'off';
+  state.tect.tectonicGraph = false; generate();
+  let same = true; for (let i = 0; i < field.length; i++) if (field[i] !== base[i]){ same = false; break; }
+  check('gate off again → field bit-identical (round-trip)', same && orogenyField === null);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

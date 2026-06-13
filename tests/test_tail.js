@@ -1061,6 +1061,26 @@ fieldsFinite('generate(world)');
   check('gate off again → field bit-identical (round-trip)', same && orogenyField === null);
 }
 
+/* ---------- v0.063 smoothed-bathymetry water shading ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.mode = 'biome'; state.debug = 'off'; state.tect.tectonicGraph = false;
+  renderNow();   // sets _seaH for the biome map
+  check('smoothSeaH built + finite', _seaH !== null && allFinite(_seaH));
+  // the smoothed sea floor must be flatter than the raw field over water cells (that is the whole point)
+  const variance = (pick) => { let n = 0, s = 0, s2 = 0;
+    for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel){ const v = pick(i); n++; s += v; s2 += v * v; }
+    return n ? s2 / n - (s / n) * (s / n) : 0; };
+  const vRaw = variance(i => field[i]), vSmooth = variance(i => _seaH[i]);
+  check('smoothed bathymetry variance < raw seabed variance (' + vSmooth.toExponential(1) + ' < ' + vRaw.toExponential(1) + ')', vSmooth < vRaw);
+  // land/water boundary is untouched: smoothing only feeds water COLOUR, the mask still uses raw field
+  check('water shading is render-only (field still finite, sea level unchanged)', allFinite(field) && state.seaLevel === 0.42);
+  // Relief mode does not build _seaH (keeps the height ramp)
+  state.mode = 'hypso'; renderNow();
+  check('Relief mode leaves _seaH null', _seaH === null);
+  state.mode = 'biome'; renderNow();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

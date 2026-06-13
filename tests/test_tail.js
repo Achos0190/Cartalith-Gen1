@@ -1006,9 +1006,9 @@ fieldsFinite('generate(world)');
     if (Math.abs(x - 60) > RAD + 1.5 && U[y * W + x] !== 0) outside++;
   check('cells beyond kernel radius exactly 0', outside === 0);
 
-  // transform untouched; rift is now active (graben) — only transform is empty
+  // transform with NO shear input → still zero (amplitude comes from shear, not normal stress)
   const Ut = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, opts);
-  check('transform polylines → zero (T4 territory)', Ut.every(v => v === 0));
+  check('transform without shear → zero', Ut.every(v => v === 0));
 
   // amplitude linear in margin stress (all per-type profiles scale by mean |stress|)
   const halfStress = Float32Array.from(stress, v => v * 0.5);
@@ -1043,6 +1043,27 @@ fieldsFinite('generate(world)');
   // T3 rift: axial graben notch (negative at the margin) flanked by uplifted shoulders
   const Urift = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, opts);
   check('rift → axial graben below shoulders', Urift[48 * W + 60] < 0 && Urift.some(v => v > 0.1));
+
+  // T4 transform: amplitude from SHEAR; linear fault valley + a pressure ridge offset laterally ∝ shear sense/size
+  const shearP = new Float32Array(W * H); for (const p of pts) shearP[p[1] * W + p[0]] = 0.8;   // uniform + shear along the fault
+  const optT = { blurR: 18, seed: 7, jitter: 0, shear: shearP };
+  const Utp = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, optT);
+  check('transform with shear → nonzero, finite', allFinite(Utp) && Utp.some(v => v !== 0));
+  check('transform → linear fault valley (axis below sea-floor)', Utp[48 * W + 60] < 0);
+  const crestX = (fld) => { let hi = -Infinity, xh = 0; for (let x = 30; x < 90; x++){ const v = fld[48 * W + x]; if (v > hi){ hi = v; xh = x; } } return xh; };
+  // flip shear sign → the pressure ridge moves to the opposite side of the fault
+  const Utn = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: Float32Array.from(shearP, v => -v) });
+  check('transform ridge offset reverses with shear sign (' + crestX(Utp) + ' vs ' + crestX(Utn) + ')', crestX(Utp) < 60 && crestX(Utn) > 60);
+  // larger shear → larger lateral offset (displacement ∝ S)
+  const Uth = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: Float32Array.from(shearP, v => v * 0.5) });
+  check('lateral ridge offset scales with shear magnitude (∝S)', Math.abs(crestX(Utp) - 60) > Math.abs(crestX(Uth) - 60));
+  check('transform valley depth scales with shear amplitude', Math.abs(Utp[48 * W + 60]) > Math.abs(Uth[48 * W + 60]) * 1.6);
+  // beyond the transform radius (blurR*2) → bit-untouched
+  let toutside = 0; const TRAD = 18 * 2.0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (Math.abs(x - 60) > TRAD + 1.5 && Utp[y * W + x] !== 0) toutside++;
+  check('transform beyond radius exactly 0', toutside === 0);
+  // zero shear → zero (no transform feature without shear)
+  check('transform with zero shear → zero', buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: new Float32Array(W * H) }).every(v => v === 0));
 
   // live-engine gate: off → on → off must round-trip bit-exactly (Invariant-10 style)
   generate();

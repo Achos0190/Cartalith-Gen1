@@ -1094,11 +1094,17 @@ fieldsFinite('generate(world)');
     return n ? s2 / n - (s / n) * (s / n) : 0; };
   const vRaw = variance(i => field[i]), vSmooth = variance(i => _seaH[i]);
   check('smoothed bathymetry variance < raw seabed variance (' + vSmooth.toExponential(1) + ' < ' + vRaw.toExponential(1) + ')', vSmooth < vRaw);
+  // v0.065: water hillshade comes from the smoothed sea floor, flatter than the raw seabed hillshade
+  check('seaShade built + finite', _seaShade !== null && allFinite(_seaShade));
+  const sVar = (pick) => { let n = 0, s = 0, s2 = 0; for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel){ const v = pick(i); n++; s += v; s2 += v * v; } return n ? s2 / n - (s / n) * (s / n) : 0; };
+  // raw shadeFactor over water vs smoothed seaShade — smoothed must be flatter (less per-cell variation)
+  const rawShadeVar = (() => { let n = 0, s = 0, s2 = 0; for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++){ const i = y * GW + x; if (field[i] < state.seaLevel){ const v = shadeFactor(x, y); n++; s += v; s2 += v * v; } } return n ? s2 / n - (s / n) * (s / n) : 0; })();
+  check('smoothed sea hillshade flatter than raw (' + sVar(i => _seaShade[i]).toExponential(1) + ' < ' + rawShadeVar.toExponential(1) + ')', sVar(i => _seaShade[i]) < rawShadeVar);
   // land/water boundary is untouched: smoothing only feeds water COLOUR, the mask still uses raw field
   check('water shading is render-only (field still finite, sea level unchanged)', allFinite(field) && state.seaLevel === 0.42);
-  // Relief mode does not build _seaH (keeps the height ramp)
+  // Relief mode does not build _seaH/_seaShade (keeps the height ramp)
   state.mode = 'hypso'; renderNow();
-  check('Relief mode leaves _seaH null', _seaH === null);
+  check('Relief mode leaves _seaH/_seaShade null', _seaH === null && _seaShade === null);
   state.mode = 'biome'; renderNow();
 }
 

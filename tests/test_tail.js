@@ -972,13 +972,13 @@ fieldsFinite('generate(world)');
   check('generate() invalidates the cache', currentBoundaryGraph() !== Gr);
 }
 
-/* ---------- T2 orogenic uplift kernel (v0.061, tectonic-feature-graph.md) ---------- */
+/* ---------- T2+T3 tectonic feature kernels (v0.061/v0.062, tectonic-feature-graph.md) ---------- */
 {
-  // synthetic straight collision margin: vertical line, uniform stress 1
-  const W = 128, H = 96, stress = new Float32Array(W * H), pts = [];
+  // synthetic straight collision margin: vertical line, uniform stress 1, all-continental crust
+  const W = 128, H = 96, stress = new Float32Array(W * H), pts = [], cont = new Float32Array(W * H).fill(1);
   for (let y = 10; y <= 85; y++){ pts.push([60, y]); stress[y * W + 60] = 1; }
   const opts = { blurR: 18, seed: 7, jitter: 0 };
-  const U = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, W, H, opts);
+  const U = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
   check('orogeny finite, nonzero', allFinite(U) && U.some(v => v > 0.5));
 
   // the research-doc T2 acceptance test: >=3 parallel ridges with valleys between
@@ -987,7 +987,7 @@ fieldsFinite('generate(world)');
   const maxima = [];
   for (let x = 1; x < W - 1; x++)
     if (prof[x] > 0.1 && prof[x] > prof[x - 1] && prof[x] >= prof[x + 1]) maxima.push(x);
-  check('convergent margin → ≥3 parallel ridges (' + maxima.length + ' at x=' + maxima.join(',') + ')', maxima.length >= 3);
+  check('collision margin → ≥3 parallel ridges (' + maxima.length + ' at x=' + maxima.join(',') + ')', maxima.length >= 3);
   let valleysOk = maxima.length >= 3;
   for (let k = 0; k + 1 < maxima.length && valleysOk; k++){
     let lo = Infinity;
@@ -996,33 +996,53 @@ fieldsFinite('generate(world)');
   }
   check('valleys between the ridges (cols <75% of peaks)', valleysOk);
 
-  // asymmetric flanks: 0.5A side vs 0.3A side (band sums average out the fbm vigor jitter)
-  let left = 0, right = 0;
-  for (let y = 20; y <= 70; y++) for (let dx = 10; dx <= 25; dx++){ left += U[y * W + (60 - dx)]; right += U[y * W + (60 + dx)]; }
-  check('flanking ridges asymmetric (' + (left / right).toFixed(2) + ':1)', Math.abs(left - right) / Math.max(left, right) > 0.15);
+  // T3: collision has a foreland-basin depression beyond one flank (negative somewhere)
+  check('collision → foreland basin (negative cell present)', U.some(v => v < -0.05));
 
-  // kernel support: cells beyond the radius are bit-untouched (exactly 0)
-  const RAD = 18 * 1.0 + 3 * 18 * 0.30;
+  // kernel support: cells beyond the collision radius (blurR*3.3) are bit-untouched (exactly 0)
+  const RAD = 18 * 3.3;
   let outside = 0;
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
     if (Math.abs(x - 60) > RAD + 1.5 && U[y * W + x] !== 0) outside++;
   check('cells beyond kernel radius exactly 0', outside === 0);
 
-  // non-convergent types produce no orogeny
-  const Ur = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, W, H, opts);
-  const Ut = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, W, H, opts);
-  check('rift/transform polylines → zero orogeny', Ur.every(v => v === 0) && Ut.every(v => v === 0));
+  // transform untouched; rift is now active (graben) — only transform is empty
+  const Ut = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, opts);
+  check('transform polylines → zero (T4 territory)', Ut.every(v => v === 0));
 
-  // amplitude linear in margin stress
+  // amplitude linear in margin stress (all per-type profiles scale by mean |stress|)
   const halfStress = Float32Array.from(stress, v => v * 0.5);
-  const Uh = buildOrogenyField([{ pts, type: BTYPE.collision }], halfStress, W, H, opts);
+  const Uh = buildOrogenyField([{ pts, type: BTYPE.collision }], halfStress, cont, W, H, opts);
   let linOk = true;
   for (let i = 0; i < U.length; i++) if (Math.abs(Uh[i] - 0.5 * U[i]) > 1e-6){ linOk = false; break; }
   check('orogeny amplitude linear in stress', linOk);
 
   // deterministic
-  const U2 = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, W, H, opts);
+  const U2 = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
   check('buildOrogenyField deterministic', U.every((v, i) => v === U2[i]));
+
+  // T3 subduction: ocean on the RIGHT (x>60) → trench below sea on ocean side, arc above on land side
+  const argRow = (fld, y) => { let lo = Infinity, hi = -Infinity, xl = 0, xh = 0;
+    for (let x = 0; x < W; x++){ const v = fld[y * W + x]; if (v < lo){ lo = v; xl = x; } if (v > hi){ hi = v; xh = x; } } return { lo, hi, xl, xh }; };
+  const oceanR = Float32Array.from({ length: W * H }, (_, i) => (i % W) > 60 ? -1 : 1);
+  const oceanL = Float32Array.from({ length: W * H }, (_, i) => (i % W) < 60 ? -1 : 1);
+  const Us = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanR, W, H, opts);
+  const sR = argRow(Us, 48);
+  check('subduction → trench (deep negative) + arc (positive)', sR.lo < -0.3 && sR.hi > 0.3);
+  check('subduction trench sits on the oceanic side (x>60, x=' + sR.xl + ')', sR.xl > 60 && sR.xh < 60);
+  // flip the ocean to the LEFT → trench follows the crust to x<60
+  const Us2 = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanL, W, H, opts);
+  const sL = argRow(Us2, 48);
+  check('trench follows crust input (ocean left → trench x<60, x=' + sL.xl + ')', sL.xl < 60 && sL.xh > 60);
+
+  // T3 island arc (ocean both sides): trench + arc + backarc → both signs present
+  const allOcean = new Float32Array(W * H).fill(-1);
+  const Ua = buildOrogenyField([{ pts, type: BTYPE.arcOO }], stress, allOcean, W, H, opts);
+  check('island arc → trench + arc (both signs)', Ua.some(v => v < -0.3) && Ua.some(v => v > 0.3));
+
+  // T3 rift: axial graben notch (negative at the margin) flanked by uplifted shoulders
+  const Urift = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, opts);
+  check('rift → axial graben below shoulders', Urift[48 * W + 60] < 0 && Urift.some(v => v > 0.1));
 
   // live-engine gate: off → on → off must round-trip bit-exactly (Invariant-10 style)
   generate();

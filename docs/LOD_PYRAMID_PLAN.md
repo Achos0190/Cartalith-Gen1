@@ -30,7 +30,7 @@ export: bakeTiled walks every tile of the chosen export level → full 8K+ image
 - **Stage 1 — pyramid core (v0.072, DONE).** Pure, headless-tested: `pyramidDims(z)`, `pyramidTile(...)`
   (= `refineTile` over the full world), `pyramidTileBounds`, `pyramidLevelForZoom`. Seam-Δ=0 same-level
   (asserted), determinism, addressing, level-for-zoom monotonic. No viewer yet → generate() bit-identical.
-- **Stage 2 — live tiled viewer (browser).** A bounded LRU tile cache keyed by (z,col,row); on pan/zoom,
+- **Stage 2 — live tiled viewer (browser, v0.073 DONE).** A bounded LRU tile cache keyed by (z,col,row); on pan/zoom,
   pick the level from `pyramidLevelForZoom`, cull to the visible rect (`pyramidTileBounds`), generate
   missing tiles (worker-friendly: `pyramidTile` is pure), composite onto the `viewT`-transformed stack.
   Per-tile resolution selector (1K/2K/4K). The base coarse world remains the z=0 fallback so there is

@@ -1269,6 +1269,21 @@ fieldsFinite('generate(world)');
   // determinism
   const t2 = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts);
   check('pyramidTile deterministic', a.data.every((v, i) => v === t2.data[i]));
+
+  // Stage 2 engine: visible-tile enumeration + LRU cache
+  const span = tilesInView(2, 0, 0, (cW - 1) / 2, (cH - 1) / 2, cW, cH);   // top-left quadrant at level 2 (4×4 grid)
+  check('tilesInView spans the visible rect', span.c0 === 0 && span.c1 === 2 && span.r0 === 0 && span.r1 === 2 && span.count === 9);
+  lodCacheClear();
+  const vis = collectVisibleTiles(coarse, cW, cH, 1, 0, 0, cW - 1, cH - 1, ts, opts);   // whole world at level 1 = 4 tiles
+  check('collectVisibleTiles returns the visible tiles, finite', vis.length === 4 && vis.every(t => t.data.every(Number.isFinite)));
+  const before = _lodCache.size;
+  const vis2 = collectVisibleTiles(coarse, cW, cH, 1, 0, 0, cW - 1, cH - 1, ts, opts);
+  check('collectVisibleTiles reuses the cache (no growth)', _lodCache.size === before && vis2[0] === vis[0]);
+  // LRU eviction
+  lodCacheClear(); const sv = _lodCacheMax; _lodCacheMax = 3;
+  for (let i = 0; i < 6; i++) lodCachePut('k' + i, { i });
+  check('LRU cache evicts down to max', _lodCache.size === 3 && lodCacheGet('k0') === null && lodCacheGet('k5') !== null);
+  _lodCacheMax = sv; lodCacheClear();
 }
 
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */

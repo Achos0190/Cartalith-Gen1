@@ -42,11 +42,11 @@ model. They are realism ceilings, not bugs.
 - **Loop 1 — v0.066 (done).** `evolveCoupled(cycles)`: each cycle carves (stream-power) → rebounds →
   `computeFlow` → `refreshClimate`, so rainfall driving the next cycle reflects the orography it
   built. New opt-in op (Erosion panel "Evolve" button + cycles slider) → `generate()` bit-identical.
-- **Loop 2 — v0.067 (planned).** Compute the SST anomaly BEFORE the weather sim and feed it into the
+- **Loop 2 — v0.067 (done).** Compute the SST anomaly BEFORE the weather sim and feed it into the
   sea-temperature that drives `buildWind` (pressure ∝ −T) and evaporation, so currents steer winds &
   rain instead of post-tinting. Gated on `state.climate.currents` (default off → bit-identical).
-- **Loop 3 — v0.068 (planned).** Mass-conserving fluvial sediment routing down the `computeFlow`
-  drainage network → deposit in flats/basins/below sea level (floodplains, deltas, shelves) with a
-  conserved budget. Opt-in (default off → bit-identical).
+- **Loop 3 — v0.069 (done).** `routeSediment` carries an eroded-sediment supply down the drainage
+  network and deposits it (floodplains, deltas/shelves, sink pooling), conserving mass exactly. Opt-in
+  **Sediment fill** button (`depositSediment`). Default off → bit-identical.
 
 Loops 4 (dynamic lithology) and 6 (cryosphere albedo) remain documented follow-ups.

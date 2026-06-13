@@ -1157,6 +1157,38 @@ fieldsFinite('generate(world)');
   state.climate.currents = false; refreshClimate();
 }
 
+/* ---------- loop 3: mass-conserving sediment routing (v0.069) ---------- */
+{
+  // synthetic ramp draining downward into a sub-sea basin (closed, non-world)
+  const W = 40, H = 40, n = W * H, fld = new Float32Array(n), disch = new Float32Array(n).fill(2), supply = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.6 - 0.013 * y;   // high at top, bottom rows < sea
+  for (let i = 0; i < n; i++) supply[i] = 0.001;
+  const sum = 0.001 * n, before = Float32Array.from(fld);
+  const res = routeSediment(fld, disch, supply, W, H, { sea: 0.42, capacity: 6.0, world: false });
+  check('routeSediment conserves mass (dep ' + res.deposited.toFixed(4) + ' vs supply ' + sum.toFixed(4) + ')', Math.abs(res.deposited - sum) < 1e-3);
+  let totalRise = 0; for (let i = 0; i < n; i++) totalRise += fld[i] - before[i];
+  check('Σ deposition equals Σ supply (mass conserved on grid)', Math.abs(totalRise - sum) < 1e-3);
+  let belowRose = 0; for (let i = 0; i < n; i++) if (before[i] < 0.42 && fld[i] > before[i] + 1e-9) belowRose++;
+  check('sediment builds deltas/shelves below sea (' + belowRose + ' cells)', belowRose > 0);
+  // determinism
+  const fld2 = new Float32Array(n); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld2[y * W + x] = 0.6 - 0.013 * y;
+  const r2 = routeSediment(fld2, disch, supply, W, H, { sea: 0.42, capacity: 6.0, world: false });
+  let det = true; for (let i = 0; i < n; i++) if (fld[i] !== fld2[i]){ det = false; break; }
+  check('routeSediment deterministic', det && r2.deposited === res.deposited);
+
+  // wired op on the real engine
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.tect.tectonicGraph = false;
+  const fpre = Float32Array.from(field);
+  depositSediment();
+  check('depositSediment keeps field finite', allFinite(field));
+  let changed = 0; for (let i = 0; i < field.length; i++) if (field[i] !== fpre[i]) changed++;
+  check('sediment fill reshapes terrain (' + changed + ' cells)', changed > 100);
+  generate(); depositSediment(); const fa = Float32Array.from(field);
+  generate(); depositSediment(); let det2 = true; for (let i = 0; i < fa.length; i++) if (fa[i] !== field[i]){ det2 = false; break; }
+  check('depositSediment deterministic', det2);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

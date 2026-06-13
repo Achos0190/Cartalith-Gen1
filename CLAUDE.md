@@ -6,8 +6,8 @@ HTML worldbuilding toolset. Two single-file apps being merged into one tool ("Ge
 
 | File | Lines | Role |
 |------|-------|------|
-| `elevation_foundation_v0.068.html` | ~3,780 | **Current** procedural heightmap/terrain/climate generator |
-| `elevation_foundation_v0.036–67.html` | — | Previous versions (kept; don't edit) |
+| `elevation_foundation_v0.069.html` | ~3,810 | **Current** procedural heightmap/terrain/climate generator |
+| `elevation_foundation_v0.036–68.html` | — | Previous versions (kept; don't edit) |
 | `assets/sample_pack.zip` + `make_sample_pack.py` | — | Reference CC0 asset pack + its generator (in-app importer) |
 | `Cartalith_V1.914.html` | ~15,300 | Cartographic editor: routes, settlements, painted biome/terrain grid, politics timeline, journey planner |
 | `Weather Model.md`, `Gravity influence.md` | — | User research notes feeding the roadmap |
@@ -95,6 +95,8 @@ Since v0.066 (`docs/research/system-coupling-audit.md` §1, first of the Earth-s
 Since v0.067 (`docs/research/system-coupling-audit.md` §2, second coupling loop): **ocean currents ↔ atmosphere.** The audit found `applyOceanCurrents` ran *after* `simulateWeather` and only post-tinted temp/rain. `oceanSSTAnomaly(WW,WH,wrapX,step)` is extracted (the wind-driven warm/cold SST field, shared with `applyOceanCurrents`); `simulateWeather` now folds it into the **sea temperature `tc` before `buildWind`** (gated on `state.climate.currents`), so warm currents → lower pressure + more evaporation → wetter downwind, cold currents → drier — currents steer winds & rainfall, not just colour. `applyOceanCurrents` still adds the visible `tempField` anomaly afterwards. Off (default) ⇒ bit-identical to v0.066. 282 assertions green (SST anomaly warm+cold, **winds measurably change when the anomaly is injected**, currents reshape rainfall, deterministic).
 
 Since v0.068 (user: ocean still pixelated at 2K, fine at 512/1K + request for higher res): **resolution-independent water grain + 4K/8K options.** The water `nLow` noise used a per-cell frequency (`x·0.05`), so at 2K it was 4× finer-grained than at 512 (the "pixelated at 2K" report). Now `vnoise(x·25.6/GW,…)` → a fixed ~25.6 wavelengths across the map at every resolution (identical to the old look at 512). `smoothSeaH` radius nudged `GW/256→GW/200`. **Render-only, water-only** (field/temp/rain bit-identical to v0.067, land byte-identical). New **4096 / 8192** buttons in the working-resolution picker (generic `GW·GH` path; memory-heavy — 8K needs several GB, flagged in the UI hint and for a browser run). 282 assertions green.
+
+Since v0.069 (`docs/research/system-coupling-audit.md` §3, third coupling loop): **mass-conserving sediment routing.** `routeSediment(fld, disch, supply, W, H, opts)` is a pure primitive — routes a per-cell sediment `supply` (the column an erosion pass removed) down the steepest-descent drainage network and deposits it where transport capacity (∝ discharge·slope) drops below the load: floodplains in low-slope reaches, deltas/shelves building toward sea level at river mouths, pooling in closed sinks. **Conserves mass exactly** (every unit deposits on-grid or pools; non-world ⇒ nothing exits — asserted Σdeposit = Σsupply to 1e-3). Wired as the opt-in **Sediment fill** erosion button (`depositSediment()`: stream-power carve → route the eroded mass → redeposit, instead of broad isostatic rebound). New op, never auto-runs ⇒ generate() bit-identical to v0.068. 289 assertions green (exact conservation, deltas below sea, determinism). **All three audit loops the user prioritised (L1 climate↔erosion, L2 currents→winds, L3 sediment) are now shipped.**
 
 Renderer: per-pixel material mixture `{snow, rock, sand, wetland, canopy, grass}` from `materialWeights(T, M, slope, r, twi, asp, curv)` (Σ=1 invariant); `classifyBiome(t,m)`; multi-scale hillshade; atmospheric haze.
 

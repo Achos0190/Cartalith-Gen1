@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. v0.048–0.066 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
-- Current engine file: **`elevation_foundation_v0.066.html`** (older `v0.036–0.065` kept, never edited in place — new version = new file).
-- Headless suite: **277 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. v0.048–0.067 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.067.html`** (older `v0.036–0.066` kept, never edited in place — new version = new file).
+- Headless suite: **282 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```

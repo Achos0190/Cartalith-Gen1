@@ -1130,6 +1130,33 @@ fieldsFinite('generate(world)');
   check('evolveCoupled deterministic', det);
 }
 
+/* ---------- loop 2: ocean currents ↔ atmosphere coupling (v0.067) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.climate.currents = false; refreshClimate();
+  const rainNoCur = Float32Array.from(rainField);
+  const WW = Math.min(GW, 240), WH = Math.max(2, Math.round(WW * GH / GW)), wrapX = !!state.world, step = 3.0, N = WW * WH;
+  const an = oceanSSTAnomaly(WW, WH, wrapX, step);
+  check('oceanSSTAnomaly finite', allFinite(an));
+  check('SST anomaly has warm + cold cells', an.some(v => v > 0.01) && an.some(v => v < -0.01));
+  // the loop closes: winds built on tc+anomaly differ from winds on tc (currents steer winds)
+  const tc0 = new Float32Array(N).fill(15), wx0 = new Float32Array(N), wy0 = new Float32Array(N);
+  buildWind(wx0, wy0, WW, WH, step, tc0, 0);
+  const tc1 = Float32Array.from(tc0); for (let i = 0; i < N; i++) tc1[i] += an[i];
+  const wx1 = new Float32Array(N), wy1 = new Float32Array(N); buildWind(wx1, wy1, WW, WH, step, tc1, 0);
+  let wd = 0; for (let i = 0; i < N; i++) if (wx0[i] !== wx1[i] || wy0[i] !== wy1[i]) wd++;
+  check('winds respond to the SST anomaly (' + wd + ' coarse cells)', wd > 0);
+  // currents on now reshapes rainfall (via the in-sim coupling, not just a post tint)
+  state.climate.currents = true; refreshClimate();
+  let rc = 0; for (let i = 0; i < rainField.length; i++) if (Math.abs(rainField[i] - rainNoCur[i]) > 1e-6) rc++;
+  check('currents reshape rainfall (' + rc + ' cells)', rc > 50 && allFinite(rainField));
+  // determinism
+  const ra = Float32Array.from(rainField); refreshClimate();
+  let det = true; for (let i = 0; i < ra.length; i++) if (Math.abs(ra[i] - rainField[i]) > 1e-9){ det = false; break; }
+  check('currents-coupled climate deterministic', det);
+  state.climate.currents = false; refreshClimate();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

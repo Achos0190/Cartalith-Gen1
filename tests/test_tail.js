@@ -1240,6 +1240,37 @@ fieldsFinite('generate(world)');
   state.resW = 256; GW = 256; GH = gridH(256); allocate();   // restore the suite's working size
 }
 
+/* ---------- LOD tile pyramid core (v0.072) ---------- */
+{
+  const cW = 33, cH = 17, coarse = new Float32Array(cW * cH);
+  for (let y = 0; y < cH; y++) for (let x = 0; x < cW; x++) coarse[y * cW + x] = 0.3 + 0.4 * Math.sin(x * 0.4) * Math.cos(y * 0.5);
+  const ts = 32, opts = { seed: 7, detailAmp: 0.1 };
+  check('pyramidDims(0) = 1×1', pyramidDims(0).cols === 1 && pyramidDims(0).rows === 1);
+  check('pyramidDims(2) = 4×4', pyramidDims(2).cols === 4 && pyramidDims(2).rows === 4);
+  // a pyramid tile is exactly a refineTile over the full world (sanity)
+  const t = pyramidTile(coarse, cW, cH, 1, 0, 0, ts, opts);
+  const region = { x: 0, y: 0, w: cW - 1, h: cH - 1 }, td = tileDims(region, 2, 2, ts);
+  const direct = refineTile(coarse, cW, cH, region, 2, 2, 0, 0, td.w, td.h, opts);
+  check('pyramidTile matches refineTile', t.w === td.w && t.h === td.h && t.data.every((v, i) => v === direct[i]));
+  // seam Δ=0 between horizontally adjacent tiles at level 2 (inherited from refineTile)
+  const a = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts), b = pyramidTile(coarse, cW, cH, 2, 2, 1, ts, opts);
+  let seamMax = 0; for (let y = 0; y < a.h; y++) seamMax = Math.max(seamMax, Math.abs(a.data[y * a.w + (a.w - 1)] - b.data[y * b.w]));
+  check('pyramid same-level horizontal seam Δ=0 (' + seamMax.toExponential(1) + ')', seamMax < 1e-6);
+  const c2 = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts), d2 = pyramidTile(coarse, cW, cH, 2, 1, 2, ts, opts);
+  let vMax = 0; for (let x = 0; x < c2.w; x++) vMax = Math.max(vMax, Math.abs(c2.data[(c2.h - 1) * c2.w + x] - d2.data[x]));
+  check('pyramid same-level vertical seam Δ=0', vMax < 1e-6);
+  // tile has detail + finite
+  const varOf = (tile) => { let s = 0, s2 = 0; for (const v of tile.data){ s += v; s2 += v * v; } const n = tile.data.length; return s2 / n - (s / n) * (s / n); };
+  check('pyramid tile has detail + finite', varOf(t) > 0 && t.data.every(Number.isFinite));
+  // addressing + level-for-zoom
+  const bnd = pyramidTileBounds(cW, cH, 1, 1, 0);
+  check('pyramidTileBounds addresses the quadrant', Math.abs(bnd.x - (cW - 1) / 2) < 1e-9 && Math.abs(bnd.w - (cW - 1) / 2) < 1e-9);
+  check('pyramidLevelForZoom rises with zoom', pyramidLevelForZoom(4, 2048, 1024, 6) >= pyramidLevelForZoom(1, 2048, 1024, 6));
+  // determinism
+  const t2 = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts);
+  check('pyramidTile deterministic', a.data.every((v, i) => v === t2.data[i]));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

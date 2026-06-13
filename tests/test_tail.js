@@ -1108,6 +1108,28 @@ fieldsFinite('generate(world)');
   state.mode = 'biome'; renderNow();
 }
 
+/* ---------- loop 1: climate ↔ erosion coupled evolution (v0.066) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.tect.tectonicGraph = false;
+  const field0 = Float32Array.from(field), rain0 = Float32Array.from(rainField);
+  evolveCoupled(3);
+  check('evolveCoupled keeps field finite', allFinite(field));
+  check('evolveCoupled keeps rainfall finite', allFinite(rainField));
+  let terrChanged = 0; for (let i = 0; i < field.length; i++) if (field[i] !== field0[i]) terrChanged++;
+  check('evolve carves the terrain (' + terrChanged + ' cells)', terrChanged > 100);
+  // the loop CLOSED: rainfall was recomputed on the evolved terrain, so it differs from generate-time rain
+  let rainChanged = 0; for (let i = 0; i < rainField.length; i++) if (Math.abs(rainField[i] - rain0[i]) > 1e-6) rainChanged++;
+  check('climate re-evolved with terrain (' + rainChanged + ' rain cells changed)', rainChanged > 100);
+  // channels incise: at least some cells cut down meaningfully (rebound broadly raises uplands — that's correct LEM)
+  let maxDown = 0; for (let i = 0; i < field.length; i++) maxDown = Math.max(maxDown, field0[i] - field[i]);
+  check('evolve incises channels (max cut ' + maxDown.toFixed(3) + ')', maxDown > 0.003);
+  // determinism: same seed + same cycles → identical result
+  generate(); evolveCoupled(3); const fa = Float32Array.from(field);
+  generate(); evolveCoupled(3); let det = true; for (let i = 0; i < fa.length; i++) if (fa[i] !== field[i]){ det = false; break; }
+  check('evolveCoupled deterministic', det);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

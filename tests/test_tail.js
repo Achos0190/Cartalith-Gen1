@@ -1286,6 +1286,24 @@ fieldsFinite('generate(world)');
   _lodCacheMax = sv; lodCacheClear();
 }
 
+/* ---------- v0.074: button-driven LOD refine (overview, then refine on demand) ---------- */
+{
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  _lodTile = 512; _lodZoom = 2; _lodCx = GW / 2; _lodCy = GH / 2; lodCacheClear();
+  const v = lodViewRect();
+  check('lodViewRect covers a centered sub-region', v.x1 > v.x0 && v.y1 > v.y0 && v.x1 <= GW - 1 && v.y1 <= GH - 1);
+  const keys = visibleTileKeys(v.z, v.x0, v.y0, v.x1, v.y1);
+  check('visibleTileKeys non-empty', keys.length >= 1);
+  const before = _lodCache.size;
+  refineVisibleTiles();
+  check('Refine builds detail tiles into the cache', _lodCache.size > before);
+  const after = _lodCache.size; refineVisibleTiles();
+  check('re-refine reuses the cache (no growth)', _lodCache.size === after);
+  const k0 = keys[0], t = lodCacheGet(lodCacheKey(v.z, k0.col, k0.row, _lodTile));
+  check('refined tile is finite high-res detail', t && t.data.every(Number.isFinite) && t.w >= 2);
+  _lodOn = false; _lodZoom = 1; lodCacheClear();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

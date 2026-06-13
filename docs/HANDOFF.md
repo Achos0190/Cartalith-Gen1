@@ -4,8 +4,8 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. v0.048–0.067 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
-- Current engine file: **`elevation_foundation_v0.067.html`** (older `v0.036–0.066` kept, never edited in place — new version = new file).
+- Repo `achos0190/cartalith-gen1`. v0.048–0.068 work lives on branch **`claude/map-painting-ux-v048-acjted`** (draft PR #2); earlier work (≤v0.047) on `claude/weather-gravity-cartalith-c4u12t` / PR #1. Push to the session's work branch, never to `main`.
+- Current engine file: **`elevation_foundation_v0.068.html`** (older `v0.036–0.067` kept, never edited in place — new version = new file).
 - Headless suite: **282 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
@@ -30,7 +30,7 @@
 3. **Gravity completion**: G2 geoid sea-level field DONE in v0.054 (`buildGeoid`: J2 bulge + harmonics + mantle fbm, local sea level threads through water mask/climate/erosion/render + Geoid debug view; off ⇒ bit-identical). Remaining: **G3** moons & tidal-range overlay → coastal hazard zones.
 4. **River painting / stream-carving quality pass** (user wants to re-check this — not now).
 
-**Manual browser pass still owed** (headless can't cover): v0.063/v0.065 — confirm the seas now read smooth/sharp (not blocky) on the biome map at 2K (v0.065 shades the smoothed sea floor + restores v0.015 constants), and that coastlines stay crisp (mask uses the raw field). v0.061/v0.062 — Orog debug view + Structured-orogeny gate then an erosion carve: collision belts, subduction trench+arc, rift grabens should read as real landforms. v0.053 — region drag-select overlay, refined ZIP download (PNG tiles present, gzip'd bins), a 4×4@4096 run to watch memory. v0.052 — export a tiled ZIP and confirm `tiles/index.json` is the new schema-2 manifest + `heightmap_rg16.bin` re-imports cleanly (round-trips field). v0.051 — coastal wave-line look at two zooms. v0.050 — parchment slider look, icon glyph aesthetics/density at 2048px (mountains on ridges, trees in forests, nothing in oceans), toggles off→on→off leaves the map unchanged. v0.049 — worker carve progress %, responsive UI, sync fallback. v0.048 — zoom/pan gestures desktop+mobile, paint/guide alignment at zoom ≠ 1, scale bar, Ctrl-Z guards, GPU tag, 7 feature brushes.
+**Manual browser pass still owed** (headless can't cover): v0.068 — confirm the ocean grain is now resolution-consistent at 2K/4K (no longer finer at high res) and that 4K/8K generate without OOM on the target machine. v0.063/v0.065 — confirm the seas read smooth/sharp (not blocky) on the biome map at 2K (v0.065 shades the smoothed sea floor + restores v0.015 constants), and that coastlines stay crisp (mask uses the raw field). v0.061/v0.062 — Orog debug view + Structured-orogeny gate then an erosion carve: collision belts, subduction trench+arc, rift grabens should read as real landforms. v0.053 — region drag-select overlay, refined ZIP download (PNG tiles present, gzip'd bins), a 4×4@4096 run to watch memory. v0.052 — export a tiled ZIP and confirm `tiles/index.json` is the new schema-2 manifest + `heightmap_rg16.bin` re-imports cleanly (round-trips field). v0.051 — coastal wave-line look at two zooms. v0.050 — parchment slider look, icon glyph aesthetics/density at 2048px (mountains on ridges, trees in forests, nothing in oceans), toggles off→on→off leaves the map unchanged. v0.049 — worker carve progress %, responsive UI, sync fallback. v0.048 — zoom/pan gestures desktop+mobile, paint/guide alignment at zoom ≠ 1, scale bar, Ctrl-Z guards, GPU tag, 7 feature brushes.
 
 ## Locked decisions (don't relitigate)
 

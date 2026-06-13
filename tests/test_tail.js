@@ -1224,6 +1224,22 @@ fieldsFinite('generate(world)');
   state.planet.tides.enabled = false; refreshTides();
 }
 
+/* ---------- v0.071: resolution-switch must not leave stale warp (NaN regression) ---------- */
+{
+  // mirror the resSeg button: change GW, allocate, generate — same seed (so the warp cache is tempted to hit)
+  state.world = false; state.tect.seed = 777;
+  const genAt = (R) => { state.resW = R; GW = R; GH = gridH(R); allocate(); generate(); };
+  genAt(64); let nan0 = 0; for (let i = 0; i < field.length; i++) if (Number.isNaN(field[i])) nan0++;
+  genAt(128);   // switch UP (the case that read warpX past its end → NaN before the fix)
+  let nanUp = 0; for (let i = 0; i < field.length; i++) if (Number.isNaN(field[i])) nanUp++;
+  check('switch to higher resolution: no NaN in field', nanUp === 0);
+  check('warp rebuilt at the new resolution', !warpX || warpX.length === GW * GH);
+  check('field finite after res switch', allFinite(field) && allFinite(tempField) && allFinite(rainField));
+  genAt(64);    // switch DOWN too
+  check('switch to lower resolution: field finite', allFinite(field) && field.every(v => !Number.isNaN(v)));
+  state.resW = 256; GW = 256; GH = gridH(256); allocate();   // restore the suite's working size
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

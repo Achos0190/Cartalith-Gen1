@@ -1189,6 +1189,41 @@ fieldsFinite('generate(world)');
   check('depositSediment deterministic', det2);
 }
 
+/* ---------- G3: moons & tidal-range field (v0.070) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  check('tides off (default) → tideField null', tideField === null);
+  // forcing math: Σ massRel / distRel³
+  check('tidalForcing linear in mass', tidalForcing([{ massRel: 2, distRel: 1 }]) === 2 * tidalForcing([{ massRel: 1, distRel: 1 }]));
+  check('tidalForcing ∝ 1/dist³', Math.abs(tidalForcing([{ massRel: 1, distRel: 2 }]) - 1 / 8) < 1e-9);
+  check('tidalForcing sums moons', Math.abs(tidalForcing([{ massRel: 1, distRel: 1 }, { massRel: 0.5, distRel: 1 }]) - 1.5) < 1e-9);
+  // enable
+  state.planet.tides.enabled = true; refreshTides();
+  check('tideField built + finite', tideField !== null && allFinite(tideField));
+  let landNonzero = 0, oceanPos = 0;
+  for (let i = 0; i < tideField.length; i++){ if (field[i] >= state.seaLevel){ if (tideField[i] !== 0) landNonzero++; } else if (tideField[i] > 0) oceanPos++; }
+  check('tides: land cells 0, ocean cells positive (' + oceanPos + ')', landNonzero === 0 && oceanPos > 100);
+  // amplified near coast vs far/deep ocean (shelf + funnelling)
+  const cd = computeCoastDistance(field, GW, GH, state.seaLevel), cscale = Math.max(4, GW / 40);
+  let nearSum = 0, nearN = 0, farSum = 0, farN = 0;
+  for (let i = 0; i < tideField.length; i++){ if (field[i] >= state.seaLevel) continue;
+    if (cd[i] < cscale){ nearSum += tideField[i]; nearN++; } else if (cd[i] > 3 * cscale){ farSum += tideField[i]; farN++; } }
+  check('tidal range amplified near coast', nearN > 0 && farN > 0 && nearSum / nearN > farSum / farN);
+  // ∝ 1/g
+  const g1 = computeTideField(state.planet.tides), savedG = state.planet.g;
+  state.planet.g = 2; const g2 = computeTideField(state.planet.tides); state.planet.g = savedG;
+  let di = -1; for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel - 0.1){ di = i; break; }
+  check('tidal range ∝ 1/g', di >= 0 && Math.abs(g2[di] - g1[di] / 2) < 1e-6);
+  // determinism
+  const ta = computeTideField(state.planet.tides), tb = computeTideField(state.planet.tides);
+  check('computeTideField deterministic', ta.every((v, i) => v === tb[i]));
+  // debug view + overlay
+  state.debug = 'tides'; renderNow(); check('Tides debug view renders opaque', img.data[3] === 255);
+  state.debug = 'off'; renderNow();   // intertidal overlay path (tides enabled) runs without error
+  check('biome render with tides overlay opaque', img.data[3] === 255);
+  state.planet.tides.enabled = false; refreshTides();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

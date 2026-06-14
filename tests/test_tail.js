@@ -1483,6 +1483,31 @@ fieldsFinite('generate(world)');
   check('atlasMetaRec has NO worldKey field (so the world index excludes it)', !('worldKey' in m));
 }
 
+/* ---------- Atlas Phase 3: biome-coloured tiles (renderBiomeTileRGBA) (v0.083) ---------- */
+{
+  // amplify a sub-region into a tile, then render it both ways
+  const region = { x: GW * 0.25, y: GH * 0.3, w: GW * 0.4, h: GH * 0.35 }, TW = 40, TH = 36;
+  const tile = amplifyRegion(field, GW, GH, region, TW, TH, { detailAmp: 0.1, sea: state.seaLevel });
+  const bounds = { x: region.x, y: region.y, w: region.w, h: region.h };
+  const bio = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  const relief = renderHeightTileRGBA(tile, TW, TH);
+  check('renderBiomeTileRGBA RGBA length + opaque', bio.length === TW * TH * 4 && bio[3] === 255 && bio[bio.length - 1] === 255);
+  let finite = true; for (let i = 0; i < bio.length; i++) if (!Number.isFinite(bio[i])) finite = false;
+  check('renderBiomeTileRGBA all finite', finite);
+  let diff = 0; for (let i = 0; i < bio.length; i++) if (bio[i] !== relief[i]) diff++;
+  check('biome tile differs from the relief tile (climate colour added)', diff > bio.length * 0.25);
+  const bio2 = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  check('renderBiomeTileRGBA deterministic', bio.every((v, i) => v === bio2[i]));
+  // an all-ocean tile renders ocean (blue-dominant), an all-high tile does not
+  const seaTile = new Float32Array(TW * TH).fill(state.seaLevel - 0.2);
+  const sea = renderBiomeTileRGBA(seaTile, TW, TH, bounds);
+  check('ocean tile is blue-dominant (B>R)', sea[2] > sea[0]);
+  const hiTile = new Float32Array(TW * TH).fill(Math.min(1, state.seaLevel + 0.5));
+  const hi = renderBiomeTileRGBA(hiTile, TW, TH, bounds);
+  let oceanish = 0; for (let i = 0; i < hiTile.length; i++){ const p = i * 4; if (hi[p + 2] > hi[p] + 20) oceanish++; }
+  check('land tile is not rendered as ocean', oceanish < hiTile.length * 0.5);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

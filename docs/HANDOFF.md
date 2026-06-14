@@ -101,7 +101,7 @@ Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity sc
 
 ## Docs map
 
-`CLAUDE.md` (architecture, 11 invariants, verification, "Since v0.0XX" changelog) · `docs/ROADMAP.md` (priority order + Done log) · `docs/ATLAS_ARCHITECTURE.md` (current north-star workstream + phased plan) · `docs/UNIFIED_TOOL_PLAN.md` · `docs/GENERATOR_PARAMETERS.md` (every modifier) · `docs/BIOME_AND_VISUALS_PLAN.md` · `docs/WORLD_REGIONAL_TILING_PLAN.md` · `docs/LOD_PYRAMID_PLAN.md` · `docs/research/` (ui-unified-tool, weather-model-v2, gravity-influence, engine-optimization, pipeline-order-audit, map-painting-ux, asset-candidates, ASSET_PACK_FORMAT, **tectonic-feature-graph** [mountains-as-structures plan])
+`CLAUDE.md` (architecture, 11 invariants, verification, "Since v0.0XX" changelog) · `docs/ROADMAP.md` (priority order + Done log) · `docs/ATLAS_ARCHITECTURE.md` (current north-star workstream + phased plan) · `docs/UNIFIED_TOOL_PLAN.md` · `docs/GENERATOR_PARAMETERS.md` (every modifier) · `docs/BIOME_AND_VISUALS_PLAN.md` · `docs/WORLD_REGIONAL_TILING_PLAN.md` · `docs/LOD_PYRAMID_PLAN.md` · `docs/research/` (ui-unified-tool, weather-model-v2, gravity-influence, engine-optimization, pipeline-order-audit, map-painting-ux, asset-candidates, ASSET_PACK_FORMAT, **tectonic-feature-graph** [mountains-as-structures plan], **terrain-rendering-enhancement** [multi-scale shading, AO, ridge crest, texture synthesis, R1–R4 phases])
 
 ## Watch-outs
 

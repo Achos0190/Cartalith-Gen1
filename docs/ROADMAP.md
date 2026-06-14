@@ -13,22 +13,27 @@ User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → 
 
 ## Next
 
-5. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`)
-   Namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel.
-6. **P2 — Save schema v10** with both legacy importers.
-7. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`): JS micro-opts in the stencil loops — only if profiling shows a need.
+5. **Atlas Phase 2b — cross-session IDB persistence** (`docs/ATLAS_ARCHITECTURE.md`): query IndexedDB on `generate()` / page-load to repopulate `_atlasBaked` for the current `worldKey`; atlas status indicator; metadata round-trip. Same-world bakes already survive in-session (v0.081); 2b makes them survive a page reload.
+6. **Rendering quality pass — R1** (`docs/research/terrain-rendering-enhancement.md`): multi-scale hillshading (macro σ≈96px / meso σ≈16px / micro σ≈4px, weights 0.55/0.30/0.15) + screen-space ambient occlusion (neighbourhood height-difference, k≈0.2). Render-only: field/temp/rain bit-identical; toggle + strength sliders; proven via cmp harness.
+7. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`): namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel.
+8. **P2 — Save schema v10** with both legacy importers.
+9. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`): JS micro-opts in the stencil loops — only if profiling shows a need.
 
 ## Later
 
-7. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
-8. **R32F GPU migration** (handoff pending #3) with RGBA8 fallback tier.
-9. **Disturbance model completion** (handoff pending #2): wind-throw from W1 wind field, flood proxy from flowField/TWI.
+10. **Rendering quality pass — R2** (`docs/research/terrain-rendering-enhancement.md`): ridge crest enhancement (`_crestField`: negative curvature ∩ high slope → thin bright strokes) + slope-material refinement (`G^1.5` rock weight, curvature-driven wetness in `materialWeights`).
+11. **Rendering quality pass — R3**: three-frequency procedural texture synthesis (large/medium/fine fbm colour modulation ±10%) + minor-channel flow lines (F^0.45 Hack's-law width; extend threshold floor to show low-accumulation channels as subtle overlays).
+12. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
+13. **R32F GPU migration** (handoff pending #3) with RGBA8 fallback tier.
+14. **Disturbance model completion** (handoff pending #2): wind-throw from W1 wind field, flood proxy from flowField/TWI.
 
 (G2 geoid and G3 moons/tides moved up into Now → item 3, per the user's June 2026 sequencing.)
 
 ## Bigger workstreams (planned)
 
-- **Tectonic feature graph** (`docs/research/tectonic-feature-graph.md`, user proposal June 2026 — **ACTIVE: T0 shipped v0.058**): the largest realism gap — ranges are currently `stress → blur → height` (smooth blobs). Add the missing layer between plate interaction and height: tangential **shear** field, **boundary-type matrix** (crust A×B × convergence × shear), boundary **polyline graph**, and feature synthesis along segments (multi-ridge orogenic kernel, fold belts `sin(k√|C|·d)`, trench+arc, foreland basin, transform offsets). ~6 phased versions (T0 shear/metadata → T1 graph → T2 uplift kernel → T3 boundary-type features → T4 transforms → T5 tuning), each opt-in/gated + bit-identical at defaults + headless-verifiable. Reuses `distanceToBoundary`, `applyFeatureAlongCurve` (distance-field stamp), `rdpSimplify`, and the existing erosion. Independent of the asset/visual work; world-res only (16k tiles inherit it via `amplifyRegion`). Refs: Cortial 2019, Cordonnier 2016.
+- **Tectonic feature graph** (`docs/research/tectonic-feature-graph.md`, user proposal June 2026 — **T0–T4 SHIPPED, T5 optional**): shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064). T5 = archetype tuning (fold-intensity/trench-depth sliders).
+
+- **Terrain rendering enhancement** (`docs/research/terrain-rendering-enhancement.md`, user research June 2026): multi-scale hillshading → AO → slope-material refinement → ridge crest highlights → three-frequency texture synthesis → minor-channel flow lines → elevation-weighted ridged noise formalisation. Phased R1–R4, all render-only/gated at defaults. Approach: painterly cartographic relief without additional geological simulation; seamless at >16k via world-coordinate noise. Targets visual quality parity with reference atlas maps and World Machine/Gaea outputs.
 
 ## Bigger workstreams (planned, post-merge)
 
@@ -37,8 +42,8 @@ User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → 
 
 ## Research / spikes
 
+- **Terrain rendering enhancement** (June 2026): `docs/research/terrain-rendering-enhancement.md` — framework for multi-scale shading, AO, ridge synthesis, slope-material masks, flow-line enhancement, crest highlights, procedural texture synthesis. Phased plan R1–R4.
 - Map-painting & zoom UX (Wonderdraft / World Machine / World Creator takeaways): `docs/research/map-painting-ux.md` → shipped as v0.048 (plotline feature brushes, zoom/pan + scale bar).
-
 - Rust/WASM SIMD erosion kernel (inline base64) — only if profiling after #3/#8 still shows CPU-bound erosion. Verdict & sources: `docs/research/engine-optimization.md`.
 - WebGPU compute backend — Gen1 v2 candidate.
 - Dirty-rect rendering (handoff pending #5) — when brush latency becomes a complaint.

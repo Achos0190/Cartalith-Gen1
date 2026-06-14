@@ -1340,6 +1340,29 @@ fieldsFinite('generate(world)');
   _lodEdit = false; _lodOn = false; _lodEdits.clear(); _lodUndo.length = 0; lodCacheClear();
 }
 
+/* ---------- v0.076: discharge-widened smooth rivers ---------- */
+{
+  // synthetic land with a trunk river (high discharge) and a tributary (low discharge)
+  const W = 40, H = 40, fld = new Float32Array(W * H).fill(0.6), flow = new Float32Array(W * H);
+  const thresh = W * H * 0.0004;
+  for (let y = 5; y < 35; y++) flow[y * W + 20] = thresh * 200;   // trunk down the middle
+  for (let x = 20; x < 35; x++) flow[10 * W + x] = thresh * 8;    // thin tributary
+  const rf = buildRiverField(flow, fld, W, H, 0.42);
+  check('river field finite', allFinite(rf));
+  // width: count lit cells across the trunk row vs the tributary column
+  let trunkW = 0, tribW = 0;
+  for (let x = 0; x < W; x++) if (rf[20 * W + x] > 0.01) trunkW++;        // across the trunk at row 20
+  for (let y = 0; y < H; y++) if (rf[y * W + 30] > 0.01) tribW++;         // across the tributary at col 30
+  check('trunk river is wider than the tributary (' + trunkW + ' vs ' + tribW + ')', trunkW > tribW && trunkW >= 3);
+  // ocean cells get no river
+  const fldSea = new Float32Array(W * H).fill(0.2);   // all below sea
+  const rfSea = buildRiverField(flow, fldSea, W, H, 0.42);
+  check('no river overlay on ocean cells', rfSea.every(v => v === 0));
+  // deterministic
+  const rf2 = buildRiverField(flow, fld, W, H, 0.42);
+  check('buildRiverField deterministic', rf.every((v, i) => v === rf2[i]));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

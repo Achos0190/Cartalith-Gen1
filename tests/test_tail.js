@@ -1363,6 +1363,33 @@ fieldsFinite('generate(world)');
   check('buildRiverField deterministic', rf.every((v, i) => v === rf2[i]));
 }
 
+/* ---------- v0.077: river carving interplay (monotonic channel + entrenchment) ---------- */
+{
+  // a brushed river over terrain that RISES downstream must still carve a monotonically descending channel
+  const W = 60, H = 20, fld = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.5 + x * 0.004;   // rises with x
+  const orig = Float32Array.from(fld);
+  const pts = []; for (let x = 5; x < 55; x++) pts.push([x, 10]);
+  const cells = enforceChannelDescent(fld, W, H, pts, 0.42, 1.5);
+  let mono = true, prev = Infinity;
+  for (let x = 5; x < 55; x++){ const v = fld[10 * W + x]; if (v > prev + 1e-7){ mono = false; break; } prev = v; }
+  check('brushed river centreline descends monotonically (cuts through rises)', mono);
+  check('channel is carved below the original terrain', fld[10 * W + 30] < orig[10 * W + 30]);
+  check('descent carve returns locked cells', cells.length > 0);
+
+  // entrenchment: deposition refilling a locked river is clamped back to its floor
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  const i = 128 * GW + 100; riverMask[i] = 1; riverFloor[i] = 0.30; field[i] = 0.55; _riverAny = true;
+  enforceRiverChannels();
+  check('enforceRiverChannels clamps a refilled river to its floor', field[i] === riverFloor[i] && field[i] < 0.55);
+  const j = 10 * GW + 10; field[j] = 0.99; riverMask[j] = 0; const jset = field[j];
+  enforceRiverChannels();
+  check('non-river cells untouched by enforcement', field[j] === jset);
+  riverMask.fill(0); _riverAny = false;
+  const snap = Float32Array.from(field); enforceRiverChannels();
+  check('enforceRiverChannels is a no-op with no locked rivers', field.every((v, k) => v === snap[k]));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

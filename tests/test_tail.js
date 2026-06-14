@@ -1416,6 +1416,27 @@ fieldsFinite('generate(world)');
   state.viz.sharpBiomes = sv;
 }
 
+/* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */
+{
+  const p = chunkParent(3, 5, 6);
+  check('chunkParent halves col/row, drops a level', p.z === 2 && p.col === 2 && p.row === 3);
+  check('chunkParent(0) = null (root)', chunkParent(0, 0, 0) === null);
+  const ch = chunkChildren(2, 1, 1);
+  check('chunkChildren = 4 at z+1 covering the quadrant', ch.length === 4 && ch.every(c => c.z === 3) &&
+    ch.some(c => c.col === 2 && c.row === 2) && ch.some(c => c.col === 3 && c.row === 3));
+  check('parent↔children round-trip', ch.every(c => { const pp = chunkParent(c.z, c.col, c.row); return pp.z === 2 && pp.col === 1 && pp.row === 1; }));
+  const a = chunkColorHash(2, 3, 4), b = chunkColorHash(2, 3, 4);
+  check('chunkColorHash deterministic + valid RGB', a.length === 3 && a.every((v, i) => v === b[i]) && a.every(v => v >= 0 && v <= 255));
+  // lifecycle reflects the caches, with the atlas authoritative
+  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear(); _lodTile = 512;
+  check('chunkState unexplored by default', chunkState(2, 1, 1) === 'unexplored');
+  const key = lodCacheKey(2, 1, 1, _lodTile); _lodCache.set(key, {});
+  check('chunkState cached after generation', chunkState(2, 1, 1) === 'cached');
+  _lodEdits.set(key, {}); check('edited overrides cached', chunkState(2, 1, 1) === 'edited');
+  _atlasBaked.add(key); check('baked overrides edited (images authoritative)', chunkState(2, 1, 1) === 'baked');
+  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

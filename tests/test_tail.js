@@ -1390,6 +1390,32 @@ fieldsFinite('generate(world)');
   check('enforceRiverChannels is a no-op with no locked rivers', field.every((v, k) => v === snap[k]));
 }
 
+/* ---------- v0.078: Cartalith biome-paint PoC + sharper biomes ---------- */
+{
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  const cb = buildCartBiome();
+  check('buildCartBiome finite indices in 1..15', cb.length === GW * GH && cb.every(v => v >= 1 && v <= 15));
+  let oceanOk = true, landOk = true;
+  for (let i = 0; i < cb.length; i++){ const w = field[i] - geoAt(i) < state.seaLevel;
+    if (w && cb[i] !== 15) oceanOk = false;          // ocean cells → Ocean (15)
+    if (!w && cb[i] === 15) landOk = false;          // land cells never Ocean
+  }
+  check('CBiome: ocean cells → Ocean(15), land never Ocean', oceanOk && landOk);
+  const cb2 = buildCartBiome();
+  check('buildCartBiome deterministic', cb.every((v, i) => v === cb2[i]));
+  // CBiome debug view renders opaque
+  state.mode = 'biome'; state.debug = 'cbiome'; _cartBiome = null; renderNow();
+  check('CBiome debug view renders opaque', img.data[3] === 255);
+  state.debug = 'off';
+  // bioJitter: sharp toggle changes the ecotone jitter; OFF reproduces the legacy single octave exactly
+  const sv = state.viz.sharpBiomes;
+  state.viz.sharpBiomes = false; const j0 = bioJitter(40, 30), legacy = vnoise(40 / GW * 40, 30 / GW * 40, 31);
+  check('sharpBiomes off → legacy single-octave jitter (bit-identical)', j0 === legacy);
+  state.viz.sharpBiomes = true; const j1 = bioJitter(40, 30);
+  check('sharpBiomes on → jitter differs from legacy', j1 !== legacy);
+  state.viz.sharpBiomes = sv;
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

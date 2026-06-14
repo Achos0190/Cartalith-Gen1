@@ -1304,6 +1304,42 @@ fieldsFinite('generate(world)');
   _lodOn = false; _lodZoom = 1; lodCacheClear();
 }
 
+/* ---------- Stage 3: per-tile editing (v0.075) ---------- */
+{
+  // pure brush
+  const W = 20, H = 20, d = new Float32Array(W * H).fill(0.5);
+  brushHeight(d, W, H, 10, 10, 5, 0.2, 'raise');
+  check('brush raise lifts the centre', d[10 * W + 10] > 0.5);
+  check('brush leaves cells outside the radius untouched', d[0] === 0.5);
+  const dl = new Float32Array(W * H).fill(0.5); brushHeight(dl, W, H, 10, 10, 5, 0.2, 'lower');
+  check('brush lower drops the centre', dl[10 * W + 10] < 0.5);
+  const dc = new Float32Array(W * H).fill(1); brushHeight(dc, W, H, 10, 10, 5, 0.5, 'raise');
+  check('brush clamps to [0,1]', dc.every(v => v <= 1 && v >= 0));
+  const noisy = Float32Array.from({ length: W * H }, () => Math.random()); const ns = Float32Array.from(noisy);
+  for (let k = 0; k < 6; k++) brushHeight(ns, W, H, 10, 10, 8, 1, 'smooth');
+  const variance = a => { let s = 0, s2 = 0, n = 0; for (let y = 6; y <= 14; y++) for (let x = 6; x <= 14; x++){ const v = a[y * W + x]; s += v; s2 += v * v; n++; } return s2 / n - (s / n) ** 2; };
+  check('brush smooth reduces local variance', variance(ns) < variance(noisy));
+
+  // tile editing on a refined tile
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  _lodTile = 512; _lodZoom = 1; _lodCx = GW / 2; _lodCy = GH / 2; lodCacheClear(); _lodEdits.clear(); _lodUndo.length = 0;
+  refineVisibleTiles();
+  const pick = lodPick(GW / 2, GH / 2);
+  check('lodPick returns a valid tile + in-range local coords', pick.lx >= 0 && pick.lx <= pick.td.w && pick.ly >= 0 && pick.ly <= pick.td.h);
+  const proc = lodCacheGet(pick.key); const procCopy = proc ? Float32Array.from(proc.data) : null;
+  lodEditBegin(GW / 2, GH / 2);
+  const ok = editTileAt(GW / 2, GH / 2);
+  check('editTileAt edits the refined tile', ok && _lodEdits.has(pick.key));
+  check('edit diverges from the procedural tile', procCopy && !_lodEdits.get(pick.key).data.every((v, i) => v === procCopy[i]));
+  // re-refine does not clobber the edit (drawLODView prefers _lodEdits)
+  refineVisibleTiles();
+  check('re-refine preserves the edit', _lodEdits.has(pick.key) && _lodEdits.get(pick.key).edited);
+  // undo reverts to procedural
+  lodUndo();
+  check('Ctrl-Z reverts the tile edit', !_lodEdits.has(pick.key));
+  _lodEdit = false; _lodOn = false; _lodEdits.clear(); _lodUndo.length = 0; lodCacheClear();
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

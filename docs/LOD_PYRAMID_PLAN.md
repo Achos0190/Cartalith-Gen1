@@ -35,7 +35,7 @@ export: bakeTiled walks every tile of the chosen export level → full 8K+ image
   missing tiles (worker-friendly: `pyramidTile` is pure), composite onto the `viewT`-transformed stack.
   Per-tile resolution selector (1K/2K/4K). The base coarse world remains the z=0 fallback so there is
   never a blank frame. Browser-only — manual verification.
-- **Stage 3 — per-tile editing.** Erosion/sculpt/biome-paint operate on the *loaded* high-res tile(s)
+- **Stage 3 — per-tile editing (browser, v0.075 DONE).** Erosion/sculpt/biome-paint operate on the *loaded* high-res tile(s)
   under the cursor; writes are stored as a per-tile override layer (so the procedural base stays
   reproducible) with tile-aware undo. Seam continuity at tile borders handled by editing on the +1
   overlap and re-deriving neighbours. Browser-only.

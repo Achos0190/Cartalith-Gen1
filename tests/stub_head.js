@@ -78,3 +78,5 @@ global.localStorage = { getItem(){ return null; }, setItem(){}, removeItem(){} }
 try { global.navigator = { userAgent: 'node-headless' }; } catch (_) { /* node ≥21: read-only global, built-in is fine */ }
 if (!global.URL.createObjectURL){ global.URL.createObjectURL = () => 'blob:stub'; global.URL.revokeObjectURL = () => {}; }
 if (typeof global.alert === 'undefined') global.alert = () => {};
+// IndexedDB is intentionally NOT stubbed: the Atlas (v0.081+) feature-detects `typeof indexedDB==='undefined'`
+// and no-ops headless, so the engine stays bit-identical to the no-IDB path. Only the pure cores are tested here.

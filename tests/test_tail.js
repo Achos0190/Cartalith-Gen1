@@ -1427,14 +1427,51 @@ fieldsFinite('generate(world)');
   check('parent↔children round-trip', ch.every(c => { const pp = chunkParent(c.z, c.col, c.row); return pp.z === 2 && pp.col === 1 && pp.row === 1; }));
   const a = chunkColorHash(2, 3, 4), b = chunkColorHash(2, 3, 4);
   check('chunkColorHash deterministic + valid RGB', a.length === 3 && a.every((v, i) => v === b[i]) && a.every(v => v >= 0 && v <= 255));
-  // lifecycle reflects the caches, with the atlas authoritative
-  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear(); _lodTile = 512;
+  // lifecycle reflects the caches, with the atlas authoritative (v0.081: baked uses the worldKey-namespaced atlas key)
+  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear(); _lodTile = 512; _worldKey = 'tw';
   check('chunkState unexplored by default', chunkState(2, 1, 1) === 'unexplored');
   const key = lodCacheKey(2, 1, 1, _lodTile); _lodCache.set(key, {});
   check('chunkState cached after generation', chunkState(2, 1, 1) === 'cached');
   _lodEdits.set(key, {}); check('edited overrides cached', chunkState(2, 1, 1) === 'edited');
-  _atlasBaked.add(key); check('baked overrides edited (images authoritative)', chunkState(2, 1, 1) === 'baked');
+  _atlasBaked.add(atlasChunkKey(2, 1, 1, _lodTile)); check('baked overrides edited (images authoritative)', chunkState(2, 1, 1) === 'baked');
   _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear();
+}
+
+/* ---------- Atlas Phase 2a: worldKey + IDB chunk encode/decode + ancestor coverage (v0.081) ---------- */
+{
+  // worldKey deterministic + sensitive to a generation param
+  const wk1 = worldKey(), wk2 = worldKey();
+  check('worldKey deterministic (same state → same key)', wk1 === wk2 && typeof wk1 === 'string' && wk1.length > 0);
+  const sv = state.tect.seed; state.tect.seed = sv + 1;
+  check('worldKey changes when a gen param changes', worldKey() !== wk1);
+  state.tect.seed = sv; check('worldKey restored when param restored', worldKey() === wk1);
+
+  // atlasKeyStr format + uniqueness across z/col/row/ts
+  check('atlasKeyStr format', atlasKeyStr('w', 512, 2, 3, 4) === 'w:512:2:3:4');
+  const ks = new Set([
+    atlasKeyStr('w', 512, 2, 3, 4), atlasKeyStr('w', 1024, 2, 3, 4),
+    atlasKeyStr('w', 512, 3, 3, 4), atlasKeyStr('w', 512, 2, 4, 4), atlasKeyStr('w', 512, 2, 3, 5),
+    atlasKeyStr('x', 512, 2, 3, 4)]);
+  check('atlasKeyStr unique across ts/z/col/row/worldKey', ks.size === 6);
+
+  // encode/decode round-trip ≤1 LSB, preserving dims + addressing
+  const tw = 12, th = 8, td = new Float32Array(tw * th);
+  for (let i = 0; i < td.length; i++) td[i] = i / (td.length - 1);
+  const tile = { data: td, w: tw, h: th, z: 3, col: 5, row: 6 };
+  const rec = atlasEncodeChunk(tile), dec = atlasDecodeChunk(rec);
+  let maxErr = 0; for (let i = 0; i < td.length; i++) maxErr = Math.max(maxErr, Math.abs(td[i] - dec.data[i]));
+  check('atlasEncodeChunk packs rg16 + dims', rec.rg16.length === tw * th * 4 && rec.w === tw && rec.h === th && rec.z === 3 && rec.col === 5 && rec.row === 6);
+  check('atlas chunk round-trip ≤1 LSB (max Δ=' + maxErr.toExponential(1) + ')', maxErr <= 0.5 / 65535 + 1e-9);
+  check('atlasDecodeChunk preserves addressing', dec.w === tw && dec.h === th && dec.z === 3 && dec.col === 5 && dec.row === 6);
+
+  // bakedCover: a baked ancestor covers its descendants, not a sibling subtree
+  _atlasBaked.clear(); _lodTile = 512; _worldKey = 'cw';
+  check('bakedCover false when nothing baked', bakedCover(3, 4, 4) === false);
+  _atlasBaked.add(atlasChunkKey(1, 1, 1, _lodTile));                 // bake a level-1 ancestor
+  check('bakedCover true for a descendant of a baked ancestor', bakedCover(3, 4, 4) === true);   // (1,1,1)→(2,2,2)→(3,4,4)
+  check('bakedCover true for the baked chunk itself', bakedCover(1, 1, 1) === true);
+  check('bakedCover false for a sibling subtree', bakedCover(3, 0, 0) === false);                // under (1,0,0), not baked
+  _atlasBaked.clear();
 }
 
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */

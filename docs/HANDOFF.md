@@ -6,7 +6,7 @@
 
 - Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas Phase 2a) + v0.082 (Atlas Phase 2b) + v0.083 (Atlas Phase 3) + v0.084 (R1 rendering)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
 - Current engine file: **`elevation_foundation_v0.084.html`** (older `v0.036–0.083` kept, never edited in place — new version = new file).
-- Headless suite: **all green**. Run before & after any engine change:
+- Headless suite: **394 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -80,6 +80,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.084** — Ambient occlusion: in **Biome** view, drag **Style → Ambient occlusion** up → valleys/canyons/basins darken (depth cue), ridges/peaks unaffected; at 0 the map is unchanged. Confirm AO also shows in LOD biome tiles and in PNG bakes.
 - **v0.083** — Biome tiles: in **Biome** View mode, enable Tiled LOD → the overview + refined + baked tiles render the full biome look (climate colours, not grey relief); switch View to **Relief** → tiles fall back to the height ramp. Bake → the stored atlas PNG is the biome visual; region-export PNGs are biome-coloured.
 - **v0.082** — Atlas persistence: bake some chunks, **reload the page**, set the same seed + Generate → the chunk-debug overlay shows them green and they render from the atlas with no Refine; the `#atlasStat` line shows the count; switch seed → status shows empty; switch back → count returns; **Clear atlas** zeroes it. Confirm no-IndexedDB shows "Atlas: — (no IndexedDB)" and degrades silently.
 - **v0.081** — Atlas bake: enable Tiled LOD, **Refine** a view, **Bake visible tiles**; confirm the chunk-debug overlay shows baked tiles green, pan away/back re-draws them from the atlas (read-from-IDB), **Refine** no longer adds detail under baked tiles, **Clear atlas** reverts to procedural, and reload-page-then-bake round-trips through IndexedDB. Confirm no-IndexedDB / `file://`-without-IDB degrades silently to procedural.

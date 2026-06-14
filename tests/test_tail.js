@@ -1508,6 +1508,24 @@ fieldsFinite('generate(world)');
   check('land tile is not rendered as ocean', oceanish < hiTile.length * 0.5);
 }
 
+/* ---------- R1: ambient occlusion (aoMul + renderBiomeTileRGBA AO) (v0.084) ---------- */
+{
+  check('aoMul darkens depressions', aoMul(0.05, 1) < 1 && aoMul(0.05, 1) >= 1 - AO_MAX - 1e-9);
+  check('aoMul leaves ridges/flat unchanged', aoMul(-0.05, 1) === 1 && aoMul(0, 1) === 1);
+  check('aoMul scales with strength', aoMul(0.02, 1) < aoMul(0.02, 0.3));
+  check('aoMul clamped at max darkening', aoMul(1, 1) === 1 - AO_MAX);
+  const region = { x: GW * 0.25, y: GH * 0.3, w: GW * 0.4, h: GH * 0.35 }, TW = 40, TH = 36;
+  const tile = amplifyRegion(field, GW, GH, region, TW, TH, { detailAmp: 0.1, sea: state.seaLevel });
+  const bounds = { x: region.x, y: region.y, w: region.w, h: region.h }, saved = state.viz.ao;
+  state.viz.ao = 0;   const off = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  state.viz.ao = 0.8; const on  = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  state.viz.ao = saved;
+  let d = 0, neverBrighter = true; for (let i = 0; i < off.length; i += 4){ if (on[i] !== off[i]) d++; if (on[i] > off[i] || on[i + 1] > off[i + 1] || on[i + 2] > off[i + 2]) neverBrighter = false; }
+  check('AO changes the biome tile when on', d > 0);
+  check('AO only darkens, never brightens', neverBrighter);
+  check('AO off ⇒ tile identical to no-AO render', (() => { state.viz.ao = 0; const a = renderBiomeTileRGBA(tile, TW, TH, bounds); state.viz.ao = saved; return a.every((v, i) => v === off[i]); })());
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

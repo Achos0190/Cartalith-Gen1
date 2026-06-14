@@ -1474,6 +1474,15 @@ fieldsFinite('generate(world)');
   _atlasBaked.clear();
 }
 
+/* ---------- Atlas Phase 2b: metadata record helpers (pure) (v0.082) ---------- */
+{
+  check('atlasMetaKey prefixes the worldKey', atlasMetaKey('abc') === 'meta:abc');
+  check('atlasMetaKey distinct from any chunk key', atlasMetaKey('abc') !== atlasKeyStr('abc', 512, 0, 0, 0));
+  const m = atlasMetaRec('abc', { ts: 1024, chunks: 7, time: 42 });
+  check('atlasMetaRec shape', m.key === 'meta:abc' && m.ts === 1024 && m.chunks === 7 && m.ver === VERSION && m.time === 42);
+  check('atlasMetaRec has NO worldKey field (so the world index excludes it)', !('worldKey' in m));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)
@@ -1533,6 +1542,38 @@ fieldsFinite('generate(world)');
       const z2 = await unzipAny(zipBuf.buffer.slice(zipBuf.byteOffset, zipBuf.byteOffset + zipBuf.byteLength));
       check('unzipAny inflates a DEFLATED entry', !!z2['a.txt'] && new TextDecoder().decode(z2['a.txt']) === 'hello deflate world '.repeat(20));
     } else { console.log('skip - DecompressionStream unavailable'); }
+  }
+
+  /* ---------- Atlas Phase 2b: IndexedDB persistence round-trip via the test-only shim (v0.082) ---------- */
+  {
+    global.indexedDB = __makeIDBShim(); _atlasDBp = null;          // install the shim; reset the engine's cached open promise
+    _worldKey = 'rt'; _atlasBaked.clear(); _lodTile = 512;
+    // bake 3 chunk records + a meta record
+    for (let i = 0; i < 3; i++){
+      const ak = atlasChunkKey(2, i, 0, _lodTile);
+      await atlasPut({ key: ak, worldKey: 'rt', ts: 512, z: 2, col: i, row: 0, w: 2, h: 2, rg16: new Uint8Array(16), png: null, ver: VERSION, time: 1 });
+      _atlasBaked.add(ak);
+    }
+    await atlasPutMeta('rt');
+    const keys = await atlasKeysForWorld('rt');
+    check('atlasKeysForWorld returns the 3 baked chunk keys', Array.isArray(keys) && keys.length === 3);
+    check('atlasKeysForWorld excludes the meta record', !keys.includes(atlasMetaKey('rt')));
+    const got = await atlasGet(atlasChunkKey(2, 1, 0, _lodTile));
+    check('atlasGet round-trips a chunk record', !!got && got.col === 1 && got.rg16.length === 16);
+    const meta = await atlasGetMeta('rt');
+    check('atlasGetMeta round-trips the metadata', !!meta && meta.chunks === 3 && meta.ts === 512 && meta.ver === VERSION);
+    // simulate a fresh session: drop the in-memory set + cached handle, rediscover from IDB
+    _atlasBaked.clear(); _atlasImg.clear(); _atlasDBp = null;
+    await atlasSyncWorld();
+    check('atlasSyncWorld rediscovers baked chunks (persistence)', _atlasBaked.size === 3 && _atlasMeta && _atlasMeta.chunks === 3);
+    // a different world sees an empty atlas
+    _worldKey = 'other'; _atlasBaked.clear(); await atlasSyncWorld();
+    check('a different worldKey has no baked chunks', _atlasBaked.size === 0);
+    // clear wipes the world's chunks + meta
+    _worldKey = 'rt'; await atlasClearWorld('rt');
+    check('atlasClearWorld removes all chunk keys', (await atlasKeysForWorld('rt')).length === 0);
+    check('atlasClearWorld removes the meta record', (await atlasGetMeta('rt')) == null);
+    delete global.indexedDB; _atlasDBp = null; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta = null; _worldKey = '';
   }
 
   console.log('\n' + __pass + ' passed, ' + __fail + ' failed');

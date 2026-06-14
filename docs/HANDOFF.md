@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081** (Atlas Phase 2a) is on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR). Create a new branch (`claude/<topic>`) for the next session's work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.081.html`** (older `v0.036–0.080` kept, never edited in place — new version = new file).
-- Headless suite: **369 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas Phase 2a) + v0.082 (Atlas Phase 2b)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4 — the contiguous atlas workstream). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.082.html`** (older `v0.036–0.081` kept, never edited in place — new version = new file).
+- Headless suite: **381 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -36,20 +36,25 @@
 - Render rule (`drawLODView`): baked chunk → load from IDB (`atlasLoadImg`→`_atlasImg`); else procedural. `refineVisibleTiles` skips tiles under a baked ancestor (`bakedCover`).
 - Off / no-IDB ⇒ bit-identical to v0.080 (field/temp/rain/render cmp-clean)
 
-**Phase 2b (v0.082) — NEXT**: Persistence + atlas lifecycle (edits/bakes survive `generate()` across sessions — query IDB for the world's keys on generate/startup to repopulate `_atlasBaked`; atlas status UI; metadata round-trip). `generate()` already keeps same-world bakes in-session; 2b adds cross-session rediscovery. Drawing an upscaled baked *ancestor* when zoomed below it is a deferred render refinement from 2a.
+**Phase 2b (v0.082) — DONE**: cross-session persistence + status + metadata
+- `atlasSyncWorld()` fires from `generate()` (runs at startup): `atlasKeysForWorld(wk)` (`world` index `getAllKeys`) repopulates `_atlasBaked` from IDB → bakes survive reload/regenerate. Re-checks `wk===_worldKey` after each await (no stale repopulate on fast world-switch).
+- Per-world metadata record (`atlasMetaRec`/`atlasMetaKey='meta:'+wk`, no `worldKey` field so the index excludes it; `atlasPutMeta`/`atlasGetMeta`) → powers the `#atlasStat` status line (`updateAtlasStatus`).
+- `atlasClearWorld` refactored cursor-free (`atlasKeysForWorld`+`atlasDelete`+meta).
+- Test-only in-memory IDB shim (`__makeIDBShim` in `tests/stub_head.js`, not auto-installed) drives a full headless round-trip; default suite + cmp stay on the genuine no-IDB path.
+- Off / no-IDB ⇒ bit-identical to v0.081 (field/temp/rain/render cmp-clean).
 
-**Phase 3 (v0.083)**: Biome-coloured tiles (tiles render the full biome look, not relief-only)
+**Phase 3 (v0.083) — NEXT**: Biome-coloured tiles (tiles render the full biome look — sample coarse climate per tile → `classifyBiome`/`materialWeights`/`landColorCore` — not relief-only via `renderHeightTileRGBA`). *Alternative next:* R1 rendering quality pass (multi-scale shading + AO, `docs/research/terrain-rendering-enhancement.md`) — user-selectable.
 
 **Phase 4 (v0.084)**: Portable atlas export/import (`World/` ZIP → IndexedDB and back)
 
 **Deferred**: F0–F3 frequency-layered generation; unified-tool merge P0–P2
 
-## Completed workstreams (shipped in v0.048–v0.081)
+## Completed workstreams (shipped in v0.048–v0.082)
 
 - **Tectonic feature graph T0–T4**: shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064). Feature-complete; optional T5 tuning/archetype hooks remain.
 - **Earth-system coupling loops L1–L3**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069).
 - **Gravity G1–G3**: G1 scaling throughout pipeline (v0.038), G2 geoid sea-level field (v0.054), G3 moons + tidal range field (v0.070). G4 tidal sedimentation deferred.
-- **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080) → **Atlas Phase 2a: IndexedDB chunk baking + images-override** (v0.081).
+- **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080) → **Atlas Phase 2a: IndexedDB chunk baking + images-override** (v0.081) → **Atlas Phase 2b: cross-session persistence + status + metadata** (v0.082).
 - **Rivers**: smooth discharge-widened rivers (v0.076) + brushed rivers as entrenched drainage seeds (v0.077).
 - **Visuals**: parchment + icons (v0.050), waves (v0.051), Style tab + asset-pack importer (v0.056), B2 texture splatting (v0.059).
 - **16k tiling**: seamless `amplifyRegion` core (v0.044) → `refineTile` + `packHeight16` + manifest v2 (v0.052) → region-refine export (v0.053) → cols×rows + aspect-preserving tile pixels (v0.055).
@@ -70,6 +75,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.082** — Atlas persistence: bake some chunks, **reload the page**, set the same seed + Generate → the chunk-debug overlay shows them green and they render from the atlas with no Refine; the `#atlasStat` line shows the count; switch seed → status shows empty; switch back → count returns; **Clear atlas** zeroes it. Confirm no-IndexedDB shows "Atlas: — (no IndexedDB)" and degrades silently.
 - **v0.081** — Atlas bake: enable Tiled LOD, **Refine** a view, **Bake visible tiles**; confirm the chunk-debug overlay shows baked tiles green, pan away/back re-draws them from the atlas (read-from-IDB), **Refine** no longer adds detail under baked tiles, **Clear atlas** reverts to procedural, and reload-page-then-bake round-trips through IndexedDB. Confirm no-IndexedDB / `file://`-without-IDB degrades silently to procedural.
 - **v0.080** — Confirm LOD zoom + terrain painting now both work correctly when the Tiled-LOD view is toggled on/off; confirm wheel scroll zooms the LOD view, drag pans it, and Edit tiles brush works.
 - **v0.079** — Chunk-debug overlay: Grid / Colors / Labels each toggle independently; tile labels show LOD/coords/state.

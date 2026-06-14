@@ -18,7 +18,11 @@ The generator already has a working grid (`GW×GH`, 512/1K/2K), a tiled PNG bake
 
 ## Status (June 2026)
 
-**Stage 3 amplification core shipped in v0.044**: `amplifyRegion()` — pure, worker-ready, proven seamless (seam Δ=0 across adjacent tiles), deterministic, constraint-preserving (78 headless assertions). Remaining (browser-bound): region-selection UI, per-tile OffscreenCanvas/worker rendering, fflate-compressed tiled export + manifest, 16-bit height packing.
+**Stage 3 amplification core shipped in v0.044**: `amplifyRegion()` — pure, worker-ready, proven seamless (seam Δ=0 across adjacent tiles), deterministic, constraint-preserving.
+
+**Tiling core completed in v0.052** (pure, headless-verifiable): `refineTile()` splits a coarse sub-region into a cols×rows grid with one-cell shared-edge overlap → adjacent tiles seam-Δ=0 across a full split (both axes); `packHeight16`/`unpackHeight16` 16-bit R+G height packing (round-trip ≤1 LSB), wired into `exportZip` (`heightmap_rg16.bin`) + `loadZip` fallback; `buildTileManifest()` manifest v2 (schema 2, worldSeed, coarse per-tile bounds, height encoding, compression), now emitted by `bakeTiled`.
+
+**Remaining (browser-bound):** region-selection UI on the world map, per-tile OffscreenCanvas/worker rendering at 16k, fflate-compressed tiled export (currently stored ZIP), and the 16-bit-packed **PNG** export (canvas `toBlob`; `.bin`/`.f32` precision already ship). These need a real browser/device and are the next steps once a manual pass confirms the core.
 
 ## Architecture: coarse world → selected region → high-res tiles
 

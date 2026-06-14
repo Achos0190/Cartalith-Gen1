@@ -183,6 +183,51 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   }
 }
 
+/* ---------- stream-power / glacial kernel self-containment (v0.048b, W0b worker contract) ---------- */
+{
+  // Same discipline as the droplet kernel: rebuild from source with every module global shadowed
+  // to undefined (the Worker environment). Any closure leak throws or corrupts the output.
+  const shadows = ['field', 'stressField', 'resistanceField', 'rainField', 'tempField', 'GW', 'GH',
+                   'state', 'isostaticRebound', 'computeFlow', 'refreshClimate', 'renderNow',
+                   'gaussBlur', 'mbuf', 'ibuf', 'ubuf', 'MinHeap', 'computeFlowRouting'];
+  const W = 60, H = 44, n = W * H;
+  // a tilted dome so routing, MFD area and incision all have work to do
+  const mk = () => { const a = new Float32Array(n);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+      a[y * W + x] = 0.55 - Math.hypot(x - W / 2, y - H / 2) / W * 0.7 + (x + y) * 0.0008;
+    return a; };
+  const stress = new Float32Array(n), resist = new Float32Array(n).fill(0.5), rain = new Float32Array(n).fill(0.5);
+  for (let i = 0; i < n; i++) stress[i] = Math.max(0, mk()[i] - 0.3);
+
+  for (const [name, fn, callArgs, makeArgs, P] of [
+    ['streamPowerKernel', streamPowerKernel,
+      'fld, stress, resist, rain', () => [stress, resist, rain],
+      { k: 0.6, uplift: 0, deposit: 0.3, climateK: 0.5, iters: 6, resist: 0.5, g: 1, world: false, sea: 0.42 }],
+    ['glacialKernel', glacialKernel,
+      'fld, temp', () => [new Float32Array(n).fill(-12)],
+      { kg: 0.15, mg: 0.4, snowline: 0.02, uFactor: 0.6, passes: 8, g: 1, sea: 0.42, world: false }],
+  ]){
+    let rebuilt = null, evalOk = true;
+    try {
+      rebuilt = new Function(...shadows, 'return (' + fn.toString() + ')').apply(null, shadows.map(() => undefined));
+    } catch (e){ evalOk = false; }
+    check(name + ' rebuilds from source (worker stringification)', evalOk && typeof rebuilt === 'function');
+    if (rebuilt){
+      const a = mk(), b = mk(), orig = mk(), extra = makeArgs();
+      // signature: (fld, ...extraFields, W, H, P, onProgress)
+      rebuilt(a, ...extra, W, H, P);
+      fn(b, ...extra, W, H, P);
+      let identical = true, changed = false;
+      for (let i = 0; i < n; i++){ if (a[i] !== b[i]) identical = false; if (a[i] !== orig[i]) changed = true; }
+      check(name + ' output finite & changed terrain', allFinite(a) && changed);
+      check(name + ' bit-identical to in-module kernel (no closure leaks)', identical);
+      let progCalls = 0;
+      rebuilt(mk(), ...makeArgs(), W, H, P, () => progCalls++);
+      check(name + ' reports progress (' + progCalls + ' callbacks)', progCalls >= 2);
+    }
+  }
+}
+
 /* ---------- biome raster handoff (v0.042+, BIOME_AND_VISUALS_PLAN Part A) ---------- */
 {
   const raster = buildBiomeRaster();
@@ -267,6 +312,65 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     added = Math.max(added, Math.abs(A[oy * outW + ox] - src[(30 + cy) * sW + (40 + cx)]));
   }
   check('amplification adds sub-cell detail (max Δ=' + added.toFixed(3) + ')', added > 1e-3);
+
+  /* ---- refineTile: full cols×rows split must be seam-Δ=0 at every internal join (v0.052) ---- */
+  {
+    const region = { x: 8, y: 6, w: 48, h: 30 }, cols = 3, rows = 2, ts = 24;
+    const T = [];
+    for (let r = 0; r < rows; r++){ T[r] = []; for (let c = 0; c < cols; c++) T[r][c] = refineTile(src, sW, sH, region, cols, rows, c, r, ts, ts, opts); }
+    let vSeam = 0, hSeam = 0, fin = true;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++){ if (!allFinite(T[r][c])) fin = false; }
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols - 1; c++)
+      for (let y = 0; y < ts; y++) vSeam = Math.max(vSeam, Math.abs(T[r][c][y * ts + (ts - 1)] - T[r][c + 1][y * ts]));
+    for (let r = 0; r < rows - 1; r++) for (let c = 0; c < cols; c++)
+      for (let x = 0; x < ts; x++) hSeam = Math.max(hSeam, Math.abs(T[r][c][(ts - 1) * ts + x] - T[r + 1][c][x]));
+    check('refineTile tiles finite', fin);
+    check('refineTile vertical seams Δ=0 (max ' + vSeam.toExponential(1) + ')', vSeam < 1e-6);
+    check('refineTile horizontal seams Δ=0 (max ' + hSeam.toExponential(1) + ')', hSeam < 1e-6);
+    const single = amplifyRegion(src, sW, sH, { x: region.x, y: region.y, w: region.w / cols + 1, h: region.h / rows + 1 }, ts, ts, opts);
+    let m = 0; for (let i = 0; i < ts * ts; i++) m = Math.max(m, Math.abs(single[i] - T[0][0][i]));
+    check('refineTile(0,0) matches a direct amplifyRegion of that sub-bounds (Δ=' + m.toExponential(1) + ')', m < 1e-6);
+    /* ---- non-square tiles: aspect-preserving dims + seams still Δ=0 (v0.055) ---- */
+    const nsRegion = { x: 4, y: 4, w: 60, h: 20 };   // 3:1 selection
+    const td = tileDims(nsRegion, 2, 2, 30);
+    check('tileDims preserves aspect (' + td.w + '×' + td.h + ')', td.w === 30 && td.h === 10);   // 1.5 cols-span : 0.5 → wait, (60/2)/(20/2)=3 → 30×10
+    const A = refineTile(src, sW, sH, nsRegion, 2, 2, 0, 0, td.w, td.h, opts);
+    const B = refineTile(src, sW, sH, nsRegion, 2, 2, 1, 0, td.w, td.h, opts);
+    check('non-square tile has tw·th cells, finite', A.length === td.w * td.h && allFinite(A));
+    let ns = 0; for (let y = 0; y < td.h; y++) ns = Math.max(ns, Math.abs(A[y * td.w + (td.w - 1)] - B[y * td.w]));
+    check('non-square adjacent tiles seam Δ=0 (max ' + ns.toExponential(1) + ')', ns < 1e-6);
+    // assembled image preserves the selection aspect regardless of grid choice
+    const td2 = tileDims(nsRegion, 5, 1, 40);
+    check('assembled size keeps selection aspect', Math.abs((5 * td2.w) / (1 * td2.h) - nsRegion.w / nsRegion.h) < 0.05);
+  }
+
+  /* ---- 16-bit height pack/unpack round-trip (v0.052) ---- */
+  {
+    const n = 500, fld = new Float32Array(n);
+    for (let i = 0; i < n; i++) fld[i] = i / (n - 1);            // sweep [0,1]
+    fld[0] = -0.3; fld[1] = 1.7;                                  // out-of-range clamps
+    const rg = packHeight16(fld, n), back = unpackHeight16(rg, n);
+    let maxErr = 0; for (let i = 2; i < n; i++) maxErr = Math.max(maxErr, Math.abs(fld[i] - back[i]));
+    check('packHeight16 RGBA length & opaque', rg.length === n * 4 && rg[3] === 255 && rg[2] === 0);
+    check('16-bit height round-trip within 1 LSB (max Δ=' + maxErr.toExponential(1) + ')', maxErr <= 0.5 / 65535 + 1e-9);
+    check('packHeight16 clamps out-of-range', back[0] === 0 && back[1] === 1);
+  }
+
+  /* ---- tile manifest v2 (v0.052) ---- */
+  {
+    const man = buildTileManifest({ cols: 4, rows: 4, tileSize: 4096, width: 16384, height: 16384,
+      seed: 12345, world: true, bounds: { x: 10, y: 20, w: 64, h: 64 }, heightEncoding: 'rg16', compression: 'gzip' });
+    check('manifest schema 2 + back-compat flat fields', man.schema === 2 && man.cols === 4 && man.rows === 4 && man.tileSize === 4096 && man.width === 16384);
+    check('manifest lists every tile', man.tiles.length === 16 && man.tiles[0].file === 'tiles/tile_0_0.png');
+    check('manifest carries world seed + encoding', man.worldSeed === 12345 && man.world === true && man.heightEncoding === 'rg16' && man.compression === 'gzip');
+    // coarse bounds: adjacent tiles share their seam edge (col c right edge == col c+1 left edge)
+    const at = (r, c) => man.tiles[r * 4 + c].coarse;
+    let edgeOK = true;
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++){ const a = at(r, c), b = at(r, c + 1); if (Math.abs((a.x + a.w - 1) - b.x) > 1e-9) edgeOK = false; }
+    check('manifest tile coarse bounds share seam edges', edgeOK);
+    const m1 = buildTileManifest({ cols: 2, rows: 1, tileSize: 1024, width: 2048, height: 1024 });
+    check('manifest defaults: no bounds → no per-tile coarse', m1.bounds === null && m1.tiles[0].coarse === undefined && m1.heightEncoding === 'none');
+  }
 }
 
 /* ---------- seasons + Köppen (v0.043+, weather-model-v2 W3) ---------- */
@@ -349,6 +453,92 @@ refreshClimate();        check('climate refresh finite', allFinite(tempField) &&
 renderNow();
 check('render wrote opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
 
+/* ---------- B1/B3 visual layers (v0.050, BIOME_AND_VISUALS_PLAN Part B) ---------- */
+{
+  // icon placement on a synthetic ridge: pure primitive, no globals
+  const W = 96, H = 64, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const ridge = Math.max(0, 1 - Math.abs(y - 32) / 18);          // E–W ridge along y=32
+    fld[y * W + x] = (x >= 8 && x < 88) ? sea + 0.02 + 0.48 * ridge : 0.2;  // flanks → low land, edges → ocean
+  }
+  const biome = new Uint8Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    biome[y * W + x] = (x < 48) ? 5 /* tempForest */ : 9 /* desert */;
+  const opts = { sea, seed: 7 };
+  const icons = placeMapIcons(fld, biome, W, H, opts);
+  check('icons: mountains found on the ridge (' + icons.mountains.length + ')', icons.mountains.length >= 3);
+  check('icons: hills found on the flanks (' + icons.hills.length + ')', icons.hills.length >= 2);
+  const landR = v => (v - sea) / (1 - sea);
+  check('icons: every mountain sits above the mountain threshold',
+    icons.mountains.every(m => landR(fld[m.y * W + m.x]) >= 0.58));
+  check('icons: every hill sits in the hill band',
+    icons.hills.every(h => { const r = landR(fld[h.y * W + h.x]); return r >= 0.53 && r < 0.58; }));
+  const mSpace = Math.max(5, Math.round(W / 90));
+  let minD2 = Infinity;
+  for (let a = 0; a < icons.mountains.length; a++) for (let b = a + 1; b < icons.mountains.length; b++){
+    const dx = icons.mountains[a].x - icons.mountains[b].x, dy = icons.mountains[a].y - icons.mountains[b].y;
+    minD2 = Math.min(minD2, dx * dx + dy * dy);
+  }
+  check('icons: mountain spacing respected (min ' + Math.sqrt(minD2).toFixed(1) + ' ≥ ' + mSpace + ')', minD2 >= mSpace * mSpace);
+  check('icons: trees only on closed-canopy biome cells',
+    icons.trees.length > 5 && icons.trees.every(t => { const b = biome[t.y * W + t.x]; return b === 3 || b === 4 || b === 5 || b === 6 || b === 12; }));
+  check('icons: painter order is north→south', ['mountains', 'hills', 'trees'].every(k =>
+    icons[k].every((p, i, a) => i === 0 || a[i - 1].y <= p.y)));
+  const icons2 = placeMapIcons(fld, biome, W, H, opts);
+  check('icons: placement deterministic', JSON.stringify(icons) === JSON.stringify(icons2));
+  const flat = new Float32Array(n).fill(sea + 0.02);
+  const none = placeMapIcons(flat, null, W, H, opts);
+  check('icons: flat lowland → no mountains or hills', none.mountains.length === 0 && none.hills.length === 0 && none.trees.length === 0);
+
+  // parchment: defaults-off neutrality + visible effect, on the real map
+  const before = Uint8ClampedArray.from(img.data);
+  state.viz.parchment = 0.5; renderNow();
+  let diff = 0; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== before[i]) diff++;
+  check('parchment 0.5 changes pixels (' + diff + ' bytes differ)', diff > 1000);
+  check('parchment render stays opaque', img.data[3] === 255);
+  state.viz.parchment = 0; renderNow();
+  let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== before[i]){ same = false; break; }
+  check('parchment off → bit-identical to before (default neutrality)', same);
+
+  // icon layer toggles without error headless (vector draw is a vctx no-op in the stub)
+  state.viz.icons = true; renderNow();
+  check('icon layer renders without error', img.data[3] === 255);
+  state.viz.icons = false; renderNow();
+}
+
+/* ---------- B4 coastal wave lines (v0.051) ---------- */
+{
+  // half ocean (x<W/2) / half land split: ocean distance grows toward the left edge
+  const W = 40, H = 24, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = x < W / 2 ? 0.2 : 0.7;
+  const d = computeCoastDistance(fld, W, H, sea);
+  check('coastDist: land cells are zero', (() => { for (let i = 0; i < n; i++){ const x = i % W; if (x >= W / 2 && d[i] !== 0) return false; } return true; })());
+  check('coastDist: shore ocean cell ≈ 1', Math.abs(d[12 * W + (W / 2 - 1)] - 1) < 0.01);
+  const row = 12 * W;
+  check('coastDist: distance increases away from shore',
+    d[row + (W / 2 - 1)] < d[row + (W / 2 - 5)] && d[row + (W / 2 - 5)] < d[row + 0]);
+  check('coastDist: all finite', allFinite(d));
+
+  // render: waves off = bit-identical; on = only WATER pixels change (land untouched)
+  state.viz.parchment = 0; state.viz.icons = false; state.viz.waves = false;
+  state.mode = 'biome'; state.debug = 'off'; renderNow();
+  const base = Uint8ClampedArray.from(img.data);
+  state.viz.waves = true; renderNow();
+  let waterDiff = 0, landChanged = 0;
+  for (let i = 0; i < GW * GH; i++){
+    const p = i * 4, isW = field[i] < state.seaLevel;
+    const changed = img.data[p] !== base[p] || img.data[p + 1] !== base[p + 1] || img.data[p + 2] !== base[p + 2];
+    if (changed){ if (isW) waterDiff++; else landChanged++; }
+  }
+  check('waves on: water pixels change (' + waterDiff + ')', waterDiff > 50);
+  check('waves on: land pixels untouched (' + landChanged + ' changed)', landChanged === 0);
+  state.viz.waves = false; renderNow();
+  let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
+  check('waves off → bit-identical (default neutrality)', same);
+}
+
 /* ---------- world (toroidal) mode + seam continuity ---------- */
 state.world = true;
 GW = state.resW; GH = gridH(GW);
@@ -398,9 +588,916 @@ fieldsFinite('generate(world)');
   // selecting the wind view renders a full opaque buffer
   state.debug = 'wind'; renderNow();
   check('wind debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
+  // ocean-current debug view (v0.057): coarse field finite, vectors live on water, SST anomaly present
+  const of = currentOceanField();
+  check('currentOceanField finite + flow on water', allFinite(of.u) && allFinite(of.v) && allFinite(of.sst) && of.maxSpeed > 1e-3);
+  let landZero = true, oceanCells = 0; for (let i = 0; i < of.u.length; i++){ if (!of.ocean[i]){ if (of.u[i] !== 0 || of.v[i] !== 0) landZero = false; } else oceanCells++; }
+  check('ocean current vectors are zero on land (' + oceanCells + ' ocean cells)', landZero && oceanCells > 0);
+  check('ocean SST anomaly has warm and cold sides', of.maxAnom > 1e-3);
+  state.debug = 'ocean'; renderNow();
+  check('ocean debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
   state.debug = 'off';
   state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
 }
 
-console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
-process.exit(__fail ? 1 : 0);
+/* ---------- plotline feature brushes (v0.048) ---------- */
+{
+  const distToPolyline = (p, poly) => {
+    let best = Infinity;
+    for (let s = 0; s < poly.length - 1; s++){
+      const ax = poly[s].x, ay = poly[s].y, dx = poly[s + 1].x - ax, dy = poly[s + 1].y - ay, L2 = dx * dx + dy * dy;
+      let t = L2 > 1e-12 ? ((p.x - ax) * dx + (p.y - ay) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+      best = Math.min(best, Math.hypot(p.x - (ax + t * dx), p.y - (ay + t * dy)));
+    }
+    return best;
+  };
+
+  // RDP: noisy sine simplifies; endpoints kept; every input point stays near the simplified polyline
+  const raw = []; for (let i = 0; i <= 200; i++){ const x = i * 0.5; raw.push({ x, y: 10 * Math.sin(x * 0.08) + ((i * 2654435761 >>> 16) % 7) * 0.01 }); }
+  const simp = rdpSimplify(raw, 0.5);
+  check('rdp reduces point count (' + raw.length + ' → ' + simp.length + ')', simp.length < raw.length / 2 && simp.length >= 2);
+  check('rdp keeps endpoints', simp[0] === raw[0] && simp[simp.length - 1] === raw[raw.length - 1]);
+  check('rdp output stays within tolerance of input', raw.every(p => distToPolyline(p, simp) <= 0.75));
+  check('rdp collinear → 2 points', rdpSimplify([{x:0,y:0},{x:1,y:1},{x:2,y:2},{x:3,y:3}], 0.1).length === 2);
+
+  // synthetic flat grid for the feature stamps
+  const W = 96, H = 72, flat = () => new Float32Array(W * H).fill(0.5);
+  const curve = catmullRomSample([{x:16,y:36},{x:48,y:30},{x:80,y:40}], 2);
+
+  // mountainRange: raised near the line; cells beyond the radius bit-untouched
+  const a = flat(), R = 10;
+  applyFeatureAlongCurve(a, W, H, curve, 'mountainRange', R, 0.8, 42, { sea: 0.42 });
+  check('mountainRange finite & in [0,1]', allFinite(a) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(a)));
+  let nearSum = 0, nearN = 0, farSame = true;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const d = distToPolyline({ x, y }, curve), i = y * W + x;
+    if (d <= R * 0.5){ nearSum += a[i]; nearN++; }
+    else if (d > R + 1.5 && a[i] !== 0.5) farSame = false;
+  }
+  check('mountainRange raises the near-line band (mean ' + (nearSum / nearN).toFixed(3) + ' > 0.55)', nearSum / nearN > 0.55);
+  check('cells beyond the radius are bit-untouched', farSame);
+
+  // determinism: same seed bit-identical, different seed differs
+  const b = flat();
+  applyFeatureAlongCurve(b, W, H, curve, 'mountainRange', R, 0.8, 42, { sea: 0.42 });
+  let same = true; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]){ same = false; break; }
+  check('feature stamp deterministic (same seed bit-identical)', same);
+  const c = flat();
+  applyFeatureAlongCurve(c, W, H, curve, 'mountainRange', R, 0.8, 43, { sea: 0.42 });
+  let differs = false; for (let i = 0; i < a.length; i++) if (a[i] !== c[i]){ differs = true; break; }
+  check('different seed produces different terrain', differs);
+
+  // river on a flat field: channel carves down, sits below its surroundings, deepens downstream
+  const rv = flat();
+  const rCurve = catmullRomSample([{x:10,y:20},{x:50,y:36},{x:86,y:50}], 2);
+  applyFeatureAlongCurve(rv, W, H, rCurve, 'river', 24, 0.9, 7, { sea: 0.42 });
+  check('river field finite & in [0,1]', allFinite(rv) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(rv)));
+  let low = 0, high = 0;
+  for (let k = Math.floor(rCurve.length * 0.1); k < Math.floor(rCurve.length * 0.9); k++){
+    const x = Math.round(rCurve[k].x), y = Math.round(rCurve[k].y);
+    if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+    const i = y * W + x;
+    const nbMean = (rv[i - 1] + rv[i + 1] + rv[i - W] + rv[i + W]) * 0.25;
+    if (rv[i] < 0.5 && rv[i] < nbMean - 1e-7) low++; else high++;
+  }
+  check('river channel cells carve down below their neighbours (' + low + ' low vs ' + high + ' high)', low > high * 2);
+  const at = f => { const p = rCurve[Math.floor(rCurve.length * f)]; return rv[Math.round(p.y) * W + Math.round(p.x)]; };
+  check('river deepens downstream (u≈0.15: ' + (0.5 - at(0.15)).toFixed(3) + ' < u≈0.85: ' + (0.5 - at(0.85)).toFixed(3) + ')',
+    (0.5 - at(0.85)) > (0.5 - at(0.15)) * 1.3);
+
+  // extremes: every feature at str=1, R=40 stays finite & in range; plateau never lowers
+  let extOk = true, plateauOk = true;
+  for (const ft of ['mountainRange', 'hills', 'ridge', 'plateau', 'river', 'canyon', 'escarpment']){
+    const f = flat();
+    applyFeatureAlongCurve(f, W, H, curve, ft, 40, 1, 99, { sea: 0.42 });
+    if (!allFinite(f) || minMax(f)[0] < 0 || minMax(f)[1] > 1) extOk = false;
+    if (ft === 'plateau') for (let i = 0; i < f.length; i++) if (f[i] < 0.5 - 1e-9){ plateauOk = false; break; }
+  }
+  check('all 7 features finite & in [0,1] at extreme settings', extOk);
+  check('plateau never lowers terrain (mesa semantics)', plateauOk);
+}
+
+/* ---------- feature brush integration (UI call path on real terrain) ---------- */
+{
+  const before = field.slice();
+  const pts = [{x:GW*0.25,y:GH*0.6},{x:GW*0.5,y:GH*0.45},{x:GW*0.75,y:GH*0.55}];
+  const curve = catmullRomSample(pts, 2);
+  applyFeatureAlongCurve(field, GW, GH, curve, 'mountainRange', 28, 0.45, 12345, { sea: state.seaLevel });
+  fieldsFinite('feature brush (UI call path)');
+  let changed = false; for (let i = 0; i < field.length; i++) if (field[i] !== before[i]){ changed = true; break; }
+  check('feature brush changed real terrain', changed);
+  computeFlow(true);
+  check('flow finite after feature brush', allFinite(flowField));
+}
+
+/* ---------- region refine wiring (v0.053): sync parts ---------- */
+{
+  // normRegion: order-independent, clamped, min-size
+  const a = normRegion(50.7, 30.2, 10.3, 60.9, 100, 80);
+  check('normRegion orders + snaps corners', a.x === 10 && a.y === 30 && a.w === 41 && a.h === 31);
+  const b = normRegion(-20, -10, 250, 200, 100, 80);
+  check('normRegion clamps to grid', b.x === 0 && b.y === 0 && b.w === 100 && b.h === 80);
+  const c = normRegion(50, 50, 51, 51, 100, 80);
+  check('normRegion enforces min size', c.w >= 8 && c.h >= 8 && c.x + c.w <= 100 && c.y + c.h <= 80);
+  const d = normRegion(98, 78, 99, 79, 100, 80);
+  check('normRegion min-size near edge stays in bounds', d.x + d.w <= 100 && d.y + d.h <= 80 && d.w >= 8 && d.h >= 8);
+
+  // renderHeightTileRGBA: opaque, finite, water vs land tinted differently
+  const ts = 16, tile = new Float32Array(ts * ts);
+  for (let i = 0; i < tile.length; i++) tile[i] = i < tile.length / 2 ? 0.2 : 0.8;   // top water, bottom land
+  const rgba = renderHeightTileRGBA(tile, ts, ts);
+  check('tile RGBA full + opaque', rgba.length === ts * ts * 4 && rgba[3] === 255 && rgba[rgba.length - 1] === 255);
+  const top = [rgba[0], rgba[1], rgba[2]], bot = [rgba[(ts * ts - 1) * 4], rgba[(ts * ts - 1) * 4 + 1], rgba[(ts * ts - 1) * 4 + 2]];
+  check('tile render distinguishes water from land', (top[0] !== bot[0] || top[1] !== bot[1] || top[2] !== bot[2]) && top[2] > top[0]);
+}
+
+/* ---------- G2 geoid sea-level field (v0.054, gravity-influence.md) ---------- */
+{
+  // buildGeoid pure math
+  const W = 120, H = 60;
+  const g1 = buildGeoid(W, H, { seed: 5, rotK: 1, harmK: 0, mantleK: 0, amp: 0.02, lat0: 90, lat1: -90 });
+  check('geoid finite', allFinite(g1));
+  let mx = 0, mean = 0; for (let i = 0; i < g1.length; i++){ mx = Math.max(mx, Math.abs(g1[i])); mean += g1[i]; }
+  check('geoid peak equals amp (' + mx.toFixed(4) + ')', Math.abs(mx - 0.02) < 1e-6);
+  check('geoid ~zero-mean (' + (mean / g1.length).toExponential(1) + ')', Math.abs(mean / g1.length) < 1e-4);
+  // pure-J2: sea stands higher at the equator than the poles
+  const eq = g1[(H >> 1) * W + 10], pole = g1[0 * W + 10];
+  check('J2 bulge: equator sea level > pole (' + eq.toFixed(4) + ' vs ' + pole.toFixed(4) + ')', eq > pole + 0.01);
+  const g2 = buildGeoid(W, H, { seed: 5, rotK: 1, harmK: 0, mantleK: 0, amp: 0.02, lat0: 90, lat1: -90 });
+  check('geoid deterministic', g1.every((v, i) => v === g2[i]));
+  const g3 = buildGeoid(W, H, { seed: 6, rotK: 0.2, harmK: 0.8, mantleK: 0.8, amp: 0.02, lat0: 90, lat1: -90 });
+  check('different seed/mix differs', g3.some((v, i) => v !== g1[i]));
+
+  // toggle neutrality + live effect on the real pipeline
+  state.planet.geoid = state.planet.geoid || { enabled: false, amp: 0.015 };
+  refreshGeoid();
+  check('geoid off → geoidField null', geoidField === null);
+  state.mode = 'biome'; state.debug = 'off';
+  refreshClimate(); renderNow();
+  const basePx = Uint8ClampedArray.from(img.data), baseTemp = tempField.slice(), baseField0 = field.slice();
+  state.planet.geoid.enabled = true; state.planet.geoid.amp = 0.03;
+  refreshGeoid();
+  check('geoid on → field built', geoidField instanceof Float32Array && allFinite(geoidField));
+  // ocean mask actually shifts somewhere
+  let flips = 0;
+  for (let i = 0; i < field.length; i++){
+    if ((field[i] < state.seaLevel) !== (field[i] - geoidField[i] < state.seaLevel)) flips++;
+  }
+  check('geoid shifts the coastline (' + flips + ' cells flip)', flips > 0);
+  refreshClimate(); renderNow();
+  check('climate finite with geoid on', allFinite(tempField) && allFinite(rainField));
+  check('terrain itself untouched by geoid', field.every((v, i) => v === baseField0[i]));
+  let pxDiff = 0; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== basePx[i]) pxDiff++;
+  check('geoid on changes the render (' + pxDiff + ' bytes)', pxDiff > 100);
+  // off again → climate AND render bit-identical (the gate works)
+  state.planet.geoid.enabled = false; refreshGeoid(); refreshClimate(); renderNow();
+  check('geoid off again → temp bit-identical', tempField.every((v, i) => v === baseTemp[i]));
+  let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== basePx[i]){ same = false; break; }
+  check('geoid off again → render bit-identical', same);
+}
+
+/* ---------- asset packs (v0.056, docs/ASSET_PACK_FORMAT.md) ---------- */
+{
+  const fs = require('fs');
+  // parsePackCsv — slots, icon variant ordering, tolerance, unknown-drop
+  const csv = 'type,slot,file,variant\r\ntexture,grass,textures/grass.png,\r\n\r\nicon,mountain,icons/m2.png,2\nicon,mountain,icons/m1.png,1\ntexture,bogus,x.png,\nicon,dragon,d.png,1\n';
+  const pc = parsePackCsv(csv);
+  check('parsePackCsv reads texture slots', pc.textures.grass === 'textures/grass.png' && pc.textures.bogus === undefined);
+  check('parsePackCsv orders icon variants by column', JSON.stringify(pc.icons.mountain) === JSON.stringify(['icons/m1.png', 'icons/m2.png']));
+  check('parsePackCsv drops unknown slots', pc.icons.dragon === undefined);
+
+  // parsePackManifest — JSON wins, string→array, missing-file warning, throw-on-neither
+  const zip = { 'pack.json': new TextEncoder().encode(JSON.stringify({
+      name: 'T', license: 'CC0', textures: { grass: 'g.png', nope: 'n.png' },
+      icons: { mountain: ['m1.png', 'm2.png'], hill: 'h.png', tree_conifer: ['gone.png'] } })),
+    'pack.csv': new TextEncoder().encode('type,slot,file,variant\ntexture,rock,r.png,\n'),
+    'g.png': new Uint8Array(1), 'm1.png': new Uint8Array(1), 'm2.png': new Uint8Array(1), 'h.png': new Uint8Array(1) };
+  const man = parsePackManifest(zip);
+  check('parsePackManifest: JSON wins over CSV', man.textures.grass === 'g.png' && man.textures.rock === undefined);
+  check('parsePackManifest: icon string → array', Array.isArray(man.icons.hill) && man.icons.hill[0] === 'h.png');
+  check('parsePackManifest: missing files dropped + warned', man.icons.tree_conifer === undefined && man.warnings.some(w => /tree_conifer/.test(w)));
+  check('parsePackManifest: unknown slot warned, not kept', man.textures.nope === undefined && man.warnings.some(w => /nope/.test(w)));
+  check('parsePackManifest: name/license carried', man.name === 'T' && man.license === 'CC0');
+  let threw = false; try { parsePackManifest({ 'foo.txt': new Uint8Array(1) }); } catch (e) { threw = true; }
+  check('parsePackManifest throws when no manifest', threw);
+
+  // pickIconVariant — deterministic, in range, hits all variants
+  check('pickIconVariant deterministic', pickIconVariant(5, 9, 3, 4) === pickIconVariant(5, 9, 3, 4));
+  check('pickIconVariant n<=1 → 0', pickIconVariant(5, 9, 3, 1) === 0);
+  { const seen = new Set(); let inRange = true; for (let x = 0; x < 60; x++) for (let y = 0; y < 60; y++){ const v = pickIconVariant(x, y, 7, 4); if (v < 0 || v >= 4) inRange = false; seen.add(v); }
+    check('pickIconVariant in [0,n) and hits all variants', inRange && seen.size === 4); }
+
+  // spriteDrawRect — bottom-center anchor, ∝ s, aspect preserved
+  const sr = spriteDrawRect(100, 200, 1, 10, 80, 160);
+  check('spriteDrawRect bottom-center', Math.abs(sr.dx + sr.dw / 2 - 100) < 1e-9 && Math.abs(sr.dy + sr.dh - 200) < 1e-9);
+  check('spriteDrawRect aspect preserved', Math.abs(sr.dw / sr.dh - 80 / 160) < 1e-9);
+  check('spriteDrawRect scales with s', spriteDrawRect(0, 0, 2, 10, 80, 160).dh === sr.dh * 2);
+
+  // finalizePackTexture — inverse channel means
+  const ft = finalizePackTexture(2, 1, new Uint8ClampedArray([100, 50, 200, 255, 100, 150, 0, 255]));
+  check('finalizePackTexture inv = 1/mean', Math.abs(ft.inv[0] - 1 / 100) < 1e-9 && Math.abs(ft.inv[1] - 1 / 100) < 1e-9 && Math.abs(ft.inv[2] - 1 / 100) < 1e-9);
+
+  // serializeState carries scaleBar pref but never the pack
+  const ser = serializeState();
+  check('serializeState has viz.scaleBar, no assetPack', ser.state.viz.scaleBar === true && ser.state.assetPack === undefined);
+
+  // updateScaleBar honours the toggle
+  state.viz.scaleBar = false; updateScaleBar();
+  check('updateScaleBar hides when off', document.getElementById('scaleBar').style.display === 'none');
+  state.viz.scaleBar = true;
+
+  // sample pack on disk — proves STORED (sync unzipStore reads it) + manifest shape + PNG headers
+  {
+    const ab = fs.readFileSync('assets/sample_pack.zip');
+    const z = unzipStore(ab.buffer.slice(ab.byteOffset, ab.byteOffset + ab.byteLength));
+    const allStored = Object.values(z).every(v => v instanceof Uint8Array);
+    check('sample_pack.zip is fully STORED (unzipStore reads every entry)', allStored && z['pack.json'] && z['pack.csv']);
+    const sman = parsePackManifest(z);
+    check('sample pack manifest: 7 textures + 3/2/2/2 icons, CC0', Object.keys(sman.textures).length === 7 &&
+      sman.icons.mountain.length === 3 && sman.icons.hill.length === 2 && sman.icons.tree_conifer.length === 2 &&
+      sman.icons.tree_broadleaf.length === 2 && sman.license === 'CC0' && sman.warnings.length === 0);
+    const pngOK = Object.keys(z).filter(n => n.endsWith('.png')).every(n => { const d = z[n]; return d[0] === 0x89 && d[1] === 0x50 && d[2] === 0x4E && d[3] === 0x47; });
+    check('sample pack PNGs have valid signatures', pngOK);
+  }
+
+  // sprite + neutrality smoke with a synthetic pack (no image decode; drawImage is a stub no-op)
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.mode = 'biome'; state.debug = 'off'; state.viz.icons = false; renderNow();
+  const baseNoPack = Uint8ClampedArray.from(img.data);
+  assetPack = { name: 'syn', license: 'CC0', texAny: false, textures: {},
+    icons: { mountain: [{ w: 64, h: 64, bmp: {} }, { w: 64, h: 64, bmp: {} }], tree_conifer: [{ w: 32, h: 48, bmp: {} }] } };
+  renderNow();   // pack present but icons toggle off → every pack path inert
+  let neutral = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPack[i]) { neutral = false; break; }
+  check('asset pack loaded but icons off → render bit-identical', neutral);
+  state.viz.icons = true;
+  let threw2 = false; try { renderNow(); } catch (e) { threw2 = true; }
+  check('sprite draw path runs without error', !threw2 && img.data[3] === 255);
+  state.viz.icons = false; assetPack = null; renderNow();
+}
+
+/* ---------- B2 texture splatting (v0.059) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.mode = 'biome'; state.debug = 'off'; state.viz.icons = false;
+  state.viz.splat = 0.7; renderNow();
+  const baseNoPack = Uint8ClampedArray.from(img.data);   // no pack ⇒ _splatK gated to 0
+  // synthetic pack covering every material slot with a distinct solid texture
+  const solid = (r, g, b) => { const d = new Uint8ClampedArray(4 * 4 * 4); for (let i = 0; i < 16; i++){ d[i*4]=r; d[i*4+1]=g; d[i*4+2]=b; d[i*4+3]=255; } return finalizePackTexture(4, 4, d); };
+  assetPack = { name: 'syn', license: 'CC0', texAny: true, icons: {},
+    textures: { grass: solid(60,140,60), rock: solid(140,140,140), sand: solid(210,190,140),
+                snow: solid(240,240,245), wetland: solid(70,90,60), canopy: solid(40,80,45) } };
+  // splat=0 with a pack loaded → identical to baseline (strength gate)
+  state.viz.splat = 0; renderNow();
+  let same0 = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPack[i]){ same0 = false; break; }
+  check('splat strength 0 (pack loaded) → render bit-identical', same0);
+  // splat>0 → land pixels change, ocean pixels stay (seaColor has no splat)
+  state.viz.splat = 1; renderNow();
+  let landChanged = 0, oceanChanged = 0;
+  for (let i = 0; i < GW * GH; i++){ const p = i * 4, isW = field[i] < state.seaLevel;
+    const ch = img.data[p] !== baseNoPack[p] || img.data[p+1] !== baseNoPack[p+1] || img.data[p+2] !== baseNoPack[p+2];
+    if (ch){ if (isW) oceanChanged++; else landChanged++; } }
+  check('splat 1 changes land pixels (' + landChanged + ')', landChanged > 100);
+  check('splat leaves ocean pixels untouched (' + oceanChanged + ' changed)', oceanChanged === 0);
+  check('splat render stays finite/opaque', img.data[3] === 255);
+  // splat>0 but assetPack null → identical (pack gate)
+  assetPack = null; renderNow();
+  let sameNull = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPack[i]){ sameNull = false; break; }
+  check('splat 1 with no pack → render bit-identical', sameNull);
+  state.viz.splat = 0.7;
+}
+
+/* ---------- T0 tectonic boundary classification (v0.058, tectonic-feature-graph.md) ---------- */
+{
+  // pure matrix: crust A × crust B × convergence × shear
+  check('classifyBoundary: C–C convergent → collision', classifyBoundary(false, false, 1.0, 0.1) === BTYPE.collision);
+  check('classifyBoundary: O–C convergent → subduction', classifyBoundary(true, false, 1.0, 0.1) === BTYPE.subductionOC &&
+    classifyBoundary(false, true, 1.0, 0.1) === BTYPE.subductionOC);
+  check('classifyBoundary: O–O convergent → island arc', classifyBoundary(true, true, 1.0, 0.1) === BTYPE.arcOO);
+  check('classifyBoundary: divergent → rift (any crust)', classifyBoundary(false, false, -1.0, 0.1) === BTYPE.rift &&
+    classifyBoundary(true, true, -0.2, 0.0) === BTYPE.rift);
+  check('classifyBoundary: shear-dominant → transform (any crust, any sign)',
+    classifyBoundary(false, false, 0.2, 1.0) === BTYPE.transform && classifyBoundary(true, false, -0.1, 0.9) === BTYPE.transform);
+  check('BTYPE order frozen', BTYPE_KEYS.join(',') === 'none,collision,subductionOC,arcOO,rift,transform');
+
+  // synthetic two-plate worlds: head-on convergence vs pure shear
+  const savedPlates = plates, savedSeed = state.tect.seed;
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate();
+  // two plates split left/right at x=GW/2; assign plateId directly
+  plates = [
+    { x: GW * 0.25, y: GH * 0.5, vx: 1, vy: 0, base: 0.3 },     // continental, moving right
+    { x: GW * 0.75, y: GH * 0.5, vx: -1, vy: 0, base: 0.3 },    // continental, moving left → head-on
+  ];
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) plateId[y * GW + x] = x < GW / 2 ? 0 : 1;
+  computeStress();
+  let convTypes = new Set(), shearMax = 0;
+  for (let i = 0; i < boundaryType.length; i++){ if (boundaryMask[i]) convTypes.add(boundaryType[i]); shearMax = Math.max(shearMax, Math.abs(shearField[i])); }
+  check('head-on C–C boundary classifies as collision', convTypes.has(BTYPE.collision) && !convTypes.has(BTYPE.transform));
+  plates[0].vx = 0; plates[0].vy = 1; plates[1].vx = 0; plates[1].vy = -1;   // pure tangential motion
+  computeStress();
+  let transTypes = new Set();
+  for (let i = 0; i < boundaryType.length; i++) if (boundaryMask[i]) transTypes.add(boundaryType[i]);
+  check('pure tangential motion classifies as transform', transTypes.has(BTYPE.transform) && !transTypes.has(BTYPE.collision));
+  check('shearField finite + normalized to |max|=1', allFinite(shearField) && Math.abs(Math.max(...Array.from(shearField).map(Math.abs)) - 1) < 1e-6);
+  let typedOffBoundary = 0;
+  for (let i = 0; i < boundaryType.length; i++) if (!boundaryMask[i] && boundaryType[i] !== 0) typedOffBoundary++;
+  check('boundaryType only on boundary cells', typedOffBoundary === 0);
+
+  // restore a real world and check the debug view + that real geometry produces shear somewhere
+  plates = savedPlates; state.tect.seed = savedSeed; generate();
+  check('real world: shearField finite, nonzero somewhere', allFinite(shearField) && shearField.some(v => Math.abs(v) > 1e-3));
+  let realTypes = new Set(); for (let i = 0; i < boundaryType.length; i++) if (boundaryMask[i]) realTypes.add(boundaryType[i]);
+  check('real world produces ≥3 distinct boundary types (' + [...realTypes].join(',') + ')', realTypes.size >= 3);
+  state.debug = 'btype'; renderNow();
+  check('Tect debug view renders opaque pixels', img.data.length === GW * GH * 4 && img.data[3] === 255);
+  state.debug = 'off'; renderNow();
+}
+
+/* ---------- T1 boundary polyline graph (v0.060, tectonic-feature-graph.md) ---------- */
+{
+  // synthetic straight diagonal line → one open polyline, ~zero curvature
+  const W = 24, H = 24, line = new Uint8Array(W * H);
+  for (let i = 3; i < 20; i++) line[i * W + i] = 1;
+  const gLine = traceBoundaries(line, W, H);
+  check('straight line → exactly one polyline', gLine.polylines.length === 1);
+  check('straight line → not closed', !gLine.polylines[0].closed);
+  check('straight line → curvature ≈ 0', gLine.polylines[0].curvature < 1e-6);
+  check('straight line length ≈ √2·span', Math.abs(gLine.polylines[0].length - Math.hypot(16, 16)) < 1.5);
+
+  // synthetic diamond ring (diagonal edges → thins cleanly, no corner triangles) → one closed loop, no junctions
+  const ring = new Uint8Array(W * H);
+  for (let i = 0; i <= 6; i++){
+    ring[(4 + i) * W + (10 + i)] = 1;   // top→right
+    ring[(10 + i) * W + (16 - i)] = 1;  // right→bottom
+    ring[(16 - i) * W + (10 - i)] = 1;  // bottom→left
+    ring[(10 - i) * W + (4 + i)] = 1;   // left→top
+  }
+  const gRing = traceBoundaries(ring, W, H);
+  check('diamond ring → one polyline, closed', gRing.polylines.length === 1 && gRing.polylines[0].closed);
+  check('diamond ring → no junction nodes', gRing.nodes.length === 0);
+  const ringLen = gRing.polylines.reduce((s, p) => s + p.length, 0);
+  check('diamond perimeter ≈ 24·√2 (' + ringLen.toFixed(1) + ')', ringLen > 30 && ringLen < 38);
+
+  // T-junction → a degree-3 node + ≥3 chains meeting there
+  const tee = new Uint8Array(W * H);
+  for (let x = 4; x <= 19; x++) tee[10 * W + x] = 1;   // horizontal bar
+  for (let y = 4; y <= 10; y++) tee[y * W + 12] = 1;   // stem up to the bar
+  const gTee = traceBoundaries(tee, W, H);
+  check('T-junction → at least one junction node', gTee.nodes.length >= 1);
+  check('T-junction → ≥3 polylines', gTee.polylines.length >= 3);
+
+  // determinism
+  const gA = traceBoundaries(tee, W, H), gB = traceBoundaries(tee, W, H);
+  check('traceBoundaries deterministic', gA.polylines.length === gB.polylines.length &&
+    gA.polylines.every((p, i) => p.pts.length === gB.polylines[i].pts.length));
+
+  // thinning reduces a 2-px-thick bar to 1-px
+  const thick = new Uint8Array(W * H);
+  for (let x = 4; x <= 18; x++){ thick[9 * W + x] = 1; thick[10 * W + x] = 1; }
+  const thinned = thinMask(thick, W, H);
+  let beforeN = 0, afterN = 0; for (let i = 0; i < thick.length; i++){ beforeN += thick[i]; afterN += thinned[i]; }
+  check('thinMask thins a 2-px bar (' + beforeN + '→' + afterN + ')', afterN > 0 && afterN < beforeN * 0.7);
+
+  // real world: graph is non-trivial, finite, typed, and cached
+  generate();
+  const Gr = currentBoundaryGraph();
+  check('real world: ≥1 boundary polyline', Gr.polylines.length >= 1);
+  const totalLen = Gr.polylines.reduce((s, p) => s + p.length, 0);
+  let bcells = 0; for (let i = 0; i < boundaryMask.length; i++) if (boundaryMask[i]) bcells++;
+  check('traced length sane vs boundary-cell count (' + totalLen.toFixed(0) + ' vs ' + bcells + ')',
+    totalLen > 0 && totalLen < bcells * 2);
+  check('every polyline finite + typed (1..5)', Gr.polylines.every(p =>
+    isFinite(p.length) && isFinite(p.curvature) && p.type >= 1 && p.type <= 5));
+  check('currentBoundaryGraph caches (same object until generate)', currentBoundaryGraph() === Gr);
+  generate();
+  check('generate() invalidates the cache', currentBoundaryGraph() !== Gr);
+}
+
+/* ---------- T2+T3 tectonic feature kernels (v0.061/v0.062, tectonic-feature-graph.md) ---------- */
+{
+  // synthetic straight collision margin: vertical line, uniform stress 1, all-continental crust
+  const W = 128, H = 96, stress = new Float32Array(W * H), pts = [], cont = new Float32Array(W * H).fill(1);
+  for (let y = 10; y <= 85; y++){ pts.push([60, y]); stress[y * W + 60] = 1; }
+  const opts = { blurR: 18, seed: 7, jitter: 0 };
+  const U = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
+  check('orogeny finite, nonzero', allFinite(U) && U.some(v => v > 0.5));
+
+  // the research-doc T2 acceptance test: >=3 parallel ridges with valleys between
+  const row = 48, prof = [];
+  for (let x = 0; x < W; x++) prof.push(U[row * W + x]);
+  const maxima = [];
+  for (let x = 1; x < W - 1; x++)
+    if (prof[x] > 0.1 && prof[x] > prof[x - 1] && prof[x] >= prof[x + 1]) maxima.push(x);
+  check('collision margin → ≥3 parallel ridges (' + maxima.length + ' at x=' + maxima.join(',') + ')', maxima.length >= 3);
+  let valleysOk = maxima.length >= 3;
+  for (let k = 0; k + 1 < maxima.length && valleysOk; k++){
+    let lo = Infinity;
+    for (let x = maxima[k]; x <= maxima[k + 1]; x++) lo = Math.min(lo, prof[x]);
+    valleysOk = lo < 0.75 * Math.min(prof[maxima[k]], prof[maxima[k + 1]]);
+  }
+  check('valleys between the ridges (cols <75% of peaks)', valleysOk);
+
+  // T3: collision has a foreland-basin depression beyond one flank (negative somewhere)
+  check('collision → foreland basin (negative cell present)', U.some(v => v < -0.05));
+
+  // kernel support: cells beyond the collision radius (blurR*3.3) are bit-untouched (exactly 0)
+  const RAD = 18 * 3.3;
+  let outside = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    if (Math.abs(x - 60) > RAD + 1.5 && U[y * W + x] !== 0) outside++;
+  check('cells beyond kernel radius exactly 0', outside === 0);
+
+  // transform with NO shear input → still zero (amplitude comes from shear, not normal stress)
+  const Ut = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, opts);
+  check('transform without shear → zero', Ut.every(v => v === 0));
+
+  // amplitude linear in margin stress (all per-type profiles scale by mean |stress|)
+  const halfStress = Float32Array.from(stress, v => v * 0.5);
+  const Uh = buildOrogenyField([{ pts, type: BTYPE.collision }], halfStress, cont, W, H, opts);
+  let linOk = true;
+  for (let i = 0; i < U.length; i++) if (Math.abs(Uh[i] - 0.5 * U[i]) > 1e-6){ linOk = false; break; }
+  check('orogeny amplitude linear in stress', linOk);
+
+  // deterministic
+  const U2 = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
+  check('buildOrogenyField deterministic', U.every((v, i) => v === U2[i]));
+
+  // T3 subduction: ocean on the RIGHT (x>60) → trench below sea on ocean side, arc above on land side
+  const argRow = (fld, y) => { let lo = Infinity, hi = -Infinity, xl = 0, xh = 0;
+    for (let x = 0; x < W; x++){ const v = fld[y * W + x]; if (v < lo){ lo = v; xl = x; } if (v > hi){ hi = v; xh = x; } } return { lo, hi, xl, xh }; };
+  const oceanR = Float32Array.from({ length: W * H }, (_, i) => (i % W) > 60 ? -1 : 1);
+  const oceanL = Float32Array.from({ length: W * H }, (_, i) => (i % W) < 60 ? -1 : 1);
+  const Us = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanR, W, H, opts);
+  const sR = argRow(Us, 48);
+  check('subduction → trench (deep negative) + arc (positive)', sR.lo < -0.3 && sR.hi > 0.3);
+  check('subduction trench sits on the oceanic side (x>60, x=' + sR.xl + ')', sR.xl > 60 && sR.xh < 60);
+  // flip the ocean to the LEFT → trench follows the crust to x<60
+  const Us2 = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanL, W, H, opts);
+  const sL = argRow(Us2, 48);
+  check('trench follows crust input (ocean left → trench x<60, x=' + sL.xl + ')', sL.xl < 60 && sL.xh > 60);
+
+  // T3 island arc (ocean both sides): trench + arc + backarc → both signs present
+  const allOcean = new Float32Array(W * H).fill(-1);
+  const Ua = buildOrogenyField([{ pts, type: BTYPE.arcOO }], stress, allOcean, W, H, opts);
+  check('island arc → trench + arc (both signs)', Ua.some(v => v < -0.3) && Ua.some(v => v > 0.3));
+
+  // T3 rift: axial graben notch (negative at the margin) flanked by uplifted shoulders
+  const Urift = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, opts);
+  check('rift → axial graben below shoulders', Urift[48 * W + 60] < 0 && Urift.some(v => v > 0.1));
+
+  // T4 transform: amplitude from SHEAR; linear fault valley + a pressure ridge offset laterally ∝ shear sense/size
+  const shearP = new Float32Array(W * H); for (const p of pts) shearP[p[1] * W + p[0]] = 0.8;   // uniform + shear along the fault
+  const optT = { blurR: 18, seed: 7, jitter: 0, shear: shearP };
+  const Utp = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, optT);
+  check('transform with shear → nonzero, finite', allFinite(Utp) && Utp.some(v => v !== 0));
+  check('transform → linear fault valley (axis below sea-floor)', Utp[48 * W + 60] < 0);
+  const crestX = (fld) => { let hi = -Infinity, xh = 0; for (let x = 30; x < 90; x++){ const v = fld[48 * W + x]; if (v > hi){ hi = v; xh = x; } } return xh; };
+  // flip shear sign → the pressure ridge moves to the opposite side of the fault
+  const Utn = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: Float32Array.from(shearP, v => -v) });
+  check('transform ridge offset reverses with shear sign (' + crestX(Utp) + ' vs ' + crestX(Utn) + ')', crestX(Utp) < 60 && crestX(Utn) > 60);
+  // larger shear → larger lateral offset (displacement ∝ S)
+  const Uth = buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: Float32Array.from(shearP, v => v * 0.5) });
+  check('lateral ridge offset scales with shear magnitude (∝S)', Math.abs(crestX(Utp) - 60) > Math.abs(crestX(Uth) - 60));
+  check('transform valley depth scales with shear amplitude', Math.abs(Utp[48 * W + 60]) > Math.abs(Uth[48 * W + 60]) * 1.6);
+  // beyond the transform radius (blurR*2) → bit-untouched
+  let toutside = 0; const TRAD = 18 * 2.0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (Math.abs(x - 60) > TRAD + 1.5 && Utp[y * W + x] !== 0) toutside++;
+  check('transform beyond radius exactly 0', toutside === 0);
+  // zero shear → zero (no transform feature without shear)
+  check('transform with zero shear → zero', buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: new Float32Array(W * H) }).every(v => v === 0));
+
+  // live-engine gate: off → on → off must round-trip bit-exactly (Invariant-10 style)
+  generate();
+  const base = Float32Array.from(field);
+  check('gate off → orogenyField null', orogenyField === null);
+  state.tect.tectonicGraph = true; generate();
+  check('gate on → orogenyField built + finite', orogenyField !== null && allFinite(orogenyField));
+  check('gate on → field finite', allFinite(field));
+  let diff = 0; for (let i = 0; i < field.length; i++) if (field[i] !== base[i]) diff++;
+  check('gate on changes the heightmap (' + diff + ' cells)', diff > 100);
+  state.debug = 'oro'; renderNow();
+  check('Orogeny debug view renders opaque pixels', img.data[3] === 255);
+  state.debug = 'off';
+  state.tect.tectonicGraph = false; generate();
+  let same = true; for (let i = 0; i < field.length; i++) if (field[i] !== base[i]){ same = false; break; }
+  check('gate off again → field bit-identical (round-trip)', same && orogenyField === null);
+}
+
+/* ---------- v0.063 smoothed-bathymetry water shading ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.mode = 'biome'; state.debug = 'off'; state.tect.tectonicGraph = false;
+  renderNow();   // sets _seaH for the biome map
+  check('smoothSeaH built + finite', _seaH !== null && allFinite(_seaH));
+  // the smoothed sea floor must be flatter than the raw field over water cells (that is the whole point)
+  const variance = (pick) => { let n = 0, s = 0, s2 = 0;
+    for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel){ const v = pick(i); n++; s += v; s2 += v * v; }
+    return n ? s2 / n - (s / n) * (s / n) : 0; };
+  const vRaw = variance(i => field[i]), vSmooth = variance(i => _seaH[i]);
+  check('smoothed bathymetry variance < raw seabed variance (' + vSmooth.toExponential(1) + ' < ' + vRaw.toExponential(1) + ')', vSmooth < vRaw);
+  // v0.065: water hillshade comes from the smoothed sea floor, flatter than the raw seabed hillshade
+  check('seaShade built + finite', _seaShade !== null && allFinite(_seaShade));
+  const sVar = (pick) => { let n = 0, s = 0, s2 = 0; for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel){ const v = pick(i); n++; s += v; s2 += v * v; } return n ? s2 / n - (s / n) * (s / n) : 0; };
+  // raw shadeFactor over water vs smoothed seaShade — smoothed must be flatter (less per-cell variation)
+  const rawShadeVar = (() => { let n = 0, s = 0, s2 = 0; for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++){ const i = y * GW + x; if (field[i] < state.seaLevel){ const v = shadeFactor(x, y); n++; s += v; s2 += v * v; } } return n ? s2 / n - (s / n) * (s / n) : 0; })();
+  check('smoothed sea hillshade flatter than raw (' + sVar(i => _seaShade[i]).toExponential(1) + ' < ' + rawShadeVar.toExponential(1) + ')', sVar(i => _seaShade[i]) < rawShadeVar);
+  // land/water boundary is untouched: smoothing only feeds water COLOUR, the mask still uses raw field
+  check('water shading is render-only (field still finite, sea level unchanged)', allFinite(field) && state.seaLevel === 0.42);
+  // Relief mode does not build _seaH/_seaShade (keeps the height ramp)
+  state.mode = 'hypso'; renderNow();
+  check('Relief mode leaves _seaH/_seaShade null', _seaH === null && _seaShade === null);
+  state.mode = 'biome'; renderNow();
+}
+
+/* ---------- loop 1: climate ↔ erosion coupled evolution (v0.066) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.tect.tectonicGraph = false;
+  const field0 = Float32Array.from(field), rain0 = Float32Array.from(rainField);
+  evolveCoupled(3);
+  check('evolveCoupled keeps field finite', allFinite(field));
+  check('evolveCoupled keeps rainfall finite', allFinite(rainField));
+  let terrChanged = 0; for (let i = 0; i < field.length; i++) if (field[i] !== field0[i]) terrChanged++;
+  check('evolve carves the terrain (' + terrChanged + ' cells)', terrChanged > 100);
+  // the loop CLOSED: rainfall was recomputed on the evolved terrain, so it differs from generate-time rain
+  let rainChanged = 0; for (let i = 0; i < rainField.length; i++) if (Math.abs(rainField[i] - rain0[i]) > 1e-6) rainChanged++;
+  check('climate re-evolved with terrain (' + rainChanged + ' rain cells changed)', rainChanged > 100);
+  // channels incise: at least some cells cut down meaningfully (rebound broadly raises uplands — that's correct LEM)
+  let maxDown = 0; for (let i = 0; i < field.length; i++) maxDown = Math.max(maxDown, field0[i] - field[i]);
+  check('evolve incises channels (max cut ' + maxDown.toFixed(3) + ')', maxDown > 0.003);
+  // determinism: same seed + same cycles → identical result
+  generate(); evolveCoupled(3); const fa = Float32Array.from(field);
+  generate(); evolveCoupled(3); let det = true; for (let i = 0; i < fa.length; i++) if (fa[i] !== field[i]){ det = false; break; }
+  check('evolveCoupled deterministic', det);
+}
+
+/* ---------- loop 2: ocean currents ↔ atmosphere coupling (v0.067) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.climate.currents = false; refreshClimate();
+  const rainNoCur = Float32Array.from(rainField);
+  const WW = Math.min(GW, 240), WH = Math.max(2, Math.round(WW * GH / GW)), wrapX = !!state.world, step = 3.0, N = WW * WH;
+  const an = oceanSSTAnomaly(WW, WH, wrapX, step);
+  check('oceanSSTAnomaly finite', allFinite(an));
+  check('SST anomaly has warm + cold cells', an.some(v => v > 0.01) && an.some(v => v < -0.01));
+  // the loop closes: winds built on tc+anomaly differ from winds on tc (currents steer winds)
+  const tc0 = new Float32Array(N).fill(15), wx0 = new Float32Array(N), wy0 = new Float32Array(N);
+  buildWind(wx0, wy0, WW, WH, step, tc0, 0);
+  const tc1 = Float32Array.from(tc0); for (let i = 0; i < N; i++) tc1[i] += an[i];
+  const wx1 = new Float32Array(N), wy1 = new Float32Array(N); buildWind(wx1, wy1, WW, WH, step, tc1, 0);
+  let wd = 0; for (let i = 0; i < N; i++) if (wx0[i] !== wx1[i] || wy0[i] !== wy1[i]) wd++;
+  check('winds respond to the SST anomaly (' + wd + ' coarse cells)', wd > 0);
+  // currents on now reshapes rainfall (via the in-sim coupling, not just a post tint)
+  state.climate.currents = true; refreshClimate();
+  let rc = 0; for (let i = 0; i < rainField.length; i++) if (Math.abs(rainField[i] - rainNoCur[i]) > 1e-6) rc++;
+  check('currents reshape rainfall (' + rc + ' cells)', rc > 50 && allFinite(rainField));
+  // determinism
+  const ra = Float32Array.from(rainField); refreshClimate();
+  let det = true; for (let i = 0; i < ra.length; i++) if (Math.abs(ra[i] - rainField[i]) > 1e-9){ det = false; break; }
+  check('currents-coupled climate deterministic', det);
+  state.climate.currents = false; refreshClimate();
+}
+
+/* ---------- loop 3: mass-conserving sediment routing (v0.069) ---------- */
+{
+  // synthetic ramp draining downward into a sub-sea basin (closed, non-world)
+  const W = 40, H = 40, n = W * H, fld = new Float32Array(n), disch = new Float32Array(n).fill(2), supply = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.6 - 0.013 * y;   // high at top, bottom rows < sea
+  for (let i = 0; i < n; i++) supply[i] = 0.001;
+  const sum = 0.001 * n, before = Float32Array.from(fld);
+  const res = routeSediment(fld, disch, supply, W, H, { sea: 0.42, capacity: 6.0, world: false });
+  check('routeSediment conserves mass (dep ' + res.deposited.toFixed(4) + ' vs supply ' + sum.toFixed(4) + ')', Math.abs(res.deposited - sum) < 1e-3);
+  let totalRise = 0; for (let i = 0; i < n; i++) totalRise += fld[i] - before[i];
+  check('Σ deposition equals Σ supply (mass conserved on grid)', Math.abs(totalRise - sum) < 1e-3);
+  let belowRose = 0; for (let i = 0; i < n; i++) if (before[i] < 0.42 && fld[i] > before[i] + 1e-9) belowRose++;
+  check('sediment builds deltas/shelves below sea (' + belowRose + ' cells)', belowRose > 0);
+  // determinism
+  const fld2 = new Float32Array(n); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld2[y * W + x] = 0.6 - 0.013 * y;
+  const r2 = routeSediment(fld2, disch, supply, W, H, { sea: 0.42, capacity: 6.0, world: false });
+  let det = true; for (let i = 0; i < n; i++) if (fld[i] !== fld2[i]){ det = false; break; }
+  check('routeSediment deterministic', det && r2.deposited === res.deposited);
+
+  // wired op on the real engine
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  state.tect.tectonicGraph = false;
+  const fpre = Float32Array.from(field);
+  depositSediment();
+  check('depositSediment keeps field finite', allFinite(field));
+  let changed = 0; for (let i = 0; i < field.length; i++) if (field[i] !== fpre[i]) changed++;
+  check('sediment fill reshapes terrain (' + changed + ' cells)', changed > 100);
+  generate(); depositSediment(); const fa = Float32Array.from(field);
+  generate(); depositSediment(); let det2 = true; for (let i = 0; i < fa.length; i++) if (fa[i] !== field[i]){ det2 = false; break; }
+  check('depositSediment deterministic', det2);
+}
+
+/* ---------- G3: moons & tidal-range field (v0.070) ---------- */
+{
+  state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  check('tides off (default) → tideField null', tideField === null);
+  // forcing math: Σ massRel / distRel³
+  check('tidalForcing linear in mass', tidalForcing([{ massRel: 2, distRel: 1 }]) === 2 * tidalForcing([{ massRel: 1, distRel: 1 }]));
+  check('tidalForcing ∝ 1/dist³', Math.abs(tidalForcing([{ massRel: 1, distRel: 2 }]) - 1 / 8) < 1e-9);
+  check('tidalForcing sums moons', Math.abs(tidalForcing([{ massRel: 1, distRel: 1 }, { massRel: 0.5, distRel: 1 }]) - 1.5) < 1e-9);
+  // enable
+  state.planet.tides.enabled = true; refreshTides();
+  check('tideField built + finite', tideField !== null && allFinite(tideField));
+  let landNonzero = 0, oceanPos = 0;
+  for (let i = 0; i < tideField.length; i++){ if (field[i] >= state.seaLevel){ if (tideField[i] !== 0) landNonzero++; } else if (tideField[i] > 0) oceanPos++; }
+  check('tides: land cells 0, ocean cells positive (' + oceanPos + ')', landNonzero === 0 && oceanPos > 100);
+  // amplified near coast vs far/deep ocean (shelf + funnelling)
+  const cd = computeCoastDistance(field, GW, GH, state.seaLevel), cscale = Math.max(4, GW / 40);
+  let nearSum = 0, nearN = 0, farSum = 0, farN = 0;
+  for (let i = 0; i < tideField.length; i++){ if (field[i] >= state.seaLevel) continue;
+    if (cd[i] < cscale){ nearSum += tideField[i]; nearN++; } else if (cd[i] > 3 * cscale){ farSum += tideField[i]; farN++; } }
+  check('tidal range amplified near coast', nearN > 0 && farN > 0 && nearSum / nearN > farSum / farN);
+  // ∝ 1/g
+  const g1 = computeTideField(state.planet.tides), savedG = state.planet.g;
+  state.planet.g = 2; const g2 = computeTideField(state.planet.tides); state.planet.g = savedG;
+  let di = -1; for (let i = 0; i < field.length; i++) if (field[i] < state.seaLevel - 0.1){ di = i; break; }
+  check('tidal range ∝ 1/g', di >= 0 && Math.abs(g2[di] - g1[di] / 2) < 1e-6);
+  // determinism
+  const ta = computeTideField(state.planet.tides), tb = computeTideField(state.planet.tides);
+  check('computeTideField deterministic', ta.every((v, i) => v === tb[i]));
+  // debug view + overlay
+  state.debug = 'tides'; renderNow(); check('Tides debug view renders opaque', img.data[3] === 255);
+  state.debug = 'off'; renderNow();   // intertidal overlay path (tides enabled) runs without error
+  check('biome render with tides overlay opaque', img.data[3] === 255);
+  state.planet.tides.enabled = false; refreshTides();
+}
+
+/* ---------- v0.071: resolution-switch must not leave stale warp (NaN regression) ---------- */
+{
+  // mirror the resSeg button: change GW, allocate, generate — same seed (so the warp cache is tempted to hit)
+  state.world = false; state.tect.seed = 777;
+  const genAt = (R) => { state.resW = R; GW = R; GH = gridH(R); allocate(); generate(); };
+  genAt(64); let nan0 = 0; for (let i = 0; i < field.length; i++) if (Number.isNaN(field[i])) nan0++;
+  genAt(128);   // switch UP (the case that read warpX past its end → NaN before the fix)
+  let nanUp = 0; for (let i = 0; i < field.length; i++) if (Number.isNaN(field[i])) nanUp++;
+  check('switch to higher resolution: no NaN in field', nanUp === 0);
+  check('warp rebuilt at the new resolution', !warpX || warpX.length === GW * GH);
+  check('field finite after res switch', allFinite(field) && allFinite(tempField) && allFinite(rainField));
+  genAt(64);    // switch DOWN too
+  check('switch to lower resolution: field finite', allFinite(field) && field.every(v => !Number.isNaN(v)));
+  state.resW = 256; GW = 256; GH = gridH(256); allocate();   // restore the suite's working size
+}
+
+/* ---------- LOD tile pyramid core (v0.072) ---------- */
+{
+  const cW = 33, cH = 17, coarse = new Float32Array(cW * cH);
+  for (let y = 0; y < cH; y++) for (let x = 0; x < cW; x++) coarse[y * cW + x] = 0.3 + 0.4 * Math.sin(x * 0.4) * Math.cos(y * 0.5);
+  const ts = 32, opts = { seed: 7, detailAmp: 0.1 };
+  check('pyramidDims(0) = 1×1', pyramidDims(0).cols === 1 && pyramidDims(0).rows === 1);
+  check('pyramidDims(2) = 4×4', pyramidDims(2).cols === 4 && pyramidDims(2).rows === 4);
+  // a pyramid tile is exactly a refineTile over the full world (sanity)
+  const t = pyramidTile(coarse, cW, cH, 1, 0, 0, ts, opts);
+  const region = { x: 0, y: 0, w: cW - 1, h: cH - 1 }, td = tileDims(region, 2, 2, ts);
+  const direct = refineTile(coarse, cW, cH, region, 2, 2, 0, 0, td.w, td.h, opts);
+  check('pyramidTile matches refineTile', t.w === td.w && t.h === td.h && t.data.every((v, i) => v === direct[i]));
+  // seam Δ=0 between horizontally adjacent tiles at level 2 (inherited from refineTile)
+  const a = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts), b = pyramidTile(coarse, cW, cH, 2, 2, 1, ts, opts);
+  let seamMax = 0; for (let y = 0; y < a.h; y++) seamMax = Math.max(seamMax, Math.abs(a.data[y * a.w + (a.w - 1)] - b.data[y * b.w]));
+  check('pyramid same-level horizontal seam Δ=0 (' + seamMax.toExponential(1) + ')', seamMax < 1e-6);
+  const c2 = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts), d2 = pyramidTile(coarse, cW, cH, 2, 1, 2, ts, opts);
+  let vMax = 0; for (let x = 0; x < c2.w; x++) vMax = Math.max(vMax, Math.abs(c2.data[(c2.h - 1) * c2.w + x] - d2.data[x]));
+  check('pyramid same-level vertical seam Δ=0', vMax < 1e-6);
+  // tile has detail + finite
+  const varOf = (tile) => { let s = 0, s2 = 0; for (const v of tile.data){ s += v; s2 += v * v; } const n = tile.data.length; return s2 / n - (s / n) * (s / n); };
+  check('pyramid tile has detail + finite', varOf(t) > 0 && t.data.every(Number.isFinite));
+  // addressing + level-for-zoom
+  const bnd = pyramidTileBounds(cW, cH, 1, 1, 0);
+  check('pyramidTileBounds addresses the quadrant', Math.abs(bnd.x - (cW - 1) / 2) < 1e-9 && Math.abs(bnd.w - (cW - 1) / 2) < 1e-9);
+  check('pyramidLevelForZoom rises with zoom', pyramidLevelForZoom(4, 2048, 1024, 6) >= pyramidLevelForZoom(1, 2048, 1024, 6));
+  // determinism
+  const t2 = pyramidTile(coarse, cW, cH, 2, 1, 1, ts, opts);
+  check('pyramidTile deterministic', a.data.every((v, i) => v === t2.data[i]));
+
+  // Stage 2 engine: visible-tile enumeration + LRU cache
+  const span = tilesInView(2, 0, 0, (cW - 1) / 2, (cH - 1) / 2, cW, cH);   // top-left quadrant at level 2 (4×4 grid)
+  check('tilesInView spans the visible rect', span.c0 === 0 && span.c1 === 2 && span.r0 === 0 && span.r1 === 2 && span.count === 9);
+  lodCacheClear();
+  const vis = collectVisibleTiles(coarse, cW, cH, 1, 0, 0, cW - 1, cH - 1, ts, opts);   // whole world at level 1 = 4 tiles
+  check('collectVisibleTiles returns the visible tiles, finite', vis.length === 4 && vis.every(t => t.data.every(Number.isFinite)));
+  const before = _lodCache.size;
+  const vis2 = collectVisibleTiles(coarse, cW, cH, 1, 0, 0, cW - 1, cH - 1, ts, opts);
+  check('collectVisibleTiles reuses the cache (no growth)', _lodCache.size === before && vis2[0] === vis[0]);
+  // LRU eviction
+  lodCacheClear(); const sv = _lodCacheMax; _lodCacheMax = 3;
+  for (let i = 0; i < 6; i++) lodCachePut('k' + i, { i });
+  check('LRU cache evicts down to max', _lodCache.size === 3 && lodCacheGet('k0') === null && lodCacheGet('k5') !== null);
+  _lodCacheMax = sv; lodCacheClear();
+}
+
+/* ---------- v0.074: button-driven LOD refine (overview, then refine on demand) ---------- */
+{
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  _lodTile = 512; _lodZoom = 2; _lodCx = GW / 2; _lodCy = GH / 2; lodCacheClear();
+  const v = lodViewRect();
+  check('lodViewRect covers a centered sub-region', v.x1 > v.x0 && v.y1 > v.y0 && v.x1 <= GW - 1 && v.y1 <= GH - 1);
+  const keys = visibleTileKeys(v.z, v.x0, v.y0, v.x1, v.y1);
+  check('visibleTileKeys non-empty', keys.length >= 1);
+  const before = _lodCache.size;
+  refineVisibleTiles();
+  check('Refine builds detail tiles into the cache', _lodCache.size > before);
+  const after = _lodCache.size; refineVisibleTiles();
+  check('re-refine reuses the cache (no growth)', _lodCache.size === after);
+  const k0 = keys[0], t = lodCacheGet(lodCacheKey(v.z, k0.col, k0.row, _lodTile));
+  check('refined tile is finite high-res detail', t && t.data.every(Number.isFinite) && t.w >= 2);
+  _lodOn = false; _lodZoom = 1; lodCacheClear();
+}
+
+/* ---------- Stage 3: per-tile editing (v0.075) ---------- */
+{
+  // pure brush
+  const W = 20, H = 20, d = new Float32Array(W * H).fill(0.5);
+  brushHeight(d, W, H, 10, 10, 5, 0.2, 'raise');
+  check('brush raise lifts the centre', d[10 * W + 10] > 0.5);
+  check('brush leaves cells outside the radius untouched', d[0] === 0.5);
+  const dl = new Float32Array(W * H).fill(0.5); brushHeight(dl, W, H, 10, 10, 5, 0.2, 'lower');
+  check('brush lower drops the centre', dl[10 * W + 10] < 0.5);
+  const dc = new Float32Array(W * H).fill(1); brushHeight(dc, W, H, 10, 10, 5, 0.5, 'raise');
+  check('brush clamps to [0,1]', dc.every(v => v <= 1 && v >= 0));
+  const noisy = Float32Array.from({ length: W * H }, () => Math.random()); const ns = Float32Array.from(noisy);
+  for (let k = 0; k < 6; k++) brushHeight(ns, W, H, 10, 10, 8, 1, 'smooth');
+  const variance = a => { let s = 0, s2 = 0, n = 0; for (let y = 6; y <= 14; y++) for (let x = 6; x <= 14; x++){ const v = a[y * W + x]; s += v; s2 += v * v; n++; } return s2 / n - (s / n) ** 2; };
+  check('brush smooth reduces local variance', variance(ns) < variance(noisy));
+
+  // tile editing on a refined tile
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  _lodTile = 512; _lodZoom = 1; _lodCx = GW / 2; _lodCy = GH / 2; lodCacheClear(); _lodEdits.clear(); _lodUndo.length = 0;
+  refineVisibleTiles();
+  const pick = lodPick(GW / 2, GH / 2);
+  check('lodPick returns a valid tile + in-range local coords', pick.lx >= 0 && pick.lx <= pick.td.w && pick.ly >= 0 && pick.ly <= pick.td.h);
+  const proc = lodCacheGet(pick.key); const procCopy = proc ? Float32Array.from(proc.data) : null;
+  lodEditBegin(GW / 2, GH / 2);
+  const ok = editTileAt(GW / 2, GH / 2);
+  check('editTileAt edits the refined tile', ok && _lodEdits.has(pick.key));
+  check('edit diverges from the procedural tile', procCopy && !_lodEdits.get(pick.key).data.every((v, i) => v === procCopy[i]));
+  // re-refine does not clobber the edit (drawLODView prefers _lodEdits)
+  refineVisibleTiles();
+  check('re-refine preserves the edit', _lodEdits.has(pick.key) && _lodEdits.get(pick.key).edited);
+  // undo reverts to procedural
+  lodUndo();
+  check('Ctrl-Z reverts the tile edit', !_lodEdits.has(pick.key));
+  _lodEdit = false; _lodOn = false; _lodEdits.clear(); _lodUndo.length = 0; lodCacheClear();
+}
+
+/* ---------- v0.076: discharge-widened smooth rivers ---------- */
+{
+  // synthetic land with a trunk river (high discharge) and a tributary (low discharge)
+  const W = 40, H = 40, fld = new Float32Array(W * H).fill(0.6), flow = new Float32Array(W * H);
+  const thresh = W * H * 0.0004;
+  for (let y = 5; y < 35; y++) flow[y * W + 20] = thresh * 200;   // trunk down the middle
+  for (let x = 20; x < 35; x++) flow[10 * W + x] = thresh * 8;    // thin tributary
+  const rf = buildRiverField(flow, fld, W, H, 0.42);
+  check('river field finite', allFinite(rf));
+  // width: count lit cells across the trunk row vs the tributary column
+  let trunkW = 0, tribW = 0;
+  for (let x = 0; x < W; x++) if (rf[20 * W + x] > 0.01) trunkW++;        // across the trunk at row 20
+  for (let y = 0; y < H; y++) if (rf[y * W + 30] > 0.01) tribW++;         // across the tributary at col 30
+  check('trunk river is wider than the tributary (' + trunkW + ' vs ' + tribW + ')', trunkW > tribW && trunkW >= 3);
+  // ocean cells get no river
+  const fldSea = new Float32Array(W * H).fill(0.2);   // all below sea
+  const rfSea = buildRiverField(flow, fldSea, W, H, 0.42);
+  check('no river overlay on ocean cells', rfSea.every(v => v === 0));
+  // deterministic
+  const rf2 = buildRiverField(flow, fld, W, H, 0.42);
+  check('buildRiverField deterministic', rf.every((v, i) => v === rf2[i]));
+}
+
+/* ---------- v0.077: river carving interplay (monotonic channel + entrenchment) ---------- */
+{
+  // a brushed river over terrain that RISES downstream must still carve a monotonically descending channel
+  const W = 60, H = 20, fld = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.5 + x * 0.004;   // rises with x
+  const orig = Float32Array.from(fld);
+  const pts = []; for (let x = 5; x < 55; x++) pts.push([x, 10]);
+  const cells = enforceChannelDescent(fld, W, H, pts, 0.42, 1.5);
+  let mono = true, prev = Infinity;
+  for (let x = 5; x < 55; x++){ const v = fld[10 * W + x]; if (v > prev + 1e-7){ mono = false; break; } prev = v; }
+  check('brushed river centreline descends monotonically (cuts through rises)', mono);
+  check('channel is carved below the original terrain', fld[10 * W + 30] < orig[10 * W + 30]);
+  check('descent carve returns locked cells', cells.length > 0);
+
+  // entrenchment: deposition refilling a locked river is clamped back to its floor
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  const i = 128 * GW + 100; riverMask[i] = 1; riverFloor[i] = 0.30; field[i] = 0.55; _riverAny = true;
+  enforceRiverChannels();
+  check('enforceRiverChannels clamps a refilled river to its floor', field[i] === riverFloor[i] && field[i] < 0.55);
+  const j = 10 * GW + 10; field[j] = 0.99; riverMask[j] = 0; const jset = field[j];
+  enforceRiverChannels();
+  check('non-river cells untouched by enforcement', field[j] === jset);
+  riverMask.fill(0); _riverAny = false;
+  const snap = Float32Array.from(field); enforceRiverChannels();
+  check('enforceRiverChannels is a no-op with no locked rivers', field.every((v, k) => v === snap[k]));
+}
+
+/* ---------- v0.078: Cartalith biome-paint PoC + sharper biomes ---------- */
+{
+  state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
+  const cb = buildCartBiome();
+  check('buildCartBiome finite indices in 1..15', cb.length === GW * GH && cb.every(v => v >= 1 && v <= 15));
+  let oceanOk = true, landOk = true;
+  for (let i = 0; i < cb.length; i++){ const w = field[i] - geoAt(i) < state.seaLevel;
+    if (w && cb[i] !== 15) oceanOk = false;          // ocean cells → Ocean (15)
+    if (!w && cb[i] === 15) landOk = false;          // land cells never Ocean
+  }
+  check('CBiome: ocean cells → Ocean(15), land never Ocean', oceanOk && landOk);
+  const cb2 = buildCartBiome();
+  check('buildCartBiome deterministic', cb.every((v, i) => v === cb2[i]));
+  // CBiome debug view renders opaque
+  state.mode = 'biome'; state.debug = 'cbiome'; _cartBiome = null; renderNow();
+  check('CBiome debug view renders opaque', img.data[3] === 255);
+  state.debug = 'off';
+  // bioJitter: sharp toggle changes the ecotone jitter; OFF reproduces the legacy single octave exactly
+  const sv = state.viz.sharpBiomes;
+  state.viz.sharpBiomes = false; const j0 = bioJitter(40, 30), legacy = vnoise(40 / GW * 40, 30 / GW * 40, 31);
+  check('sharpBiomes off → legacy single-octave jitter (bit-identical)', j0 === legacy);
+  state.viz.sharpBiomes = true; const j1 = bioJitter(40, 30);
+  check('sharpBiomes on → jitter differs from legacy', j1 !== legacy);
+  state.viz.sharpBiomes = sv;
+}
+
+/* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */
+{
+  const p = chunkParent(3, 5, 6);
+  check('chunkParent halves col/row, drops a level', p.z === 2 && p.col === 2 && p.row === 3);
+  check('chunkParent(0) = null (root)', chunkParent(0, 0, 0) === null);
+  const ch = chunkChildren(2, 1, 1);
+  check('chunkChildren = 4 at z+1 covering the quadrant', ch.length === 4 && ch.every(c => c.z === 3) &&
+    ch.some(c => c.col === 2 && c.row === 2) && ch.some(c => c.col === 3 && c.row === 3));
+  check('parent↔children round-trip', ch.every(c => { const pp = chunkParent(c.z, c.col, c.row); return pp.z === 2 && pp.col === 1 && pp.row === 1; }));
+  const a = chunkColorHash(2, 3, 4), b = chunkColorHash(2, 3, 4);
+  check('chunkColorHash deterministic + valid RGB', a.length === 3 && a.every((v, i) => v === b[i]) && a.every(v => v >= 0 && v <= 255));
+  // lifecycle reflects the caches, with the atlas authoritative
+  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear(); _lodTile = 512;
+  check('chunkState unexplored by default', chunkState(2, 1, 1) === 'unexplored');
+  const key = lodCacheKey(2, 1, 1, _lodTile); _lodCache.set(key, {});
+  check('chunkState cached after generation', chunkState(2, 1, 1) === 'cached');
+  _lodEdits.set(key, {}); check('edited overrides cached', chunkState(2, 1, 1) === 'edited');
+  _atlasBaked.add(key); check('baked overrides edited (images authoritative)', chunkState(2, 1, 1) === 'baked');
+  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear();
+}
+
+/* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
+(async () => {
+  // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)
+  if (typeof CompressionStream !== 'undefined'){
+    const n = 4096, src = new Uint8Array(n);
+    for (let i = 0; i < n; i++) src[i] = (i % 64 < 32) ? 7 : (i & 255);
+    const z = await gzipBytes(src);
+    check('gzipBytes produces smaller output (' + (z ? z.length : 'null') + ' < ' + n + ')', !!z && z.length < n);
+    const back = await gunzipBytes(z);
+    check('gzip round-trip bit-exact', !!back && back.length === n && back.every((v, i) => v === src[i]));
+  } else {
+    console.log('skip - CompressionStream unavailable in this runtime');
+    check('gzipBytes returns null when unsupported', (await gzipBytes(new Uint8Array(8))) === null);
+  }
+
+  // exportRegionTiles end-to-end on the real field (PNGs absent headless; binary path asserted)
+  {
+    const sel = normRegion(10, 10, 58, 42, GW, GH), cols = 3, rows = 2, ts = 24;   // non-square grid + selection
+    const td = tileDims(sel, cols, rows, ts);
+    const E = await exportRegionTiles(sel, cols, rows, ts, true);
+    const names = E.map(e => e.name);
+    check('region export emits a manifest', names.includes('tiles/index.json'));
+    const man = JSON.parse(new TextDecoder().decode(E.find(e => e.name === 'tiles/index.json').data));
+    check('region manifest schema 2 with cols×rows + tile dims + rg16', man.schema === 2 && man.cols === cols && man.rows === rows &&
+      man.tileW === td.w && man.tileH === td.h && man.bounds && man.bounds.x === sel.x && man.heightEncoding === 'rg16');
+    const binNames = names.filter(n => /rg16\.bin(\.gz)?$/.test(n));
+    check('region export emits one height bin per tile (' + binNames.length + ')', binNames.length === cols * rows);
+    check('manifest compression matches entries', (man.compression === 'gzip') === binNames.every(n => n.endsWith('.gz')));
+    // decode tile (0,0) and compare against a direct refineTile (non-square dims)
+    let bin = E.find(e => e.name === binNames.find(n => n.includes('_0_0'))).data;
+    if (man.compression === 'gzip') bin = await gunzipBytes(bin);
+    const dec = unpackHeight16(bin, td.w * td.h);
+    const ref = refineTile(field, GW, GH, sel, cols, rows, 0, 0, td.w, td.h, { seed: state.tect.seed, sea: state.seaLevel, ridged: state.tect.ridged });
+    let maxErr = 0; for (let i = 0; i < td.w * td.h; i++) maxErr = Math.max(maxErr, Math.abs(dec[i] - ref[i]));
+    check('exported tile round-trips through pack+gzip (max Δ=' + maxErr.toExponential(1) + ' ≤ 1 LSB)', maxErr <= 0.5 / 65535 + 1e-9);
+  }
+
+  // unzipAny (v0.056): central-dir reader handles STORED + DEFLATED entries
+  {
+    const ab = require('fs').readFileSync('assets/sample_pack.zip');
+    const z = await unzipAny(ab.buffer.slice(ab.byteOffset, ab.byteOffset + ab.byteLength));
+    check('unzipAny reads the STORED sample pack via central dir', !!z['pack.json'] && Object.keys(z).filter(n => n.endsWith('.png')).length === 16);
+    if (typeof DecompressionStream !== 'undefined'){
+      // hand-build a 1-entry DEFLATED zip (Node zlib) and confirm unzipAny inflates it
+      const zlib = require('zlib');
+      const payload = new TextEncoder().encode('hello deflate world '.repeat(20));
+      const comp = zlib.deflateRawSync(Buffer.from(payload));
+      const crc = zlib.crc32 ? zlib.crc32(Buffer.from(payload)) : require('zlib').crc32;
+      const name = Buffer.from('a.txt');
+      const u16 = v => Buffer.from([v & 255, (v >> 8) & 255]);
+      const u32 = v => Buffer.from([v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255]);
+      const crcB = u32(crc >>> 0);
+      const lh = Buffer.concat([u32(0x04034b50), u16(20), u16(0), u16(8), u16(0), u16(0), crcB, u32(comp.length), u32(payload.length), u16(name.length), u16(0), name, comp]);
+      const cd = Buffer.concat([u32(0x02014b50), u16(20), u16(20), u16(0), u16(8), u16(0), u16(0), crcB, u32(comp.length), u32(payload.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(0), name]);
+      const eo = Buffer.concat([u32(0x06054b50), u16(0), u16(0), u16(1), u16(1), u32(cd.length), u32(lh.length), u16(0)]);
+      const zipBuf = Buffer.concat([lh, cd, eo]);
+      const z2 = await unzipAny(zipBuf.buffer.slice(zipBuf.byteOffset, zipBuf.byteOffset + zipBuf.byteLength));
+      check('unzipAny inflates a DEFLATED entry', !!z2['a.txt'] && new TextDecoder().decode(z2['a.txt']) === 'hello deflate world '.repeat(20));
+    } else { console.log('skip - DecompressionStream unavailable'); }
+  }
+
+  console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
+  process.exit(__fail ? 1 : 0);
+})();

@@ -21,6 +21,7 @@ function make2dCtx(canvas){
     putImageData(){}, drawImage(){},
     fillRect(){}, strokeRect(){}, clearRect(){},
     beginPath(){}, closePath(){}, moveTo(){}, lineTo(){}, arc(){}, rect(){},
+    quadraticCurveTo(){}, bezierCurveTo(){}, ellipse(){},
     stroke(){}, fill(){}, setLineDash(){},
     save(){}, restore(){}, scale(){}, translate(){}, setTransform(){},
     measureText(){ return { width: 0 }; }, fillText(){}, strokeText(){}
@@ -68,6 +69,7 @@ global.document = {
 };
 
 global.window = new Proxy(global, { get: (t, k) => (k === 'devicePixelRatio' ? 1 : t[k]) });
+if (!global.addEventListener){ global.addEventListener = () => {}; global.removeEventListener = () => {}; }
 global.requestAnimationFrame = fn => setTimeout(fn, 0);
 global.cancelAnimationFrame = id => clearTimeout(id);
 global.Image = class { constructor(){ this.onload = null; this.onerror = null; } set src(_){} };

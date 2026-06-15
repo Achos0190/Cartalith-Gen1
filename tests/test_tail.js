@@ -1498,6 +1498,75 @@ fieldsFinite('generate(world)');
   check('sharpDelta seam-Δ < 1e-4 between adjacent tiles', maxSeamSD < 1e-4);
 }
 
+/* ---------- v0.096: signed distance fields (coast / river / biome control) ---------- */
+if (typeof buildCoastSDF === 'function') {
+  const W = 16, H = 16, sea = 0.42;
+  // left half land (0.6), right half ocean (0.3) → vertical coastline at x=8
+  const f = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f[y*W+x] = x < 8 ? 0.6 : 0.3;
+  const sdf = buildCoastSDF(f, W, H, sea);
+  check('buildCoastSDF finite', sdf.every(v => Number.isFinite(v)));
+  // sign convention: inland (land) negative, offshore (water) positive
+  check('buildCoastSDF land cells are negative', f[8*W+2] >= sea && sdf[8*W+2] < 0);
+  check('buildCoastSDF water cells are positive', f[8*W+12] < sea && sdf[8*W+12] > 0);
+  // magnitude grows away from the coast (deep inland more negative than near-shore land)
+  check('buildCoastSDF deepens inland', sdf[8*W+0] < sdf[8*W+7]);
+  check('buildCoastSDF grows offshore', sdf[8*W+15] > sdf[8*W+8]);
+  // near-shore magnitude is small (≈ a cell or two)
+  check('buildCoastSDF ~0 near the shoreline', Math.abs(sdf[8*W+7]) <= 2 && Math.abs(sdf[8*W+8]) <= 2);
+  // determinism
+  const sdf2 = buildCoastSDF(f, W, H, sea);
+  let det = true; for (let i = 0; i < sdf.length; i++) if (sdf[i] !== sdf2[i]) { det = false; break; }
+  check('buildCoastSDF deterministic', det);
+
+  // river SDF: a vertical line of high flow at x=8
+  const flow = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) flow[y*W+8] = 1000;
+  const rsdf = buildRiverSDF(flow, W, H, {thresh: 100});
+  check('buildRiverSDF channel cells negative', rsdf[5*W+8] < 0);
+  check('buildRiverSDF off-channel positive', rsdf[5*W+0] > 0);
+  check('buildRiverSDF grows away from channel', rsdf[5*W+0] > rsdf[5*W+6]);
+  check('buildRiverSDF finite', rsdf.every(v => Number.isFinite(v)));
+
+  // biome-boundary distance: left half biome 1, right half biome 2 → boundary at x=8
+  const bio = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) bio[y*W+x] = x < 8 ? 1 : 2;
+  const bd = buildBiomeBoundaryDist(bio, W, H);
+  check('buildBiomeBoundaryDist 0 on the boundary', bd[5*W+7] === 0 || bd[5*W+8] === 0);
+  check('buildBiomeBoundaryDist grows into interiors', bd[5*W+0] > bd[5*W+6]);
+  check('buildBiomeBoundaryDist non-negative & finite', bd.every(v => v >= 0 && Number.isFinite(v)));
+  // uniform biome → no edges → all INF-ish (large), but finite
+  const uni = new Uint8Array(W * H).fill(3);
+  const bdU = buildBiomeBoundaryDist(uni, W, H);
+  check('buildBiomeBoundaryDist uniform field has no boundary', bdU.every(v => v > 1e6));
+
+  // ----- consumer exercised on the live generated world (uses globals from the region generate above) -----
+  // find a near-shore land cell (land with a water neighbour)
+  let shore = -1;
+  for (let yy = 1; yy < GH-1 && shore < 0; yy++) for (let xx = 1; xx < GW-1; xx++) {
+    const ii = yy*GW+xx; const vw = geoidField ? field[ii]-geoidField[ii] : field[ii];
+    if (vw < state.seaLevel) continue;
+    const wn = field[ii-1] < state.seaLevel || field[ii+1] < state.seaLevel || field[ii-GW] < state.seaLevel || field[ii+GW] < state.seaLevel;
+    if (wn) { shore = ii; break; }
+  }
+  check('found a near-shore land cell for the SDF consumer test', shore >= 0);
+  if (shore >= 0) {
+    const sx = shore % GW, sy = (shore / GW) | 0, vw = geoidField ? field[shore]-geoidField[shore] : field[shore];
+    // off
+    _coastSDF = null; state.viz.sdfCoast = 0;
+    const off = surfaceColor(sx, sy, shore, vw).slice();
+    // on
+    _coastSDF = buildCoastSDF(geoidField ? (()=>{const a=new Float32Array(GW*GH);for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i];return a;})() : field, GW, GH, state.seaLevel);
+    state.viz.sdfCoast = 1;
+    const on = surfaceColor(sx, sy, shore, vw);
+    check('SDF coast band changes a near-shore land pixel when enabled', on[0]!==off[0] || on[1]!==off[1] || on[2]!==off[2]);
+    // restore the off state so later tests/cmp stay on the default path
+    _coastSDF = null; state.viz.sdfCoast = 0;
+    const back = surfaceColor(sx, sy, shore, vw);
+    check('SDF coast restores to the off render after disabling', back[0]===off[0] && back[1]===off[1] && back[2]===off[2]);
+  }
+}
+
 /* ---------- Stage 3: per-tile editing (v0.075) ---------- */
 {
   // pure brush

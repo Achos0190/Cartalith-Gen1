@@ -4,10 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.095** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.095.html`** (older `v0.036–0.094` kept, never edited in place — new version = new file).
-- **Next planned**: v0.096 = SDF geometric control field (coast + rivers + biomes), render-only/opt-in. Plan + research in `docs/research/multiscale-rivers.md` neighbours; the signed-coast-distance core generalizes `computeCoastDistance`.
-- Headless suite: **473 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.096** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.096.html`** (older `v0.036–0.095` kept, never edited in place — new version = new file).
+- Headless suite: **491 assertions** (one *pre-existing flaky* test — "stream-power channels net-incise" — occasionally trips because the incision mean rides near 0 and rain uses `Math.random()`; re-run to confirm green; unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -81,7 +80,7 @@
 - Real CC0 art into the sample-pack format (`docs/research/asset-candidates.md`): ambientCG textures + K.M. Alexander icons
 - Bilinear texture sampling for splat
 - Vector spline-traced coastlines (B4 optional half)
-- **SDF geometric control field** (v0.096, planned): signed coast/river/biome distance fields driving anti-aliased constant-width coastlines, distance-banded coastal biomes, river bank/wetland/floodplain bands, and seam-safe "reverse-mipmap" tile reconstruction (render-only/opt-in)
+- **SDF follow-ups** (v0.097+): river/biome SDF reconstruction in LOD tiles (v0.096 B5 does coast only); SDF tints in PNG bakes (`bakePixel`); sub-pixel land/water anti-aliasing; JFA-based Euclidean SDF for exact constant-width strokes (`docs/research/sdf-control-fields.md`)
 - fflate vendoring for tile ZIP speed
 - L4 dynamic lithology, L6 cryosphere albedo (lower-priority audit loops)
 - G4 tidal sedimentation
@@ -90,6 +89,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.096** — SDF control fields: in **Biome** view, drag **Style → SDF coastlines** up → constant-width shore-sand + coastal-plain bands hug the coast (and hold their width when you zoom via **Tiled LOD** — the reverse-mipmap win); **SDF river bands** → bank/wetland/floodplain margins along the drainage; **SDF biome blend** → biome boundaries soften into distance-proportional ecotones. All default off ⇒ unchanged. Note: SDF tints are screen overlays (not in PNG bakes yet), and LOD tiles currently reconstruct coastlines only (rivers/biomes in tiles are a follow-up).
 - **v0.095** — river Phase 2/3: with **Tiled LOD** on + **Refine** a river/delta area, toggle **"Burn river channels"** (now also runs delta sharpening → distributaries read as distinct channels vs. floodplain) and **"Micro-erode tiles"** (slower; adds terracing/meander texture inside carved channels). Confirm tile seams stay seamless with both on, and that micro-erosion doesn't disturb the tile borders. Toggle both off → smooth amplification (bit-identical to v0.094).
 - **v0.094** — AGREE river burning: enable **Tiled LOD** → Generate → **Refine** a river-rich area → toggle **"Burn river channels"** in the LOD panel → rivers should become crisp carved valleys at high zoom instead of blurry smears. Zoom into a coastal delta fan — the multiple MFD paths should resolve into carved distributary channels. Adjacent tile seams should be seamless (no height step). Toggle off → reverts to smooth amplification.
 - **v0.093** — debug legend fix (UI-only): switch through all 16 debug views (Off, Temp, Köppen, Rain, Wind, Ocean, Plates, Bounds, Tect, **Orog**, Stress, Age, Flow, **Geoid**, **Tides**, **CBiome**) and confirm the lower-left legend updates to show the correct swatches/labels for each. The four that were previously missing (**Orog**, **Geoid**, **Tides**, **CBiome**) should now show relevant info rather than falling back to the biome/hypso legend.

@@ -13,16 +13,13 @@ User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → 
 
 ## Next
 
-5. **Rendering quality pass — R4** (`docs/research/terrain-rendering-enhancement.md` §2): ridged-noise elevation-weighted detail (`ridgedFbm` formalised + strength slider; `R_weighted = R·H²` lowland gate). **(Atlas Phase 4 DONE — v0.086; R1 AO v0.084; R2 crests + slope rock v0.087; R3 texture synth + minor channels v0.088.)** The R-series rendering framework completes at R4.
-7. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`): namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel.
-8. **P2 — Save schema v10** with both legacy importers.
-9. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`): JS micro-opts in the stencil loops — only if profiling shows a need.
+5. **P0–P1 — Unified tool shell merge** (`docs/UNIFIED_TOOL_PLAN.md`): namespace engine under `Gen`, merge into `cartalith_gen1_v0.001.html`, 5-tab UI, layers panel. **(The Atlas workstream (Phases 1–4) and the R-series rendering framework (R1–R4) are now complete — v0.086/v0.089.)**
+6. **P2 — Save schema v10** with both legacy importers.
+7. **W0b — remaining micro-opts** (`docs/research/engine-optimization.md`): JS micro-opts in the stencil loops — only if profiling shows a need.
 
 ## Later
 
-10. **Rendering quality pass — R2** (`docs/research/terrain-rendering-enhancement.md`): ridge crest enhancement (`_crestField`: negative curvature ∩ high slope → thin bright strokes) + slope-material refinement (`G^1.5` rock weight, curvature-driven wetness in `materialWeights`).
-11. **Rendering quality pass — R3**: three-frequency procedural texture synthesis (large/medium/fine fbm colour modulation ±10%) + minor-channel flow lines (F^0.45 Hack's-law width; extend threshold floor to show low-accumulation channels as subtle overlays).
-12. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
+10. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
 13. **R32F GPU migration** (handoff pending #3) with RGBA8 fallback tier.
 14. **Disturbance model completion** (handoff pending #2): wind-throw from W1 wind field, flood proxy from flowField/TWI.
 
@@ -49,6 +46,7 @@ User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → 
 
 ## Done
 
+- 2026-06: **v0.089 — R4 ridged-noise elevation-weighted relief** (`docs/research/terrain-rendering-enhancement.md` §2; **R-series R1–R4 complete**). Pure `ridgedFbm(x,y,oct,s)` (configurable-octave ridged multifractal; `ridgedFbm(…,6,…)` bit-identical to the legacy `ridged()`, which is left untouched so `amplifyRegion` stays byte-stable). Gated `state.viz.ridgedRelief` slider adds H²-weighted folded-crease shading in `landColorCore` at world coords (seamless across tiles). Off ⇒ bit-identical to v0.088. 436 green. Ridged-relief aesthetics need a browser pass.
 - 2026-06: **v0.088 — R3 procedural texture synthesis + minor-channel flow lines** (`docs/research/terrain-rendering-enhancement.md` §7,§4). Two gated Style sliders (default 0 ⇒ bit-identical). `state.viz.texture` adds a three-frequency `fbm` colour modulation `C·(1+0.1·T)` inside `landColorCore` in world coords (seamless across tiles, bakes); `state.viz.minorStreams` draws faint blue-grey threads for low-accumulation cells below the trunk threshold (screen overlay in `surfaceColor`, like the trunk rivers). Off ⇒ bit-identical to v0.087 (field/temp/bakePixel byte-identical, deterministic-rain verified). 429 green. Texture/channel aesthetics need a browser pass.
 - 2026-06: **v0.087 — R2 ridge crests + slope-material refinement** (`docs/research/terrain-rendering-enhancement.md` §3,§6). Two gated Style sliders (default 0 ⇒ bit-identical). `buildCrestField` (pure; convex ∩ steep via `G^1.5` slope weight, `sx,sy` coarse-scale so tiles match the main map) → `_crestField` thin bright sunlit-rock strokes via `applyCrest` in surfaceColor/bakePixel/tiles; `state.viz.rockSlope` adds a `G^1.5` rock recolour tint inside `landColorCore` (post-mix, leaves the Σ=1 weights untouched). Off ⇒ bit-identical to v0.086 (field/temp/bakePixel byte-identical, deterministic-rain verified). 423 green. Crest/rock aesthetics need a browser pass.
 - 2026-06: **v0.086 — Atlas Phase 4: portable export/import** (`docs/ATLAS_ARCHITECTURE.md`). Pure `atlasChunkFile`/`buildAtlasManifest` + shim-tested `atlasExportEntries`/`atlasImportEntries` round-trip a world's baked chunks to a `World/` ZIP (rg16 height + visual PNG per chunk, gzip-optional, schema-1 manifest carrying worldKey + `serializeState()` params) and back into IndexedDB; `_atlasBaked` repopulates when the import matches the current world, else surfaces on the next matching generate via `atlasSyncWorld`. Export atlas… / Import atlas… buttons. Pure additions + UI ⇒ bit-identical to v0.085. 412 green (full IDB→ZIP→IDB round-trip, ≤1-LSB height). Download/file-picker need a browser pass.

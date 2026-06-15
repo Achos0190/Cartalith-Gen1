@@ -1607,6 +1607,28 @@ fieldsFinite('generate(world)');
   state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverField = null;
 }
 
+/* ---------- R4: ridged-noise elevation-weighted relief detail (v0.089) ---------- */
+{
+  // ridgedFbm pure: [0,1], deterministic, octave-count matters, and ridgedFbm(...,6,..) === ridged(...)
+  let inRange = true; for (let k = 0; k < 50; k++){ const v = ridgedFbm(k * 0.37, k * 0.21, 5, 9); if (v < 0 || v > 1) inRange = false; }
+  check('ridgedFbm stays in [0,1]', inRange);
+  check('ridgedFbm deterministic', ridgedFbm(1.3, 2.7, 5, 9) === ridgedFbm(1.3, 2.7, 5, 9));
+  check('ridgedFbm octave count changes detail', ridgedFbm(1.3, 2.7, 1, 9) !== ridgedFbm(1.3, 2.7, 5, 9));
+  check('ridgedFbm(…,6,…) matches the legacy ridged()', Math.abs(ridgedFbm(1.3, 2.7, 6, 9) - ridged(1.3, 2.7, 9)) < 1e-12);
+
+  // landColorCore ridged relief: gated; off ⇒ identical; lowland (r=0) untouched even when on (H² gate); highland changes
+  const base = [16, 0.5, 0.06, /*r*/0.8, 0.5, 0.5, 0.5, 0.8, 0.8, 0.0, 0.0, 0.0, state.bioBlend, 1, 50, 50, 1];
+  const low  = base.slice(); low[3] = 0.0;   // r=0 ⇒ H² gate = 0
+  const savedRR = state.viz.ridgedRelief;
+  state.viz.ridgedRelief = 0;   const off = landColorCore(...base), off2 = landColorCore(...base);
+  state.viz.ridgedRelief = 0.9; const on = landColorCore(...base), onLow = landColorCore(...low);
+  state.viz.ridgedRelief = 0;   const offLow = landColorCore(...low);
+  state.viz.ridgedRelief = savedRR;
+  check('ridged relief off ⇒ landColorCore unchanged/deterministic', off.every((v, i) => v === off2[i]));
+  check('ridged relief on ⇒ highland colour changes', off.some((v, i) => v !== on[i]));
+  check('ridged relief H² gate ⇒ lowland (r=0) untouched', onLow.every((v, i) => v === offLow[i]));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

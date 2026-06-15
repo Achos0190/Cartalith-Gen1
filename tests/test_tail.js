@@ -1217,6 +1217,33 @@ fieldsFinite('generate(world)');
   check('depositSediment deterministic', det2);
 }
 
+/* ---------- L6: cryosphere↔climate ice-albedo feedback (v0.091) ---------- */
+{
+  // pure applyCryosphereAlbedo: k=0 is a no-op; cold cells cool, warm cells untouched; finite + deterministic
+  const mk = () => Float32Array.from([30, 20, 10, 0, -10, -20, -30]);   // warm→cold gradient
+  const t0 = mk(); check('albedo k=0 ⇒ no-op (bit-identical)', applyCryosphereAlbedo(t0, 0).every((v, i) => v === mk()[i]));
+  const tw = mk(), base = mk(); applyCryosphereAlbedo(tw, 1);
+  check('albedo cools the cold (icy) cells', tw[6] < base[6] - 1 && tw[5] < base[5] - 1);
+  check('albedo leaves warm cells (T≫1°C) untouched', Math.abs(tw[0] - base[0]) < 1e-6 && Math.abs(tw[1] - base[1]) < 1e-6);
+  check('albedo output finite', allFinite(tw));
+  const ta = mk(), tb = mk(); applyCryosphereAlbedo(ta, 1); applyCryosphereAlbedo(tb, 1);
+  check('albedo deterministic', ta.every((v, i) => v === tb[i]));
+  const ts = mk(), tS = mk(); applyCryosphereAlbedo(ts, 0.3); applyCryosphereAlbedo(tS, 1);
+  check('albedo cooling scales with strength', tS[6] < ts[6]);
+
+  // wired on the real engine: default off ⇒ tempField unchanged; on ⇒ cold regions cool further
+  state.world = true; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  const savedA = state.climate.albedo;
+  state.climate.albedo = 0; computeTemperature(); const tOff = Float32Array.from(tempField);
+  state.climate.albedo = 0.8; computeTemperature(); const tOn = Float32Array.from(tempField);
+  state.climate.albedo = savedA; computeTemperature();
+  let cooled = 0, warmedAny = false, minOff = 1e9;
+  for (let i = 0; i < tOff.length; i++){ minOff = Math.min(minOff, tOff[i]); if (tOn[i] < tOff[i] - 0.5) cooled++; if (tOn[i] > tOff[i] + 1e-6) warmedAny = true; }
+  check('engine albedo cools polar/high cells (' + cooled + ')', cooled > 0);
+  check('engine albedo never warms a cell', !warmedAny);
+  check('engine albedo keeps tempField finite', allFinite(tOn));
+}
+
 /* ---------- G3: moons & tidal-range field (v0.070) ---------- */
 {
   state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();

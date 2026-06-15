@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas 2a) + v0.082 (Atlas 2b) + v0.083 (Atlas 3) + v0.084 (R1) + v0.085 (unified brush) + v0.086 (Atlas 4 export/import) + v0.087 (R2 crests + slope rock) + v0.088 (R3 texture synth + minor channels) + v0.089 (R4 ridged relief — R-series complete) + v0.090 (T5 orogeny tuning + archetype hooks — tectonic graph complete)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.090.html`** (older `v0.036–0.089` kept, never edited in place — new version = new file).
-- Headless suite: **442 assertions, all green** (one pre-existing water-variance test ties at rounding and may occasionally report a spurious failure — unrelated to current work). Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas 2a) + v0.082 (Atlas 2b) + v0.083 (Atlas 3) + v0.084 (R1) + v0.085 (unified brush) + v0.086 (Atlas 4 export/import) + v0.087 (R2 crests + slope rock) + v0.088 (R3 texture synth + minor channels) + v0.089 (R4 ridged relief — R-series complete) + v0.090 (T5 orogeny tuning + archetype hooks — tectonic graph complete) + v0.091 (L6 cryosphere ice-albedo feedback)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.091.html`** (older `v0.036–0.090` kept, never edited in place — new version = new file).
+- Headless suite: **451 assertions, all green** (one pre-existing water-variance test ties at rounding and may occasionally report a spurious failure — unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -65,7 +65,7 @@
 ## Completed workstreams (shipped in v0.048–v0.083)
 
 - **Tectonic feature graph T0–T5 (complete)**: shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064) → orogeny tuning sliders (fold intensity, trench depth) + archetype hooks (v0.090, `deriveFromWorldStructure` enables the graph + maps fold/trench from the archetype). Default + graph-on-with-default-sliders both bit-identical to v0.089.
-- **Earth-system coupling loops L1–L3**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069).
+- **Earth-system coupling loops L1–L3 + L6**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069), cryosphere ice-albedo feedback (v0.091). L4 dynamic lithology remains the one optional follow-up.
 - **Gravity G1–G3**: G1 scaling throughout pipeline (v0.038), G2 geoid sea-level field (v0.054), G3 moons + tidal range field (v0.070). G4 tidal sedimentation deferred.
 - **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080) → **Atlas Phase 2a: IndexedDB chunk baking + images-override** (v0.081) → **Atlas Phase 2b: cross-session persistence + status + metadata** (v0.082) → **Atlas Phase 3: biome-coloured tiles** (v0.083).
 - **Rivers**: smooth discharge-widened rivers (v0.076) + brushed rivers as entrenched drainage seeds (v0.077).
@@ -88,6 +88,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.091** — L6: in **Whole world** mode, raise **Climate → Ice albedo** → polar caps + high massifs cool and the snow/tundra biomes broaden; at 0 unchanged. Confirm the temperature debug view shows deepened cold at the poles and that warm/temperate latitudes are untouched.
 - **v0.090** — T5: enable **Structured orogeny** (Tectonics) → **Fold intensity** up = more parallel ranges / deeper intermontane basins; **Trench depth** up = deeper subduction trenches. Then enable **World Structure** + pick an archetype → confirm the graph auto-enables and fold/trench track the archetype (volcanic/archipelago = deeper trenches; high-energy = stronger folds). Inspect in the **Orog** debug view, then erode.
 - **v0.089** — R4: in **Biome** view, **Style → Ridged relief** up → folded-crease shading appears on high terrain (mountains read as ranges, not blobs) and stays clean in lowlands (H² gate); seamless across LOD tiles/zoom; at 0 unchanged.
 - **v0.088** — R3: in **Biome** view, **Style → Surface texture** up → fine fbm grain breaks up flat colour regions (seamless across tiles/zoom); **Style → Minor channels** up → faint blue-grey threads reveal low-order drainage below the main rivers. At 0 both unchanged. Texture bakes into PNG/tiles; minor channels are a screen overlay (like trunk rivers).

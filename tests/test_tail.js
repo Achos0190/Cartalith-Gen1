@@ -1606,6 +1606,48 @@ if (typeof jfaDist === 'function') {
   check('buildCoastSDF euclid ~matches chamfer near the coast', Math.abs(Math.abs(sdfJ[12*W+8]) - Math.abs(sdfC[12*W+8])) <= 1.5);
 }
 
+/* ---------- v0.098: physical-model tails (G4 tidal sed · L4 lithology · disturbance) ---------- */
+if (typeof applyTidalSedimentation === 'function') {
+  const W = 8, H = 8, sea = 0.42;
+  // zero tide → no-op
+  const f0 = new Float32Array(W*H).fill(0.30);
+  const r0 = applyTidalSedimentation(f0, new Float32Array(W*H), sea, W, H, {});
+  check('tidal sed no-op when tide is zero', f0.every(v => Math.abs(v-0.30) < 1e-6) && r0.deposited === 0);
+  // null tide → no-op
+  const fN = new Float32Array(W*H).fill(0.30); applyTidalSedimentation(fN, null, sea, W, H, {});
+  check('tidal sed no-op when tide is null', fN.every(v => Math.abs(v-0.30) < 1e-6));
+  // intertidal cells (depth < tr) accrete toward sea, never above it
+  const f1 = new Float32Array(W*H).fill(0.38), t1 = new Float32Array(W*H).fill(0.10);   // depth 0.04 < tr 0.10
+  const r1 = applyTidalSedimentation(f1, t1, sea, W, H, {});
+  check('tidal sed accretes in the intertidal band', f1.every(v => v > 0.38) && r1.deposited > 0);
+  check('tidal sed never exceeds sea level', f1.every(v => v <= sea));
+  // cells deeper than the tidal range are untouched
+  const f2 = new Float32Array(W*H).fill(0.20); applyTidalSedimentation(f2, new Float32Array(W*H).fill(0.10), sea, W, H, {});
+  check('tidal sed skips cells deeper than the tidal range', f2.every(v => Math.abs(v-0.20) < 1e-6));
+  // land untouched
+  const f3 = new Float32Array(W*H).fill(0.60); applyTidalSedimentation(f3, new Float32Array(W*H).fill(0.10), sea, W, H, {});
+  check('tidal sed leaves land untouched', f3.every(v => Math.abs(v-0.60) < 1e-6));
+
+  // L4 dynamic lithology
+  const LW = 6, LH = 6, resist = new Float32Array(LW*LH).fill(0.3);
+  const pre = new Float32Array(LW*LH).fill(0.5), post = pre.slice(); post[10] = 0.4;   // eroded 0.1 at cell 10
+  recomputeResistanceAfterErosion(resist, pre, post, LW, LH, {k:6});
+  check('dyn lithology hardens deeply-eroded cells', resist[10] > 0.3);
+  check('dyn lithology leaves un-eroded cells unchanged', Math.abs(resist[0]-0.3) < 1e-6);
+  check('dyn lithology clamps resistance to ≤ 1', resist.every(v => v <= 1));
+
+  // disturbance debug fields on the live generated world
+  const wt = currentWindThrowField();
+  check('wind-throw field finite & in [0,1]', wt.every(v => Number.isFinite(v) && v >= 0 && v <= 1));
+  let wtOceanZero = true; for (let i = 0; i < wt.length; i++){ if (field[i]-geoAt(i) < state.seaLevel && wt[i] !== 0){ wtOceanZero = false; break; } }
+  check('wind-throw is zero over ocean', wtOceanZero);
+  const fl = currentFloodField();
+  check('flood field finite & in [0,1]', fl.every(v => Number.isFinite(v) && v >= 0 && v <= 1));
+  let flOceanZero = true; for (let i = 0; i < fl.length; i++){ if (field[i]-geoAt(i) < state.seaLevel && fl[i] !== 0){ flOceanZero = false; break; } }
+  check('flood is zero over ocean', flOceanZero);
+  check('flood field is not flat (varies across the map)', variance(fl) > 1e-6);
+}
+
 /* ---------- Stage 3: per-tile editing (v0.075) ---------- */
 {
   // pure brush

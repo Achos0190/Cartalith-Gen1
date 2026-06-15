@@ -5,9 +5,9 @@
 ## Where we are
 
 - Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.096** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.097.html`** (older `v0.036–0.096` kept, never edited in place — new version = new file).
-- **In progress**: the "finish everything except the tool merge" push (plan: SDF/render polish → physical-model tails → R32F GPU). v0.097 = SDF polish (done). Next: v0.098 physical-model tails (G4 tidal sedimentation, L4 dynamic lithology, disturbance debug views), then v0.099 R32F GPU.
-- Headless suite: **500 assertions** (one *pre-existing flaky* test — "stream-power channels net-incise" — occasionally trips because the incision mean rides near 0 and rain uses `Math.random()`; re-run to confirm green; unrelated to current work). Run before & after any engine change:
+- Current engine file: **`elevation_foundation_v0.098.html`** (older `v0.036–0.097` kept, never edited in place — new version = new file).
+- **In progress**: the "finish everything except the tool merge" push (plan: SDF/render polish → physical-model tails → R32F GPU). v0.097 = SDF polish ✓, v0.098 = physical-model tails ✓. **Next: v0.099 = R32F GPU migration** (GPU already uses RGBA32F full-float; R32F is a 4× memory win, browser-verify only).
+- Headless suite: **514 assertions** (one *pre-existing flaky* test — "stream-power channels net-incise" — occasionally trips because the incision mean rides near 0 and rain uses `Math.random()`; re-run to confirm green; unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -90,6 +90,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.098** — physical-model tails: (G4) enable **Planet → Tides**, then **Erosion → Tidal flats** → mudflats accrete in the intertidal band toward sea level. (L4) tick **Erosion → Dynamic lithology**, run **Evolve** several cycles → differential erosion (benches/inselbergs) vs. uniform lowering with it off. (disturbance) switch the debug picker to **Wind-throw** (green→red on exposed forest ridges) and **Flood** (deep blue in valley floors/coastal flats). All default off ⇒ unchanged.
 - **v0.097** — SDF finish: with the SDF sliders on, confirm (a) **PNG bakes/exports now show** the coast/river/biome tints (previously screen-only); (b) **LOD tiles** show river bands + biome ecotones (not just coastlines); (c) the **coastline is anti-aliased** (smooth sea↔land edge, no stair-step) when SDF coastlines is up; (d) coastlines/rivers look crisper/rounder (JFA Euclidean vs the old chamfer anisotropy). All default off ⇒ unchanged.
 - **v0.096** — SDF control fields: in **Biome** view, drag **Style → SDF coastlines** up → constant-width shore-sand + coastal-plain bands hug the coast (and hold their width when you zoom via **Tiled LOD** — the reverse-mipmap win); **SDF river bands** → bank/wetland/floodplain margins along the drainage; **SDF biome blend** → biome boundaries soften into distance-proportional ecotones. All default off ⇒ unchanged.
 - **v0.095** — river Phase 2/3: with **Tiled LOD** on + **Refine** a river/delta area, toggle **"Burn river channels"** (now also runs delta sharpening → distributaries read as distinct channels vs. floodplain) and **"Micro-erode tiles"** (slower; adds terracing/meander texture inside carved channels). Confirm tile seams stay seamless with both on, and that micro-erosion doesn't disturb the tile borders. Toggle both off → smooth amplification (bit-identical to v0.094).

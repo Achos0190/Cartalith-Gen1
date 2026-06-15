@@ -801,6 +801,25 @@ fieldsFinite('generate(world)');
   const ser = serializeState();
   check('serializeState has viz.scaleBar, no assetPack', ser.state.viz.scaleBar === true && ser.state.assetPack === undefined);
 
+  // save/load contract: the v0.086–0.092 params round-trip through serialize→JSON→default-merge (mirrors loadZip)
+  {
+    const savedViz = JSON.parse(JSON.stringify(state.viz)), savedTect = JSON.parse(JSON.stringify(state.tect)), savedClim = JSON.parse(JSON.stringify(state.climate));
+    state.viz.crest = 0.5; state.viz.rockSlope = 0.4; state.viz.texture = 0.6; state.viz.minorStreams = 0.3; state.viz.ridgedRelief = 0.7; state.viz.ao = 0.55;
+    state.tect.foldIntensity = 1.5; state.tect.trenchDepth = 0.8; state.tect.tectonicGraph = true;
+    state.climate.albedo = 0.65;
+    const pk = JSON.parse(JSON.stringify(serializeState()));   // serialize → JSON string → parse, like params.json
+    // replicate loadZip's default-merges
+    const viz = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, pk.state.viz || {});
+    check('save round-trip: new viz sliders preserved', viz.crest === 0.5 && viz.rockSlope === 0.4 && viz.texture === 0.6 && viz.minorStreams === 0.3 && viz.ridgedRelief === 0.7 && viz.ao === 0.55);
+    const tt = pk.state.tect;   // tect uses `if(==null)` guards → explicit values survive
+    check('save round-trip: T5 tect params preserved', tt.foldIntensity === 1.5 && tt.trenchDepth === 0.8 && tt.tectonicGraph === true);
+    check('save round-trip: L6 albedo preserved', pk.state.climate.albedo === 0.65);
+    // an OLD save (missing the new fields) gets defaults, not undefined
+    const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
+    check('save round-trip: legacy save merges new viz defaults', old.crest === 0 && old.ridgedRelief === 0 && old.parchment === 0.2);
+    state.viz = savedViz; state.tect = savedTect; state.climate = savedClim;
+  }
+
   // updateScaleBar honours the toggle
   state.viz.scaleBar = false; updateScaleBar();
   check('updateScaleBar hides when off', document.getElementById('scaleBar').style.display === 'none');

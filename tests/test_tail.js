@@ -1567,6 +1567,45 @@ if (typeof buildCoastSDF === 'function') {
   }
 }
 
+/* ---------- v0.097: jfaDist (Euclidean) + SDF Euclidean backend ---------- */
+if (typeof jfaDist === 'function') {
+  const W = 24, H = 24;
+  // single seed at (5,7): every cell's distance must equal exact Euclidean to it
+  const m1 = new Uint8Array(W * H); m1[7*W+5] = 1;
+  const j1 = jfaDist(m1, W, H);
+  let exact = true, maxErr = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const want = Math.hypot(x-5, y-7), got = j1[y*W+x], e = Math.abs(want-got);
+    if (e > maxErr) maxErr = e; if (e > 1e-4) exact = false;
+  }
+  check('jfaDist is exact Euclidean from a single seed', exact);
+  check('jfaDist seed cell has distance 0', j1[7*W+5] === 0);
+  check('jfaDist finite', j1.every(v => Number.isFinite(v)));
+  // vertical line seed at x=10 → distance is the horizontal offset, exactly
+  const m2 = new Uint8Array(W * H); for (let y = 0; y < H; y++) m2[y*W+10] = 1;
+  const j2 = jfaDist(m2, W, H);
+  check('jfaDist on a line = perpendicular offset', Math.abs(j2[3*W+0]-10) < 1e-4 && Math.abs(j2[3*W+15]-5) < 1e-4);
+  // deterministic
+  const j1b = jfaDist(m1, W, H);
+  let det = true; for (let i = 0; i < j1.length; i++) if (j1[i] !== j1b[i]) { det = false; break; }
+  check('jfaDist deterministic', det);
+  // relationship to chamferDist: the 1-√2 chamfer is an UPPER bound on Euclidean, within ~8%
+  const c1 = chamferDist(m1, W, H);
+  let upper = true, within8 = true;
+  for (let i = 0; i < j1.length; i++) {
+    if (j1[i] > c1[i] + 1e-3) upper = false;          // JFA (true Euclidean) never exceeds chamfer
+    if (c1[i] > j1[i] * 1.09 + 1e-3) within8 = false; // chamfer stays within its ~8.24% theoretical max above
+  }
+  check('jfaDist ≤ chamferDist (Euclidean is the tighter distance)', upper);
+  check('chamferDist within ~8% of jfaDist', within8);
+  // SDF builders honour opts.euclid: sign convention preserved, magnitude differs slightly from chamfer
+  const sea = 0.42, f = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f[y*W+x] = x < 12 ? 0.6 : 0.3;
+  const sdfJ = buildCoastSDF(f, W, H, sea, {euclid:true}), sdfC = buildCoastSDF(f, W, H, sea);
+  check('buildCoastSDF euclid keeps the sign convention', sdfJ[12*W+2] < 0 && sdfJ[12*W+20] > 0);
+  check('buildCoastSDF euclid ~matches chamfer near the coast', Math.abs(Math.abs(sdfJ[12*W+8]) - Math.abs(sdfC[12*W+8])) <= 1.5);
+}
+
 /* ---------- Stage 3: per-tile editing (v0.075) ---------- */
 {
   // pure brush

@@ -69,14 +69,26 @@ local to each tile but seam-safe because adjacent tiles share their boundary hei
 1-cell coarse overlap), so the distance transform agrees at the shared edge. World-wrap is
 deliberately ignored (subtle decoration), matching `computeCoastDistance`.
 
-## Deferred follow-ups
-- River / biome SDF reconstruction *in LOD tiles* (B5 currently does coast only; rivers in tiles
-  come from `burnChannels` carving, biomes from the coarse climate sample).
-- SDF tints in PNG bakes (`bakePixel`): currently screen-only overlays, consistent with how the
-  river and minor-channel overlays already behave — `bakePixel` stays bit-identical.
-- Anti-aliased sub-pixel land/water boundary (the binary `isWater` edge itself is unchanged; v0.096
-  adds distance-banded *land* tinting beside it, not a reworked mask).
-- JFA-based Euclidean SDF for exact constant-width strokes.
+## Completed in v0.097 (the deferred follow-ups)
+- **River + biome SDF in LOD tiles** — `renderBiomeTileRGBA` now builds a local river SDF (from the
+  coarse `flowField` sampled at world coords) and a local biome-boundary distance (from a per-tile
+  biome raster classified at the sampled climate), applying the same banded tints + `ecoK`.
+- **SDF tints in PNG bakes** — the coast/river tints + `ecoK` were factored into shared helpers
+  (`applyCoastRiverSDFv`, `sdfEcoKv`) called by **both** `surfaceColor` (screen) and `bakePixel`
+  (export), and the SDF fields are built in `buildGridFields` too. Bakes now match the screen.
+- **Sub-pixel land/water AA** — when the coast SDF is on, the biome-mode renderer blends sea↔land
+  over a `smoothstep(-0.6,0.6,coastSDF)` sub-cell band instead of the hard `isWater` step.
+- **JFA Euclidean backend** — `jfaDist(seedMask,W,H)` (Rong & Tan 2006; generalized from the
+  `assignPlates` plate-Voronoi JFA) gives true Euclidean distance; the SDF builders take `opts.euclid`
+  and the visual consumers use it (chamfer stays the builder default + the wave-field path). The
+  1-√2 chamfer over-estimates Euclidean by up to 8.24%; JFA removes that anisotropy.
+
+All four remain render-only / opt-in ⇒ off is bit-identical (main-map, `bakePixel`, and LOD-tile
+render hashes all byte-identical to v0.096 at defaults).
+
+## Deferred (lower priority)
+- SDF in the *Relief* (hypso) view (currently biome-mode only).
+- `jfaDist` world-wrap awareness for the toroidal seam (currently ignored, like `computeCoastDistance`).
 
 ## References
 - Hellweger, F. & Maidment, D. (1997). AGREE — DEM Surface Reconditioning System. UT Austin. (the

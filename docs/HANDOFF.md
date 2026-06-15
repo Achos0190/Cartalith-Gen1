@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas 2a) + v0.082 (Atlas 2b) + v0.083 (Atlas 3) + v0.084 (R1) + v0.085 (unified brush) + v0.086 (Atlas 4 export/import) + v0.087 (R2 crests + slope rock) + v0.088 (R3 texture synth + minor channels) + v0.089 (R4 ridged relief — R-series complete)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.089.html`** (older `v0.036–0.088` kept, never edited in place — new version = new file).
-- Headless suite: **436 assertions, all green** (one pre-existing water-variance test ties at rounding and may occasionally report a spurious failure — unrelated to current work). Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas 2a) + v0.082 (Atlas 2b) + v0.083 (Atlas 3) + v0.084 (R1) + v0.085 (unified brush) + v0.086 (Atlas 4 export/import) + v0.087 (R2 crests + slope rock) + v0.088 (R3 texture synth + minor channels) + v0.089 (R4 ridged relief — R-series complete) + v0.090 (T5 orogeny tuning + archetype hooks — tectonic graph complete)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.090.html`** (older `v0.036–0.089` kept, never edited in place — new version = new file).
+- Headless suite: **442 assertions, all green** (one pre-existing water-variance test ties at rounding and may occasionally report a spurious failure — unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```

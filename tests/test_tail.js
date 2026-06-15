@@ -1065,6 +1065,34 @@ fieldsFinite('generate(world)');
   // zero shear → zero (no transform feature without shear)
   check('transform with zero shear → zero', buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: new Float32Array(W * H) }).every(v => v === 0));
 
+  /* ---------- T5: fold-intensity + trench-depth tuning (v0.090) ---------- */
+  {
+    // back-compat: omitting foldK/trenchK reproduces the explicit defaults (0.16 / 1.0) bit-exactly
+    const Udef = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
+    const Uexp = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, { ...opts, foldK: 0.16, trenchK: 1.0 });
+    check('T5 omitted foldK/trenchK ⇒ legacy defaults (bit-identical)', Udef.every((v, i) => v === Uexp[i]));
+    // stronger fold intensity ⇒ larger crest-to-col ripple along the collision belt
+    const ripple = (U) => { let mx = -1e9, mn = 1e9; for (let x = 0; x < W; x++){ const v = U[48 * W + x]; if (v > 0.1){ mx = Math.max(mx, v); mn = Math.min(mn, v); } } return mx - mn; };
+    const Ulow = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, { ...opts, foldK: 0.05 });
+    const Uhigh = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, { ...opts, foldK: 0.5 });
+    check('T5 higher fold intensity ⇒ deeper intermontane cols (more ripple)', ripple(Uhigh) > ripple(Ulow));
+    // deeper trench: subduction trench min more negative with larger trenchK
+    const oceanR = new Float32Array(W * H); for (let i = 0; i < oceanR.length; i++) oceanR[i] = (i % W) > 60 ? -1 : 1;
+    const trenchMin = (U) => { let lo = 1e9; for (let i = 0; i < U.length; i++) lo = Math.min(lo, U[i]); return lo; };
+    const Ts1 = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanR, W, H, { ...opts, trenchK: 1.0 });
+    const Ts2 = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanR, W, H, { ...opts, trenchK: 2.0 });
+    check('T5 higher trench depth ⇒ deeper subduction trench', trenchMin(Ts2) < trenchMin(Ts1) - 0.1);
+
+    // archetype wiring: deriveFromWorldStructure turns on the graph + maps fold/trench from ws params
+    const savedWS = JSON.parse(JSON.stringify(state.world_structure)), savedTect = { g: state.tect.tectonicGraph, f: state.tect.foldIntensity, t: state.tect.trenchDepth };
+    state.world_structure.tectonicEnergy = 0.9; state.world_structure.oceanDepth = 0.8;
+    deriveFromWorldStructure();
+    check('T5 archetype wiring enables structured orogeny', state.tect.tectonicGraph === true);
+    check('T5 fold intensity scales with tectonicEnergy', Math.abs(state.tect.foldIntensity - (0.6 + 0.9)) < 1e-6);
+    check('T5 trench depth scales with oceanDepth', Math.abs(state.tect.trenchDepth - (0.7 + 0.8 * 0.8)) < 1e-6);
+    state.world_structure = savedWS; state.tect.tectonicGraph = savedTect.g; state.tect.foldIntensity = savedTect.f; state.tect.trenchDepth = savedTect.t;
+  }
+
   // live-engine gate: off → on → off must round-trip bit-exactly (Invariant-10 style)
   generate();
   const base = Float32Array.from(field);

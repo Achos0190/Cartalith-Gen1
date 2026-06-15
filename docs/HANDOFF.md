@@ -64,7 +64,7 @@
 
 ## Completed workstreams (shipped in v0.048–v0.083)
 
-- **Tectonic feature graph T0–T4**: shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064). Feature-complete; optional T5 tuning/archetype hooks remain.
+- **Tectonic feature graph T0–T5 (complete)**: shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064) → orogeny tuning sliders (fold intensity, trench depth) + archetype hooks (v0.090, `deriveFromWorldStructure` enables the graph + maps fold/trench from the archetype). Default + graph-on-with-default-sliders both bit-identical to v0.089.
 - **Earth-system coupling loops L1–L3**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069).
 - **Gravity G1–G3**: G1 scaling throughout pipeline (v0.038), G2 geoid sea-level field (v0.054), G3 moons + tidal range field (v0.070). G4 tidal sedimentation deferred.
 - **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080) → **Atlas Phase 2a: IndexedDB chunk baking + images-override** (v0.081) → **Atlas Phase 2b: cross-session persistence + status + metadata** (v0.082) → **Atlas Phase 3: biome-coloured tiles** (v0.083).
@@ -88,6 +88,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.090** — T5: enable **Structured orogeny** (Tectonics) → **Fold intensity** up = more parallel ranges / deeper intermontane basins; **Trench depth** up = deeper subduction trenches. Then enable **World Structure** + pick an archetype → confirm the graph auto-enables and fold/trench track the archetype (volcanic/archipelago = deeper trenches; high-energy = stronger folds). Inspect in the **Orog** debug view, then erode.
 - **v0.089** — R4: in **Biome** view, **Style → Ridged relief** up → folded-crease shading appears on high terrain (mountains read as ranges, not blobs) and stays clean in lowlands (H² gate); seamless across LOD tiles/zoom; at 0 unchanged.
 - **v0.088** — R3: in **Biome** view, **Style → Surface texture** up → fine fbm grain breaks up flat colour regions (seamless across tiles/zoom); **Style → Minor channels** up → faint blue-grey threads reveal low-order drainage below the main rivers. At 0 both unchanged. Texture bakes into PNG/tiles; minor channels are a screen overlay (like trunk rivers).
 - **v0.087** — R2: in **Biome** view, drag **Style → Ridge crests** up → thin bright sunlit-rock strokes pick out convex ridgelines/shoulders (not valleys); **Style → Slope rock** up → steep ground recolours toward rock. At 0 both are unchanged. Confirm both also show in LOD biome tiles + PNG bakes.

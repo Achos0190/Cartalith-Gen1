@@ -1319,6 +1319,19 @@ fieldsFinite('generate(world)');
   for (let k = 0; k < 6; k++) brushHeight(ns, W, H, 10, 10, 8, 1, 'smooth');
   const variance = a => { let s = 0, s2 = 0, n = 0; for (let y = 6; y <= 14; y++) for (let x = 6; x <= 14; x++){ const v = a[y * W + x]; s += v; s2 += v * v; n++; } return s2 / n - (s / n) ** 2; };
   check('brush smooth reduces local variance', variance(ns) < variance(noisy));
+  // v0.085: the 8-mode unified kernel (same modes as the base sculpt brush) now lives in brushHeight too
+  const dv = new Float32Array(W * H).fill(0.5); brushHeight(dv, W, H, 10, 10, 6, 0.5, 'volcano');
+  check('brush volcano raises a conical peak', dv[10 * W + 10] > 0.5 && dv[10 * W + 11] > 0.5 && dv[10 * W + 11] < dv[10 * W + 10]);
+  const dm = new Float32Array(W * H).fill(0.3); brushHeight(dm, W, H, 10, 10, 6, 0.5, 'mesa', { centerH: 0.3 });
+  check('brush mesa builds a raised flat top (max-semantics, never lowers)', dm[10 * W + 10] > 0.3 && dm.every((v, i) => v >= (i === 0 ? 0.3 : 0)));
+  const dr = new Float32Array(W * H).fill(0.5); brushHeight(dr, W, H, 10, 10, 6, 0.5, 'ridge', { nx: 1, ny: 0 });
+  check('brush ridge crests along the stroke', dr[10 * W + 10] > 0.5);
+  const dca = new Float32Array(W * H).fill(0.5); brushHeight(dca, W, H, 10, 10, 6, 0.8, 'canyon', { nx: 1, ny: 0 });
+  check('brush canyon cuts a channel below the surface', dca[10 * W + 10] < 0.5);
+  const dcl = new Float32Array(W * H).fill(0.5); brushHeight(dcl, W, H, 10, 10, 6, 0.8, 'cliff', { nx: 1, ny: 0 });
+  check('brush cliff raises one side, lowers the other', dcl[10 * W + 13] > 0.5 && dcl[10 * W + 7] < 0.5);
+  const du = new Float32Array(W * H).fill(0.5); brushHeight(du, W, H, 10, 10, 5, 0.2);   // no mode → back-compat raise default
+  check('brush defaults to raise when mode omitted', du[10 * W + 10] > 0.5);
 
   // tile editing on a refined tile
   state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();

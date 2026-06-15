@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas Phase 2a) + v0.082 (Atlas Phase 2b) + v0.083 (Atlas Phase 3) + v0.084 (R1 rendering)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.084.html`** (older `v0.036–0.083` kept, never edited in place — new version = new file).
-- Headless suite: **394 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas Phase 2a) + v0.082 (Atlas Phase 2b) + v0.083 (Atlas Phase 3) + v0.084 (R1 rendering) + v0.085 (unified sculpting brush)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.085.html`** (older `v0.036–0.084` kept, never edited in place — new version = new file).
+- Headless suite: **400 assertions, all green** (one pre-existing water-variance test ties at rounding and may occasionally report a spurious failure — unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -50,6 +50,8 @@
 
 **Interleaved (v0.084) — R1 rendering quality pass** (`docs/research/terrain-rendering-enhancement.md`): multi-scale hillshading + ambient occlusion (render-only). Built between Atlas Phase 3 and Phase 4 per the user's June 2026 sequencing.
 
+**Interleaved (v0.085) — unified sculpting brush** (user request): heightmap-modifying brushes now live **only** in the Sculpt tab. The weak 3-mode LOD `lodBrushSeg`/`_lodBrush` was deleted; `brushHeight` upgraded to the full 8-mode sculpt-quality kernel (shared `state.brush`); the **Edit tiles** checkbox moved Terrain → Sculpt (renamed "Edit LOD tiles"). `generate()` bit-identical to v0.084.
+
 **Phase 4 (next atlas step)**: Portable atlas export/import (`World/` ZIP → IndexedDB and back) via `bakeTiled`/`buildTileManifest`/`gzipBytes`.
 
 **Deferred**: F0–F3 frequency-layered generation; unified-tool merge P0–P2
@@ -80,6 +82,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.085** — Unified brush: in the **Sculpt tab**, all 8 Direct-paint modes work on the base field (no regression). Enable **Tiled LOD** + **Refine** (Terrain tab), then turn on **Edit LOD tiles** (now in the Sculpt tab) → the same brush sculpts refined tile detail: raise/lower/smooth, cliff/ridge/canyon follow drag direction, mesa/volcano stamp once per tap; Ctrl-Z undoes; edits persist per tile through re-refine. Confirm there is no brush selector left in the Terrain tab.
 - **v0.084** — Ambient occlusion: in **Biome** view, drag **Style → Ambient occlusion** up → valleys/canyons/basins darken (depth cue), ridges/peaks unaffected; at 0 the map is unchanged. Confirm AO also shows in LOD biome tiles and in PNG bakes.
 - **v0.083** — Biome tiles: in **Biome** View mode, enable Tiled LOD → the overview + refined + baked tiles render the full biome look (climate colours, not grey relief); switch View to **Relief** → tiles fall back to the height ramp. Bake → the stored atlas PNG is the biome visual; region-export PNGs are biome-coloured.
 - **v0.082** — Atlas persistence: bake some chunks, **reload the page**, set the same seed + Generate → the chunk-debug overlay shows them green and they render from the atlas with no Refine; the `#atlasStat` line shows the count; switch seed → status shows empty; switch back → count returns; **Clear atlas** zeroes it. Confirm no-IndexedDB shows "Atlas: — (no IndexedDB)" and degrades silently.

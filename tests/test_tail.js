@@ -1539,6 +1539,40 @@ fieldsFinite('generate(world)');
   check('AO off ⇒ tile identical to no-AO render', (() => { state.viz.ao = 0; const a = renderBiomeTileRGBA(tile, TW, TH, bounds); state.viz.ao = saved; return a.every((v, i) => v === off[i]); })());
 }
 
+/* ---------- R2: ridge crest enhancement + slope-material refinement (v0.087) ---------- */
+{
+  // buildCrestField: convex (Laplacian<0) + steep → >0; concave bowl / flat / ocean → 0
+  const W = 9, H = 9, ridge = new Float32Array(W * H), bowl = new Float32Array(W * H), flat = new Float32Array(W * H).fill(0.6);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){ const d = x - 4;
+    ridge[y * W + x] = 0.4 + 0.3 * Math.exp(-(d * d) / 4);   // rounded dome ridge along x=4 (convex + sloped shoulders)
+    bowl[y * W + x]  = 0.4 + 0.01 * d * d;                   // upward parabola valley — concave (curv>0) everywhere
+  }
+  const cr = buildCrestField(ridge, W, H, 0.0);
+  check('buildCrestField fires on the convex ridge shoulders', cr.some(v => v > 0));
+  check('buildCrestField ignores concave bowls (interior)', (() => { const bc = buildCrestField(bowl, W, H, 0.0); for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if (bc[y * W + x] !== 0) return false; return true; })());
+  check('buildCrestField ignores flat ground', buildCrestField(flat, W, H, 0.0).every(v => v === 0));
+  check('buildCrestField is land-only (ocean cells stay 0)', buildCrestField(ridge, W, H, 1.0).every(v => v === 0));
+  check('buildCrestField deterministic', buildCrestField(ridge, W, H, 0.0).every((v, i) => v === cr[i]));
+  // sx,sy scaling: a sub-cell-sampled ridge gives the same crest scale as the unit-step ridge
+  const cr1 = buildCrestField(ridge, W, H, 0.0, 1, 1);
+  check('buildCrestField sx,sy default to the unit-step result', cr1.every((v, i) => v === cr[i]));
+  // applyCrest brightens toward the highlight, clamps at s≥1
+  const c0 = [40, 60, 30]; applyCrest(c0, 0.5); check('applyCrest brightens toward the sunlit-rock stroke', c0[0] > 40 && c0[1] > 60 && c0[2] > 30);
+  const c1 = [10, 10, 10]; applyCrest(c1, 2); check('applyCrest clamps strength at 1', Math.abs(c1[0] - 240) < 1e-6);
+  const c2 = [10, 10, 10]; applyCrest(c2, 0); check('applyCrest no-op at strength 0', c2[0] === 10);
+
+  // slope-rock refinement inside landColorCore: gated, off ⇒ identical
+  {
+    const args = [16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0.0, 0.0, 0.0, state.bioBlend, 1, 50, 50, 1];
+    const savedR = state.viz.rockSlope;
+    state.viz.rockSlope = 0; const a = landColorCore(...args), a2 = landColorCore(...args);
+    state.viz.rockSlope = 0.9; const b = landColorCore(...args);
+    state.viz.rockSlope = savedR;
+    check('slope-rock off ⇒ landColorCore deterministic/unchanged', a.every((v, i) => v === a2[i]));
+    check('slope-rock on ⇒ steep land recolours toward rock', a.some((v, i) => v !== b[i]));
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

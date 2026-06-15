@@ -102,13 +102,23 @@ Why deltas form and why they emerge naturally from this codebase's existing tool
 
 **Seam safety**: Trivially satisfied when rivers don't terminate at tile edges (the common case). At exact tile-boundary rivers, seam error < 1e-4 for typical parameters.
 
-### Phase 2 — Per-Tile Micro-Erosion (deferred, v0.095)
+### Phase 2 — Per-Tile Micro-Erosion (v0.095) ✓
 
-Add a few `dropletKernel` passes after burning to add natural terracing, meanders, and bank undercut detail. Requires passing coarse-field boundary cells as fixed edges to prevent drainage disruption at tile seams. The worker kernels already exist; seam boundary conditions are the implementation gap.
+**Function**: `tileMicroErodeKernel(fld, W, H, P, fixed)` (self-contained, no module globals, worker-ready) + the `tileErode(tile, W, H, opts)` wrapper.
 
-### Phase 3 — Delta Distributary Refinement (deferred)
+A small droplet pass on the *already-burned* amplified tile adds natural terracing, meanders, and bank texture inside the carved channels (the Houdini upsample-then-fine-erode cascade, §3). The implementation gap the deferral noted — seam continuity — is solved by a **fixed-border mask**: the wrapper pins the outer 1-cell ring (`fixed` Uint8Array), and both `deposit`/`scrape` skip pinned cells, so the tile boundary stays byte-identical to its neighbours'. Because adjacent tiles share that boundary line (refineTile's 1-cell coarse overlap → identical post-burn values), pinning it on both sides keeps **seam-Δ=0 exactly**. The trade-off (acknowledged): sediment can't physically cross the pinned seam, so the erosion *pattern* (not the height) is discontinuous one cell in — acceptable for decorative texturing, not a continuous physical solve. Behind a separate **"Micro-erode tiles"** toggle (slower: ~400 droplets/tile).
 
-Explicit bifurcation rules near sea level: detect where `routeSediment` builds a sediment fan, insert stochastic avulsion events (avulse when channel bed > floodplain + threshold), carve new distributaries via `burnChannels` with reduced discharge (70%/30% split). Prerequisites: Phase 2 micro-erosion already working.
+**Properties**: pure, deterministic (seeded), all-finite, never NaN; tiny tiles (<4 px) no-op.
+
+### Phase 3 — Delta Channel Sharpening (v0.095) ✓
+
+**Function**: `sharpDelta(tile, W, H, coarseFlow, cW, cH, bounds, sea, opts)`.
+
+Rather than explicit stochastic avulsion (the original Phase-3 sketch), v0.095 takes the simpler, deterministic, seam-safe route that the MFD flow field already enables: in flat coastal terrain MFD spreads discharge across many paths, but `burnChannels`' overlapping burn zones blur them into one broad gradient. `sharpDelta` finds the **coarse-flow local maxima** (the dominant distributary channels — the Bolla Pittaluga 70/30 winners, §4) and carves them an extra `sharpK` deeper, **only in the delta zone** (`tile < sea + zoneH`), restoring channel-vs-floodplain contrast. The local-maximum test runs in **coarse-cell space** (with a 0.1 hysteresis to reject noise), so it is identical for any tile covering that coarse cell → **seam-safe by construction**. Rides the "Burn river channels" toggle (cheap + deterministic).
+
+**Properties**: no-op when flow is zero; only lowers terrain; floor-clamped at `sea − 0.06`; leaves cells above the delta zone untouched; deterministic; seam-Δ < 1e-4.
+
+True stochastic avulsion / lobe-switching over time (animated deltas) remains a possible future extension but is out of scope for a static-map generator.
 
 ---
 
@@ -124,11 +134,11 @@ O(W·H·widthK²) per tile. At 512 px with widthK=3: ~512²·9 ≈ 2.4 M ops. Fa
 | `burnK` | 0.08 | Maximum burn depth at full discharge |
 | `widthK` | 3.0 | Width coefficient (W = widthK·√rel cells) |
 
-### What `burnChannels` Does NOT Do
-- Does not modify the base `field` — LOD-only, main map unchanged
-- Does not enforce monotonic descent along the channel (coarse carving via `streamPowerErode` handles this)
-- Does not add bank erosion detail (Phase 2)
-- Does not bifurcate delta distributaries (Phase 3)
+### What the river-LOD passes do NOT do
+- Do not modify the base `field` — all three passes are LOD-only, main map unchanged
+- `burnChannels` does not enforce monotonic descent along the channel (coarse carving via `streamPowerErode` handles this)
+- Micro-erosion is decorative, not a continuous physical solve across seams (pinned borders)
+- No animated lobe-switching / time-evolving avulsion (static-map generator)
 
 ---
 

@@ -1426,6 +1426,78 @@ fieldsFinite('generate(world)');
   check('burnChannels seam-Δ < 1e-4 between adjacent tiles', maxSeam94 < 1e-4);
 }
 
+/* ---------- v0.095: tileErode (Phase 2 micro-erosion) + sharpDelta (Phase 3) ---------- */
+{
+  const W = 24, H = 24;
+  // a sloped tile so droplets have somewhere to flow
+  const slope = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) slope[y * W + x] = 0.7 - 0.012 * y;
+  const tile = slope.slice();
+  tileErode(tile, W, H, {seed: 7, g: 1, droplets: 300});
+
+  // border ring is pinned (seam safety) — outer cells byte-unchanged
+  let borderMoved = false;
+  for (let x = 0; x < W; x++){ if (tile[x] !== slope[x]) borderMoved = true; if (tile[(H-1)*W+x] !== slope[(H-1)*W+x]) borderMoved = true; }
+  for (let y = 0; y < H; y++){ if (tile[y*W] !== slope[y*W]) borderMoved = true; if (tile[y*W+W-1] !== slope[y*W+W-1]) borderMoved = true; }
+  check('tileErode pins the border ring (seam safety)', !borderMoved);
+  // interior actually changes
+  let interiorMoved = false;
+  for (let y = 1; y < H-1 && !interiorMoved; y++) for (let x = 1; x < W-1; x++) if (Math.abs(tile[y*W+x] - slope[y*W+x]) > 1e-7){ interiorMoved = true; break; }
+  check('tileErode modifies the interior', interiorMoved);
+  // all finite, never NaN
+  check('tileErode output stays finite', tile.every(v => Number.isFinite(v)));
+  // deterministic: same seed → identical
+  const tile2 = slope.slice(); tileErode(tile2, W, H, {seed: 7, g: 1, droplets: 300});
+  let det = true; for (let i = 0; i < tile.length; i++) if (tile[i] !== tile2[i]){ det = false; break; }
+  check('tileErode is deterministic (same seed)', det);
+  // tiny tiles are a no-op (guard)
+  const tiny = new Float32Array(9).fill(0.5); tileErode(tiny, 3, 3, {seed: 1});
+  check('tileErode no-ops on tiles < 4 px', tiny.every(v => Math.abs(v - 0.5) < 1e-6));
+
+  // ----- sharpDelta -----
+  const sea = 0.42, cW = 16, cH = 16;
+  // zero flow → no-op
+  const sdTile = new Float32Array(W * H).fill(sea - 0.02);   // in the delta zone
+  const zeroFlow = new Float32Array(cW * cH);
+  sharpDelta(sdTile, W, H, zeroFlow, cW, cH, {x:0,y:0,w:cW-1,h:cH-1}, sea, {});
+  check('sharpDelta no-op when flow is zero', sdTile.every(v => Math.abs(v - (sea-0.02)) < 1e-6));
+
+  // a single coarse local maximum deepens the channel cells inside the delta zone
+  const flow = new Float32Array(cW * cH);
+  flow[8 * cW + 8] = 900;                                    // dominant channel peak
+  const bnds = {x:0, y:0, w:cW-1, h:cH-1};
+  const sdTile2 = new Float32Array(W * H).fill(sea - 0.02);
+  sharpDelta(sdTile2, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  check('sharpDelta deepens a local-max channel in the delta zone', sdTile2.some(v => v < sea - 0.02 - 1e-6));
+  check('sharpDelta never raises terrain', sdTile2.every(v => v <= sea - 0.02 + 1e-6));
+  check('sharpDelta never goes below sea - 0.06', sdTile2.every(v => v >= sea - 0.06 - 1e-9));
+
+  // cells above sea + zoneH are untouched (only acts in the delta zone)
+  const sdHigh = new Float32Array(W * H).fill(sea + 0.2);
+  sharpDelta(sdHigh, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  check('sharpDelta leaves cells above the delta zone unchanged', sdHigh.every(v => Math.abs(v - (sea+0.2)) < 1e-6));
+
+  // deterministic
+  const sdA = new Float32Array(W * H).fill(sea - 0.02), sdB = new Float32Array(W * H).fill(sea - 0.02);
+  sharpDelta(sdA, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  sharpDelta(sdB, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  let sdDet = true; for (let i = 0; i < sdA.length; i++) if (sdA[i] !== sdB[i]){ sdDet = false; break; }
+  check('sharpDelta is deterministic', sdDet);
+
+  // seam safety: two adjacent tiles over a shared coarse local-max agree at the seam.
+  // The coarse local-max sits well inside both tiles' coarse bounds (one cell from the seam).
+  const cW2 = 32, cH2 = 16;
+  const flow2 = new Float32Array(cW2 * cH2);
+  flow2[8 * cW2 + 20] = 900;                                 // peak inside tile B, > 3px from seam
+  const bA = {x:0, y:0, w:16, h:15}, bB = {x:15, y:0, w:16, h:15};
+  const tA = new Float32Array(32 * 16).fill(sea - 0.02), tB = new Float32Array(32 * 16).fill(sea - 0.02);
+  sharpDelta(tA, 32, 16, flow2, cW2, cH2, bA, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  sharpDelta(tB, 32, 16, flow2, cW2, cH2, bB, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  let maxSeamSD = 0;
+  for (let y = 0; y < 16; y++){ const d = Math.abs(tA[y*32 + 31] - tB[y*32 + 0]); if (d > maxSeamSD) maxSeamSD = d; }
+  check('sharpDelta seam-Δ < 1e-4 between adjacent tiles', maxSeamSD < 1e-4);
+}
+
 /* ---------- Stage 3: per-tile editing (v0.075) ---------- */
 {
   // pure brush

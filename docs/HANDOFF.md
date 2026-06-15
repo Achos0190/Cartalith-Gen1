@@ -4,9 +4,10 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.094** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.094.html`** (older `v0.036–0.093` kept, never edited in place — new version = new file).
-- Headless suite: **461 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.095** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.095.html`** (older `v0.036–0.094` kept, never edited in place — new version = new file).
+- **Next planned**: v0.096 = SDF geometric control field (coast + rivers + biomes), render-only/opt-in. Plan + research in `docs/research/multiscale-rivers.md` neighbours; the signed-coast-distance core generalizes `computeCoastDistance`.
+- Headless suite: **473 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -68,7 +69,7 @@
 - **Earth-system coupling loops L1–L3 + L6**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069), cryosphere ice-albedo feedback (v0.091). L4 dynamic lithology remains the one optional follow-up.
 - **Gravity G1–G3**: G1 scaling throughout pipeline (v0.038), G2 geoid sea-level field (v0.054), G3 moons + tidal range field (v0.070). G4 tidal sedimentation deferred.
 - **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080) → **Atlas Phase 2a: IndexedDB chunk baking + images-override** (v0.081) → **Atlas Phase 2b: cross-session persistence + status + metadata** (v0.082) → **Atlas Phase 3: biome-coloured tiles** (v0.083).
-- **Rivers**: smooth discharge-widened rivers (v0.076) + brushed rivers as entrenched drainage seeds (v0.077).
+- **Rivers**: smooth discharge-widened rivers (v0.076) + brushed rivers as entrenched drainage seeds (v0.077). **Multi-scale river LOD (complete)**: AGREE channel burning (v0.094) → per-tile micro-erosion + delta channel sharpening (v0.095), all seam-safe and LOD-only (`docs/research/multiscale-rivers.md`).
 - **Visuals**: parchment + icons (v0.050), waves (v0.051), Style tab + asset-pack importer (v0.056), B2 texture splatting (v0.059).
 - **16k tiling**: seamless `amplifyRegion` core (v0.044) → `refineTile` + `packHeight16` + manifest v2 (v0.052) → region-refine export (v0.053) → cols×rows + aspect-preserving tile pixels (v0.055).
 - **Water quality**: smooth sea-floor shading (v0.063/v0.065), resolution-independent ocean grain + 4K/8K resolution options (v0.068), **warp-cache NaN root-cause fix** (v0.071 — this was the real "bad seas at 2K" fix).
@@ -80,7 +81,7 @@
 - Real CC0 art into the sample-pack format (`docs/research/asset-candidates.md`): ambientCG textures + K.M. Alexander icons
 - Bilinear texture sampling for splat
 - Vector spline-traced coastlines (B4 optional half)
-- **Phase 2 river micro-erosion** (v0.095): run a few `dropletKernel` passes on burned tiles for natural terracing/meanders; requires passing coarse-field boundary cells as fixed edges
+- **SDF geometric control field** (v0.096, planned): signed coast/river/biome distance fields driving anti-aliased constant-width coastlines, distance-banded coastal biomes, river bank/wetland/floodplain bands, and seam-safe "reverse-mipmap" tile reconstruction (render-only/opt-in)
 - fflate vendoring for tile ZIP speed
 - L4 dynamic lithology, L6 cryosphere albedo (lower-priority audit loops)
 - G4 tidal sedimentation
@@ -89,6 +90,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.095** — river Phase 2/3: with **Tiled LOD** on + **Refine** a river/delta area, toggle **"Burn river channels"** (now also runs delta sharpening → distributaries read as distinct channels vs. floodplain) and **"Micro-erode tiles"** (slower; adds terracing/meander texture inside carved channels). Confirm tile seams stay seamless with both on, and that micro-erosion doesn't disturb the tile borders. Toggle both off → smooth amplification (bit-identical to v0.094).
 - **v0.094** — AGREE river burning: enable **Tiled LOD** → Generate → **Refine** a river-rich area → toggle **"Burn river channels"** in the LOD panel → rivers should become crisp carved valleys at high zoom instead of blurry smears. Zoom into a coastal delta fan — the multiple MFD paths should resolve into carved distributary channels. Adjacent tile seams should be seamless (no height step). Toggle off → reverts to smooth amplification.
 - **v0.093** — debug legend fix (UI-only): switch through all 16 debug views (Off, Temp, Köppen, Rain, Wind, Ocean, Plates, Bounds, Tect, **Orog**, Stress, Age, Flow, **Geoid**, **Tides**, **CBiome**) and confirm the lower-left legend updates to show the correct swatches/labels for each. The four that were previously missing (**Orog**, **Geoid**, **Tides**, **CBiome**) should now show relevant info rather than falling back to the biome/hypso legend.
 - **v0.092** — bug-fix pass: (1) In the **Terrain**/**Style** tabs, dragging the canvas must NOT sculpt (only the **Sculpt** tab edits); confirm pan still works via middle-drag/space/wheel. (2) In **Tiled LOD** + **Biome** view, the ocean should now read smooth (broad depth zones, no per-pixel seabed sparkle) like the main map; coasts stay crisp. (3) Toggle **Chunk debug → Grid/Colors** with LOD on → a bold coloured chunk lattice (+ faint child-quadrant guides) is visible; zoom in to see it subdivide. (4) terrain detail still requires **Refine** (overview is intentionally detail-free).

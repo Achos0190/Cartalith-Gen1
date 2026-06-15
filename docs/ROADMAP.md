@@ -22,6 +22,7 @@ User-set sequence (June 2026): **visuals → 16k tiling → gravity (G2/G3) → 
 10. **P3 — Climate→content bridges**: paint-grid fill from climate, flowField→ways river tracing, climate-aware planner, salt-flat/endorheic material (handoff pending #6).
 13. ~~**R32F GPU migration**~~ — SHIPPED v0.099 (R32F single-channel when renderable, RGBA32F fallback; 4× texture memory). Browser pass owed.
 14. **Disturbance model** — wind-throw (W1 wind × canopy × slope) + flood proxy (TWI + discharge) SHIPPED v0.098 as read-only debug views. Further work (optional): bake hazard layers to export, drive content placement.
+15. ~~**GUI overhaul**~~ — SHIPPED v0.100 (user request): header **Import ▾** menu, dedicated **Tiles & LOD** section with live export-size estimate + on-map tile-border preview, Erosion/Debug accordions, merged Calibrate→Scale, slimmed export section. UI-only ⇒ bit-identical. Browser pass owed.
 
 (G2 geoid and G3 moons/tides moved up into Now → item 3, per the user's June 2026 sequencing.)
 

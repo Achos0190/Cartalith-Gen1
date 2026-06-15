@@ -5,8 +5,9 @@
 ## Where we are
 
 - Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.096** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.099.html`** (older `v0.036–0.098` kept, never edited in place — new version = new file).
+- Current engine file: **`elevation_foundation_v0.100.html`** (older `v0.036–0.099` kept, never edited in place — new version = new file).
 - **"Finish everything except the tool merge" push COMPLETE**: v0.097 SDF polish ✓, v0.098 physical-model tails ✓, v0.099 R32F GPU ✓. The only owed verification is a **manual browser pass** for the GPU R32F path (headless covers only CPU fallback) plus the visual browser passes accumulated across v0.081→v0.099.
+- **v0.100 — GUI overhaul (user request) DONE**: simplified, more dynamic sidebar — header **`Import ▾`** menu (heightmap / project .zip / asset pack / atlas), a dedicated **Tiles & LOD** section with a **live export-size estimate** + **"Show tile borders" on-map preview** (`drawExportTileGrid` on `vctx`, gated `_showExportGrid`), Erosion/Debug collapsed into `<details>` accordions, Calibrate→**Scale**, Performance folded into Source, Save&export→**Export image & project**. UI-only (HTML/CSS + 3 small JS adds) ⇒ **bit-identical to v0.099** (field/temp/render cmp-clean). Browser pass owed: dropdown behaviour, tile preview + estimate, accordion ergonomics.
 - Headless suite: **514 assertions** (one *pre-existing flaky* test — "stream-power channels net-incise" — occasionally trips because the incision mean rides near 0 and rain uses `Math.random()`; re-run to confirm green; unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)

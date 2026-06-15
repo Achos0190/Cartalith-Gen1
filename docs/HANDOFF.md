@@ -4,9 +4,9 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081 (Atlas 2a) + v0.082 (Atlas 2b) + v0.083 (Atlas 3) + v0.084 (R1) + v0.085 (unified brush) + v0.086 (Atlas 4 export/import) + v0.087 (R2 crests + slope rock) + v0.088 (R3 texture synth + minor channels) + v0.089 (R4 ridged relief — R-series complete) + v0.090 (T5 orogeny tuning + archetype hooks — tectonic graph complete) + v0.091 (L6 cryosphere ice-albedo feedback) + v0.092 (LOD/sculpt/overlay bug-fix pass) + v0.093 (debug legend fix — all 16 views now update)** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.093.html`** (older `v0.036–0.092` kept, never edited in place — new version = new file).
-- Headless suite: **455 assertions, all green** (one pre-existing water-variance test ties at rounding and may occasionally report a spurious failure — unrelated to current work). Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.094** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.094.html`** (older `v0.036–0.093` kept, never edited in place — new version = new file).
+- Headless suite: **461 assertions, all green**. Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -80,7 +80,8 @@
 - Real CC0 art into the sample-pack format (`docs/research/asset-candidates.md`): ambientCG textures + K.M. Alexander icons
 - Bilinear texture sampling for splat
 - Vector spline-traced coastlines (B4 optional half)
-- Per-tile erosion at refine time; fflate vendoring for tile ZIP speed
+- **Phase 2 river micro-erosion** (v0.095): run a few `dropletKernel` passes on burned tiles for natural terracing/meanders; requires passing coarse-field boundary cells as fixed edges
+- fflate vendoring for tile ZIP speed
 - L4 dynamic lithology, L6 cryosphere albedo (lower-priority audit loops)
 - G4 tidal sedimentation
 
@@ -88,6 +89,7 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.094** — AGREE river burning: enable **Tiled LOD** → Generate → **Refine** a river-rich area → toggle **"Burn river channels"** in the LOD panel → rivers should become crisp carved valleys at high zoom instead of blurry smears. Zoom into a coastal delta fan — the multiple MFD paths should resolve into carved distributary channels. Adjacent tile seams should be seamless (no height step). Toggle off → reverts to smooth amplification.
 - **v0.093** — debug legend fix (UI-only): switch through all 16 debug views (Off, Temp, Köppen, Rain, Wind, Ocean, Plates, Bounds, Tect, **Orog**, Stress, Age, Flow, **Geoid**, **Tides**, **CBiome**) and confirm the lower-left legend updates to show the correct swatches/labels for each. The four that were previously missing (**Orog**, **Geoid**, **Tides**, **CBiome**) should now show relevant info rather than falling back to the biome/hypso legend.
 - **v0.092** — bug-fix pass: (1) In the **Terrain**/**Style** tabs, dragging the canvas must NOT sculpt (only the **Sculpt** tab edits); confirm pan still works via middle-drag/space/wheel. (2) In **Tiled LOD** + **Biome** view, the ocean should now read smooth (broad depth zones, no per-pixel seabed sparkle) like the main map; coasts stay crisp. (3) Toggle **Chunk debug → Grid/Colors** with LOD on → a bold coloured chunk lattice (+ faint child-quadrant guides) is visible; zoom in to see it subdivide. (4) terrain detail still requires **Refine** (overview is intentionally detail-free).
 - **v0.091** — L6: in **Whole world** mode, raise **Climate → Ice albedo** → polar caps + high massifs cool and the snow/tundra biomes broaden; at 0 unchanged. Confirm the temperature debug view shows deepened cold at the poles and that warm/temperate latitudes are untouched.

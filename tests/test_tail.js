@@ -1378,6 +1378,54 @@ fieldsFinite('generate(world)');
   _lodOn = false; _lodZoom = 1; lodCacheClear();
 }
 
+/* ---------- v0.094: burnChannels — AGREE stream-burning ---------- */
+{
+  const W = 32, H = 32, sea = 0.42;
+  // zero flow → tile unchanged
+  const base = new Float32Array(W * H).fill(0.6);
+  const zeroFlow = new Float32Array(16 * 10);   // all zero
+  burnChannels(base, W, H, zeroFlow, 16, 10, {x:0,y:0,w:15,h:9}, sea, {});
+  check('burnChannels with zero flow leaves tile unchanged', base.every(v => Math.abs(v - 0.6) < 1e-6));
+
+  // high-flow centre depresses, far cell unchanged
+  const tile2 = new Float32Array(W * H).fill(0.6);
+  const flow2 = new Float32Array(16 * 10);
+  flow2[5 * 16 + 8] = 500;   // high-flow cell near world-centre of this tile's bounds
+  const bounds2 = {x:6, y:3, w:10, h:7};
+  burnChannels(tile2, W, H, flow2, 16, 10, bounds2, sea, {thresh:0.005, burnK:0.08, widthK:3});
+  check('burnChannels depresses terrain under a high-flow cell', tile2.some(v => v < 0.6));
+  check('burnChannels leaves terrain far from flow channel unchanged', Math.abs(tile2[0] - 0.6) < 1e-6);
+
+  // never raises terrain (all deltas ≤ 0)
+  const tile3 = new Float32Array(W * H).fill(0.6);
+  const flow3 = new Float32Array(16 * 10).fill(100);
+  burnChannels(tile3, W, H, flow3, 16, 10, {x:0,y:0,w:15,h:9}, sea, {});
+  check('burnChannels never raises terrain', tile3.every(v => v <= 0.6));
+
+  // never goes below sea - 0.06
+  const tile4 = new Float32Array(W * H).fill(sea - 0.05);
+  burnChannels(tile4, W, H, flow3, 16, 10, {x:0,y:0,w:15,h:9}, sea, {burnK:1.0});
+  check('burnChannels never goes below sea - 0.06', tile4.every(v => v >= sea - 0.06 - 1e-9));
+
+  // seam-Δ: two adjacent tiles share identical values at their shared coarse-coord column
+  const cW2 = 32, cH2 = 20;
+  const coarse2 = new Float32Array(cW2 * cH2).fill(0.5);
+  coarse2[10 * cW2 + 22] = 800;   // prominent river cell well inside tB, >3px from seam
+  const bA = {x:0, y:0, w:16, h:20}, bB = {x:15, y:0, w:16, h:20};
+  const opts94 = {thresh:0.005, burnK:0.08, widthK:3};
+  const tA = new Float32Array(32 * 20).fill(0.6);
+  const tB = new Float32Array(32 * 20).fill(0.6);
+  burnChannels(tA, 32, 20, coarse2, cW2, cH2, bA, sea, opts94);
+  burnChannels(tB, 32, 20, coarse2, cW2, cH2, bB, sea, opts94);
+  // right column of tA (x=31) and left column of tB (x=0) cover the same coarse coord x=15
+  let maxSeam94 = 0;
+  for (let y = 0; y < 20; y++) {
+    const d = Math.abs(tA[y * 32 + 31] - tB[y * 32 + 0]);
+    if (d > maxSeam94) maxSeam94 = d;
+  }
+  check('burnChannels seam-Δ < 1e-4 between adjacent tiles', maxSeam94 < 1e-4);
+}
+
 /* ---------- Stage 3: per-tile editing (v0.075) ---------- */
 {
   // pure brush

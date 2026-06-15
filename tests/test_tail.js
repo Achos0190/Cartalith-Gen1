@@ -1632,6 +1632,43 @@ fieldsFinite('generate(world)');
     delete global.indexedDB; _atlasDBp = null; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta = null; _worldKey = '';
   }
 
+  /* ---------- Atlas Phase 4: portable World/ ZIP export+import (v0.086) ---------- */
+  {
+    // pure manifest + chunk-file naming
+    check('atlasChunkFile groups by LOD level', atlasChunkFile(3, 5, 6, 'bin') === 'World/LOD3/3_5_6.bin');
+    check('atlasChunkFile carries the .gz / .png extension', atlasChunkFile(1, 0, 0, 'bin.gz') === 'World/LOD1/1_0_0.bin.gz' && atlasChunkFile(1, 0, 0, 'png') === 'World/LOD1/1_0_0.png');
+    const man0 = buildAtlasManifest('wk1', [{ z: 2, col: 1, row: 0, w: 4, h: 4, gzip: true, png: true }, { z: 2, col: 0, row: 0, w: 4, h: 4, gzip: false, png: false }], { tileSize: 512 });
+    check('buildAtlasManifest tags kind + worldKey + count', man0.kind === 'cartalith-atlas' && man0.worldKey === 'wk1' && man0.count === 2 && man0.tileSize === 512);
+    check('buildAtlasManifest bin name reflects gzip flag', man0.chunks[0].bin.endsWith('.bin.gz') && man0.chunks[1].bin.endsWith('.bin') && !man0.chunks[1].bin.endsWith('.gz'));
+    check('buildAtlasManifest png is null when chunk has none', man0.chunks[0].png && man0.chunks[1].png === null);
+
+    // round-trip through IDB → entries → ZIP → unzip → fresh IDB
+    if (typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined') {
+      global.indexedDB = __makeIDBShim(); _atlasDBp = null;
+      _worldKey = 'ax'; _atlasBaked.clear(); _lodTile = 512;
+      const d0 = Float32Array.from({ length: 16 }, (_, i) => (i % 7) / 7), d1 = Float32Array.from({ length: 16 }, (_, i) => 1 - (i % 5) / 5);
+      await atlasPut({ key: atlasKeyStr('ax', 512, 1, 2, 3), worldKey: 'ax', ts: 512, z: 1, col: 2, row: 3, w: 4, h: 4, rg16: packHeight16(d0, 16), png: null, ver: VERSION, time: 1 });
+      await atlasPut({ key: atlasKeyStr('ax', 512, 0, 0, 0), worldKey: 'ax', ts: 512, z: 0, col: 0, row: 0, w: 4, h: 4, rg16: packHeight16(d1, 16), png: null, ver: VERSION, time: 1 });
+      const exp = await atlasExportEntries(true);
+      check('atlasExportEntries gathers both chunks + a manifest', exp && exp.manifest.count === 2 && exp.entries.some(e => e.name === 'World/atlas.json'));
+      const blob = zipStore(exp.entries), zip = await unzipAny(await blob.arrayBuffer());
+      check('exported ZIP contains the gzipped chunk bins', !!zip['World/LOD1/1_2_3.bin.gz'] && !!zip['World/LOD0/0_0_0.bin.gz']);
+      // fresh "machine": new shim, same worldKey so import repopulates _atlasBaked
+      global.indexedDB = __makeIDBShim(); _atlasDBp = null; _atlasBaked.clear();
+      const n = await atlasImportEntries(zip);
+      check('atlasImportEntries writes both chunks back to IDB', n === 2);
+      check('import repopulates _atlasBaked for the current world', _atlasBaked.has(atlasKeyStr('ax', 512, 1, 2, 3)));
+      const keys2 = await atlasKeysForWorld('ax');
+      check('imported atlas is queryable by world index', keys2.length === 2);
+      const rec = await atlasGet(atlasKeyStr('ax', 512, 1, 2, 3)), back = unpackHeight16(rec.rg16, 16);
+      let maxd = 0; for (let i = 0; i < 16; i++) maxd = Math.max(maxd, Math.abs(back[i] - d0[i]));
+      check('imported chunk height round-trips ≤ 1 LSB', maxd <= 1 / 65535 + 1e-9);
+      const imeta = await atlasGetMeta('ax');
+      check('import writes a metadata record', !!imeta && imeta.chunks === 2);
+      delete global.indexedDB; _atlasDBp = null; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta = null; _worldKey = '';
+    } else { console.log('skip - CompressionStream/DecompressionStream unavailable'); }
+  }
+
   console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
   process.exit(__fail ? 1 : 0);
 })();

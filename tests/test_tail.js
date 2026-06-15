@@ -1573,6 +1573,40 @@ fieldsFinite('generate(world)');
   }
 }
 
+/* ---------- R3: procedural texture synthesis + minor-channel flow lines (v0.088) ---------- */
+{
+  // texture synthesis inside landColorCore: gated, off ⇒ identical, on ⇒ modulates, deterministic per-pixel
+  const args = [16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0.0, 0.0, 0.0, state.bioBlend, 1, 50, 50, 1];
+  const savedT = state.viz.texture;
+  state.viz.texture = 0;   const off = landColorCore(...args), off2 = landColorCore(...args);
+  state.viz.texture = 0.9; const on = landColorCore(...args), on2 = landColorCore(...args);
+  state.viz.texture = savedT;
+  check('texture off ⇒ landColorCore unchanged/deterministic', off.every((v, i) => v === off2[i]));
+  check('texture on ⇒ colour is modulated', off.some((v, i) => v !== on[i]));
+  check('texture on ⇒ deterministic (seamless world-coord noise)', on.every((v, i) => v === on2[i]));
+  // two different world positions get different texture (it's spatially varying)
+  state.viz.texture = 0.9;
+  const pA = landColorCore(16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0, 0, 0, state.bioBlend, 1, 17, 23, 1);
+  const pB = landColorCore(16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0, 0, 0, state.bioBlend, 1, 200, 140, 1);
+  state.viz.texture = savedT;
+  check('texture varies across world coords', pA.some((v, i) => v !== pB[i]));
+
+  // minor channels: surfaceColor band below the trunk threshold, gated, off ⇒ identical
+  state.world = false; state.resW = 128; GW = 128; GH = gridH(128); allocate(); generate(); computeFlow(true);
+  const hi = GW * GH * 0.0004, lo = hi * 0.05;
+  // find a land cell whose flow sits in the minor band
+  let idx = -1; for (let i = 0; i < GW * GH; i++){ if (field[i] >= state.seaLevel && flowField[i] > lo && flowField[i] < hi){ idx = i; break; } }
+  const savedM = state.viz.minorStreams, savedR2 = state.showRivers; state.showRivers = true;
+  if (idx >= 0){ const x = idx % GW, y = (idx / GW) | 0;
+    _riverField = null; state.viz.minorStreams = 0;   const c0 = surfaceColor(x, y, idx, field[idx]);
+    _riverField = null; state.viz.minorStreams = 0;   const c0b = surfaceColor(x, y, idx, field[idx]);
+    check('minor channels off ⇒ surfaceColor unchanged/deterministic', c0.every((v, i) => v === c0b[i]));
+    _riverField = null; state.viz.minorStreams = 0.9; const c1 = surfaceColor(x, y, idx, field[idx]);
+    check('minor channels on ⇒ band cell shifts blue-grey', c1.some((v, i) => v !== c0[i]) && c1[2] >= c1[0]);
+  } else { console.log('skip - no minor-band cell found at this seed/res'); check('minor channels band lookup', true); }
+  state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverField = null;
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

@@ -4,9 +4,14 @@
 
 ## Where we are
 
-- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #2 merged June 2026). Create a new branch (`claude/<topic>`) for the next session's work; push to that branch, never directly to `main`.
-- Current engine file: **`elevation_foundation_v0.080.html`** (older `v0.036–0.079` kept, never edited in place — new version = new file).
-- Headless suite: **357 assertions, all green**. Run before & after any engine change:
+- Repo `achos0190/cartalith-gen1`. All work through **v0.080** is on **`main`** (PR #3 merged June 2026); **v0.081–v0.096** are on branch `claude/cartalith-phase-2a-idb-r4fm6c` (draft PR #4). Create a new branch (`claude/<topic>`) for unrelated next work; push to that branch, never directly to `main`.
+- Current engine file: **`elevation_foundation_v0.103.html`** (older `v0.036–0.102` kept, never edited in place — new version = new file).
+- **"Finish everything except the tool merge" push COMPLETE**: v0.097 SDF polish ✓, v0.098 physical-model tails ✓, v0.099 R32F GPU ✓. The only owed verification is a **manual browser pass** for the GPU R32F path (headless covers only CPU fallback) plus the visual browser passes accumulated across v0.081→v0.099.
+- **v0.100 — GUI overhaul (user request) DONE**: simplified, more dynamic sidebar — header **`Import ▾`** menu (heightmap / project .zip / asset pack / atlas), a dedicated **Tiles & LOD** section with a **live export-size estimate** + **"Show tile borders" on-map preview** (`drawExportTileGrid` on `vctx`, gated `_showExportGrid`), Erosion/Debug collapsed into `<details>` accordions, Calibrate→**Scale**, Performance folded into Source, Save&export→**Export image & project**. UI-only (HTML/CSS + 3 small JS adds) ⇒ **bit-identical to v0.099** (field/temp/render cmp-clean). Browser pass owed: dropdown behaviour, tile preview + estimate, accordion ergonomics.
+- **v0.101 — loading messages + resource overlay (user request) DONE**: `LOAD_MSGS` (9 category pools + rare 12% + xrare easter-egg 4%), `pickLoadingMsg(hint)`, two-line `.busy` overlay (amber wit + dim label), **Shift+D** `#resOverlay` (resolution·MP, array MB, GPU mode, IDB/Workers, LOD, active features, last-pass timing). UI-only ⇒ bit-identical to v0.100.
+- **v0.102 — Cartalith terrain layer, debug-only (user request) DONE**: second auto-filled Cartalith paint grid (TERRAIN, parallel to v0.078's CBiome). `CART_TERRAINS`/`CART_TERRAIN_COLS` (frozen 13-entry order from `Cartalith_V1.914`), `buildCartTerrain()` auto-classifies from slope+elevation+temp+moisture (human-made surfaces never auto-gen), new **Terrain** `#debugSeg` view + legend. Debug/render-only ⇒ **bit-identical to v0.101**. 519 assertions green. Browser pass owed: terrain-classification look.
+- **v0.103 — sea/lake distinction + biome-coverage completion (user request) DONE**: pure `buildWaterBodies()` → 0 land / 1 sea (largest component) / 2 lake (enclosed inland seas + moisture-gated above-sea depression pools via priority-flood). `'lake'` appended to frozen `BIOME_KEYS` (index 13) → exported `biome_raster.bin` now carries lakes (0=open sea, 13=lake). CBiome gaps filled (Coastal Lowland, Wetlands, Cold Desert, Lake, Ocean) → auto-fill now covers 13/15 Cartalith biomes (only fantasy Ruined Wastes unreached). Terrain view paints lakes lighter than sea. **Bit-identical at defaults to v0.102** (FIELD/TEMP/RENDER cmp-clean). 527 assertions green. Follow-ups: lakes in LOD tiles; lake thresholds + new biome look need a browser pass.
+- Headless suite: **514 assertions** (one *pre-existing flaky* test — "stream-power channels net-incise" — occasionally trips because the incision mean rides near 0 and rain uses `Math.random()`; re-run to confirm green; unrelated to current work). Run before & after any engine change:
   ```bash
   tests/run.sh            # extract JS → node --check → smoke suite (CPU paths)
   ```
@@ -28,27 +33,47 @@
 - `_atlasBaked` is a stub Set; Phase 2 wires it to IndexedDB
 - Chunk-debug overlay on the LOD view: Grid / Colors / Labels toggles
 
-**Phase 2a (v0.081) — NEXT**: IndexedDB store + bake + "images override generation"
-- Store `atlas` keyed by `(worldKey, z, col, row)` → rg16 height + visual PNG blob
-- `worldKey` = hash of seed + generation params
-- Bake action: render chunk → write to IndexedDB → `isBaked=true`
-- Render rule: baked chunk → load from IDB; else procedural. No refinement beneath baked chunks.
+**Phase 2a (v0.081) — DONE**: IndexedDB store + bake + "images override generation"
+- Store `atlas` (`cartalith_atlas` DB, keyPath `key`, `world` index) → `{rg16 height, png Blob}`, keyed by `atlasChunkKey = worldKey:ts:z:col:row`
+- `worldKey()` = FNV-1a hash of seed + generation params (render-affecting state subset)
+- Pure cores headless-tested: `worldKey`/`atlasKeyStr`/`atlasEncodeChunk`/`atlasDecodeChunk`/`bakedCover`
+- `bakeVisibleTiles()` renders visible LOD tiles → IDB → `_atlasBaked`; **Bake / Clear atlas** buttons
+- Render rule (`drawLODView`): baked chunk → load from IDB (`atlasLoadImg`→`_atlasImg`); else procedural. `refineVisibleTiles` skips tiles under a baked ancestor (`bakedCover`).
+- Off / no-IDB ⇒ bit-identical to v0.080 (field/temp/rain/render cmp-clean)
 
-**Phase 2b (v0.082)**: Persistence + atlas lifecycle (edits/bakes survive `generate()` when worldKey unchanged; atlas status UI; clear action)
+**Phase 2b (v0.082) — DONE**: cross-session persistence + status + metadata
+- `atlasSyncWorld()` fires from `generate()` (runs at startup): `atlasKeysForWorld(wk)` (`world` index `getAllKeys`) repopulates `_atlasBaked` from IDB → bakes survive reload/regenerate. Re-checks `wk===_worldKey` after each await (no stale repopulate on fast world-switch).
+- Per-world metadata record (`atlasMetaRec`/`atlasMetaKey='meta:'+wk`, no `worldKey` field so the index excludes it; `atlasPutMeta`/`atlasGetMeta`) → powers the `#atlasStat` status line (`updateAtlasStatus`).
+- `atlasClearWorld` refactored cursor-free (`atlasKeysForWorld`+`atlasDelete`+meta).
+- Test-only in-memory IDB shim (`__makeIDBShim` in `tests/stub_head.js`, not auto-installed) drives a full headless round-trip; default suite + cmp stay on the genuine no-IDB path.
+- Off / no-IDB ⇒ bit-identical to v0.081 (field/temp/rain/render cmp-clean).
 
-**Phase 3 (v0.083)**: Biome-coloured tiles (tiles render the full biome look, not relief-only)
+**Phase 3 (v0.083) — DONE**: biome-coloured LOD/atlas tiles
+- `renderBiomeTileRGBA(tile,W,H,bounds)` reuses `landColorCore`: height/slope/hillshade from the tile, T/M/flow/aspect from the coarse fields at the tile's world coords; slope rescaled to coarse-cell units so material thresholds match the main map.
+- `drawLODView` picks the renderer by `state.mode` (Biome → biome tiles, Relief → height ramp); `tilePngBytes` gained an optional `bounds` arg → atlas-bake + region-export PNGs store the biome visual.
+- Default render untouched (LOD-only / explicit bakes) ⇒ bit-identical to v0.082.
 
-**Phase 4 (v0.084)**: Portable atlas export/import (`World/` ZIP → IndexedDB and back)
+**Interleaved (v0.084) — R1 rendering quality pass** (`docs/research/terrain-rendering-enhancement.md`): multi-scale hillshading + ambient occlusion (render-only). Built between Atlas Phase 3 and Phase 4 per the user's June 2026 sequencing.
+
+**Interleaved (v0.089) — R4 rendering (R-series complete)** (`docs/research/terrain-rendering-enhancement.md` §2): ridged-noise elevation-weighted relief — pure `ridgedFbm(x,y,oct,s)` + a gated `state.viz.ridgedRelief` slider (H²-weighted folded-crease shading in `landColorCore`). Default 0 ⇒ bit-identical. The R1–R4 terrain-rendering-enhancement framework is now fully shipped.
+
+**Interleaved (v0.088) — R3 rendering** (`docs/research/terrain-rendering-enhancement.md`): three-frequency `fbm` surface-texture colour modulation in `landColorCore` (§7) + minor-channel flow lines below the trunk threshold in `surfaceColor` (§4). Two gated Style sliders, both default 0 ⇒ bit-identical.
+
+**Interleaved (v0.087) — R2 rendering** (`docs/research/terrain-rendering-enhancement.md`): ridge crest enhancement (`buildCrestField` → `_crestField` thin bright strokes) + slope-material refinement (`G^1.5` rock tint in `landColorCore`). Two gated Style sliders, both default 0 ⇒ bit-identical.
+
+**Interleaved (v0.085) — unified sculpting brush** (user request): heightmap-modifying brushes now live **only** in the Sculpt tab. The weak 3-mode LOD `lodBrushSeg`/`_lodBrush` was deleted; `brushHeight` upgraded to the full 8-mode sculpt-quality kernel (shared `state.brush`); the **Edit tiles** checkbox moved Terrain → Sculpt (renamed "Edit LOD tiles"). `generate()` bit-identical to v0.084.
+
+**Phase 4 (v0.086) — DONE**: Portable atlas export/import. `atlasChunkFile`/`buildAtlasManifest` (pure) + `atlasExportEntries`/`atlasImportEntries` (shim-tested) round-trip a world's baked chunks to a `World/` ZIP (rg16+PNG per chunk, gzip-optional, manifest w/ worldKey+params) and back into IndexedDB. Export/Import atlas buttons. Pure additions + UI ⇒ bit-identical to v0.085.
 
 **Deferred**: F0–F3 frequency-layered generation; unified-tool merge P0–P2
 
-## Completed workstreams (shipped in v0.048–v0.080)
+## Completed workstreams (shipped in v0.048–v0.083)
 
-- **Tectonic feature graph T0–T4**: shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064). Feature-complete; optional T5 tuning/archetype hooks remain.
-- **Earth-system coupling loops L1–L3**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069).
+- **Tectonic feature graph T0–T5 (complete)**: shear field + boundary matrix (v0.058) → polyline graph (v0.060) → orogenic kernel (v0.061) → per-type profiles: trench+arc, collision belts, rift grabens (v0.062) → transform faults (v0.064) → orogeny tuning sliders (fold intensity, trench depth) + archetype hooks (v0.090, `deriveFromWorldStructure` enables the graph + maps fold/trench from the archetype). Default + graph-on-with-default-sliders both bit-identical to v0.089.
+- **Earth-system coupling loops L1–L3 + L6**: climate↔erosion evolve (v0.066), currents→winds (v0.067), mass-conserving sediment routing (v0.069), cryosphere ice-albedo feedback (v0.091). L4 dynamic lithology remains the one optional follow-up.
 - **Gravity G1–G3**: G1 scaling throughout pipeline (v0.038), G2 geoid sea-level field (v0.054), G3 moons + tidal range field (v0.070). G4 tidal sedimentation deferred.
-- **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080).
-- **Rivers**: smooth discharge-widened rivers (v0.076) + brushed rivers as entrenched drainage seeds (v0.077).
+- **LOD tiled viewer Stages 1–3**: pure pyramid core (v0.072) → LRU viewer + overview-then-refine (v0.073–v0.074) → per-tile editing with Ctrl-Z (v0.075) → Atlas Phase 1 chunk model (v0.079) → **LOD interaction bug fix** (v0.080) → **Atlas Phase 2a: IndexedDB chunk baking + images-override** (v0.081) → **Atlas Phase 2b: cross-session persistence + status + metadata** (v0.082) → **Atlas Phase 3: biome-coloured tiles** (v0.083).
+- **Rivers**: smooth discharge-widened rivers (v0.076) + brushed rivers as entrenched drainage seeds (v0.077). **Multi-scale river LOD (complete)**: AGREE channel burning (v0.094) → per-tile micro-erosion + delta channel sharpening (v0.095), all seam-safe and LOD-only (`docs/research/multiscale-rivers.md`).
 - **Visuals**: parchment + icons (v0.050), waves (v0.051), Style tab + asset-pack importer (v0.056), B2 texture splatting (v0.059).
 - **16k tiling**: seamless `amplifyRegion` core (v0.044) → `refineTile` + `packHeight16` + manifest v2 (v0.052) → region-refine export (v0.053) → cols×rows + aspect-preserving tile pixels (v0.055).
 - **Water quality**: smooth sea-floor shading (v0.063/v0.065), resolution-independent ocean grain + 4K/8K resolution options (v0.068), **warp-cache NaN root-cause fix** (v0.071 — this was the real "bad seas at 2K" fix).
@@ -60,7 +85,8 @@
 - Real CC0 art into the sample-pack format (`docs/research/asset-candidates.md`): ambientCG textures + K.M. Alexander icons
 - Bilinear texture sampling for splat
 - Vector spline-traced coastlines (B4 optional half)
-- Per-tile erosion at refine time; fflate vendoring for tile ZIP speed
+- **SDF follow-ups** (v0.097+): river/biome SDF reconstruction in LOD tiles (v0.096 B5 does coast only); SDF tints in PNG bakes (`bakePixel`); sub-pixel land/water anti-aliasing; JFA-based Euclidean SDF for exact constant-width strokes (`docs/research/sdf-control-fields.md`)
+- fflate vendoring for tile ZIP speed
 - L4 dynamic lithology, L6 cryosphere albedo (lower-priority audit loops)
 - G4 tidal sedimentation
 
@@ -68,6 +94,25 @@
 
 (Headless can't cover canvas/WebGL/Worker paths.)
 
+- **v0.099** — R32F GPU: enable GPU compute, run thermal/diffuse/blur/temperature/coastal erosion and confirm results match the CPU path (no artifacts); the GPU status line should read **`R32F · active (…)`** on a desktop GPU (or `RGBA32F · …` if R32F isn't color-renderable — both must work). Headless can't reach the GPU path.
+- **v0.098** — physical-model tails: (G4) enable **Planet → Tides**, then **Erosion → Tidal flats** → mudflats accrete in the intertidal band toward sea level. (L4) tick **Erosion → Dynamic lithology**, run **Evolve** several cycles → differential erosion (benches/inselbergs) vs. uniform lowering with it off. (disturbance) switch the debug picker to **Wind-throw** (green→red on exposed forest ridges) and **Flood** (deep blue in valley floors/coastal flats). All default off ⇒ unchanged.
+- **v0.097** — SDF finish: with the SDF sliders on, confirm (a) **PNG bakes/exports now show** the coast/river/biome tints (previously screen-only); (b) **LOD tiles** show river bands + biome ecotones (not just coastlines); (c) the **coastline is anti-aliased** (smooth sea↔land edge, no stair-step) when SDF coastlines is up; (d) coastlines/rivers look crisper/rounder (JFA Euclidean vs the old chamfer anisotropy). All default off ⇒ unchanged.
+- **v0.096** — SDF control fields: in **Biome** view, drag **Style → SDF coastlines** up → constant-width shore-sand + coastal-plain bands hug the coast (and hold their width when you zoom via **Tiled LOD** — the reverse-mipmap win); **SDF river bands** → bank/wetland/floodplain margins along the drainage; **SDF biome blend** → biome boundaries soften into distance-proportional ecotones. All default off ⇒ unchanged.
+- **v0.095** — river Phase 2/3: with **Tiled LOD** on + **Refine** a river/delta area, toggle **"Burn river channels"** (now also runs delta sharpening → distributaries read as distinct channels vs. floodplain) and **"Micro-erode tiles"** (slower; adds terracing/meander texture inside carved channels). Confirm tile seams stay seamless with both on, and that micro-erosion doesn't disturb the tile borders. Toggle both off → smooth amplification (bit-identical to v0.094).
+- **v0.094** — AGREE river burning: enable **Tiled LOD** → Generate → **Refine** a river-rich area → toggle **"Burn river channels"** in the LOD panel → rivers should become crisp carved valleys at high zoom instead of blurry smears. Zoom into a coastal delta fan — the multiple MFD paths should resolve into carved distributary channels. Adjacent tile seams should be seamless (no height step). Toggle off → reverts to smooth amplification.
+- **v0.093** — debug legend fix (UI-only): switch through all 16 debug views (Off, Temp, Köppen, Rain, Wind, Ocean, Plates, Bounds, Tect, **Orog**, Stress, Age, Flow, **Geoid**, **Tides**, **CBiome**) and confirm the lower-left legend updates to show the correct swatches/labels for each. The four that were previously missing (**Orog**, **Geoid**, **Tides**, **CBiome**) should now show relevant info rather than falling back to the biome/hypso legend.
+- **v0.092** — bug-fix pass: (1) In the **Terrain**/**Style** tabs, dragging the canvas must NOT sculpt (only the **Sculpt** tab edits); confirm pan still works via middle-drag/space/wheel. (2) In **Tiled LOD** + **Biome** view, the ocean should now read smooth (broad depth zones, no per-pixel seabed sparkle) like the main map; coasts stay crisp. (3) Toggle **Chunk debug → Grid/Colors** with LOD on → a bold coloured chunk lattice (+ faint child-quadrant guides) is visible; zoom in to see it subdivide. (4) terrain detail still requires **Refine** (overview is intentionally detail-free).
+- **v0.091** — L6: in **Whole world** mode, raise **Climate → Ice albedo** → polar caps + high massifs cool and the snow/tundra biomes broaden; at 0 unchanged. Confirm the temperature debug view shows deepened cold at the poles and that warm/temperate latitudes are untouched.
+- **v0.090** — T5: enable **Structured orogeny** (Tectonics) → **Fold intensity** up = more parallel ranges / deeper intermontane basins; **Trench depth** up = deeper subduction trenches. Then enable **World Structure** + pick an archetype → confirm the graph auto-enables and fold/trench track the archetype (volcanic/archipelago = deeper trenches; high-energy = stronger folds). Inspect in the **Orog** debug view, then erode.
+- **v0.089** — R4: in **Biome** view, **Style → Ridged relief** up → folded-crease shading appears on high terrain (mountains read as ranges, not blobs) and stays clean in lowlands (H² gate); seamless across LOD tiles/zoom; at 0 unchanged.
+- **v0.088** — R3: in **Biome** view, **Style → Surface texture** up → fine fbm grain breaks up flat colour regions (seamless across tiles/zoom); **Style → Minor channels** up → faint blue-grey threads reveal low-order drainage below the main rivers. At 0 both unchanged. Texture bakes into PNG/tiles; minor channels are a screen overlay (like trunk rivers).
+- **v0.087** — R2: in **Biome** view, drag **Style → Ridge crests** up → thin bright sunlit-rock strokes pick out convex ridgelines/shoulders (not valleys); **Style → Slope rock** up → steep ground recolours toward rock. At 0 both are unchanged. Confirm both also show in LOD biome tiles + PNG bakes.
+- **v0.086** — Atlas export/import: bake some chunks → **Export atlas…** downloads `atlas_<wk>_Nchunks.zip` (contains `World/LOD*/…bin.gz` + `World/atlas.json`). Clear atlas → **Import atlas…** the ZIP → the chunks reappear (same world: render straight from the atlas, status line shows the count). Confirm importing an atlas for a *different* seed lands silently and surfaces after generating that seed; confirm no-IndexedDB degrades gracefully.
+- **v0.085** — Unified brush: in the **Sculpt tab**, all 8 Direct-paint modes work on the base field (no regression). Enable **Tiled LOD** + **Refine** (Terrain tab), then turn on **Edit LOD tiles** (now in the Sculpt tab) → the same brush sculpts refined tile detail: raise/lower/smooth, cliff/ridge/canyon follow drag direction, mesa/volcano stamp once per tap; Ctrl-Z undoes; edits persist per tile through re-refine. Confirm there is no brush selector left in the Terrain tab.
+- **v0.084** — Ambient occlusion: in **Biome** view, drag **Style → Ambient occlusion** up → valleys/canyons/basins darken (depth cue), ridges/peaks unaffected; at 0 the map is unchanged. Confirm AO also shows in LOD biome tiles and in PNG bakes.
+- **v0.083** — Biome tiles: in **Biome** View mode, enable Tiled LOD → the overview + refined + baked tiles render the full biome look (climate colours, not grey relief); switch View to **Relief** → tiles fall back to the height ramp. Bake → the stored atlas PNG is the biome visual; region-export PNGs are biome-coloured.
+- **v0.082** — Atlas persistence: bake some chunks, **reload the page**, set the same seed + Generate → the chunk-debug overlay shows them green and they render from the atlas with no Refine; the `#atlasStat` line shows the count; switch seed → status shows empty; switch back → count returns; **Clear atlas** zeroes it. Confirm no-IndexedDB shows "Atlas: — (no IndexedDB)" and degrades silently.
+- **v0.081** — Atlas bake: enable Tiled LOD, **Refine** a view, **Bake visible tiles**; confirm the chunk-debug overlay shows baked tiles green, pan away/back re-draws them from the atlas (read-from-IDB), **Refine** no longer adds detail under baked tiles, **Clear atlas** reverts to procedural, and reload-page-then-bake round-trips through IndexedDB. Confirm no-IndexedDB / `file://`-without-IDB degrades silently to procedural.
 - **v0.080** — Confirm LOD zoom + terrain painting now both work correctly when the Tiled-LOD view is toggled on/off; confirm wheel scroll zooms the LOD view, drag pans it, and Edit tiles brush works.
 - **v0.079** — Chunk-debug overlay: Grid / Colors / Labels each toggle independently; tile labels show LOD/coords/state.
 - **v0.078** — Sharper-biome aesthetics at 2K; CBiome debug view shows Cartalith 15-biome palette correctly.
@@ -98,7 +143,7 @@ Natural-order pipeline (flow→climate→flow, runoff-weighted) · G1 gravity sc
 
 ## Docs map
 
-`CLAUDE.md` (architecture, 11 invariants, verification, "Since v0.0XX" changelog) · `docs/ROADMAP.md` (priority order + Done log) · `docs/ATLAS_ARCHITECTURE.md` (current north-star workstream + phased plan) · `docs/UNIFIED_TOOL_PLAN.md` · `docs/GENERATOR_PARAMETERS.md` (every modifier) · `docs/BIOME_AND_VISUALS_PLAN.md` · `docs/WORLD_REGIONAL_TILING_PLAN.md` · `docs/LOD_PYRAMID_PLAN.md` · `docs/research/` (ui-unified-tool, weather-model-v2, gravity-influence, engine-optimization, pipeline-order-audit, map-painting-ux, asset-candidates, ASSET_PACK_FORMAT, **tectonic-feature-graph** [mountains-as-structures plan])
+`CLAUDE.md` (architecture, 11 invariants, verification, "Since v0.0XX" changelog) · `docs/ROADMAP.md` (priority order + Done log) · `docs/ATLAS_ARCHITECTURE.md` (current north-star workstream + phased plan) · `docs/UNIFIED_TOOL_PLAN.md` · `docs/GENERATOR_PARAMETERS.md` (every modifier) · `docs/BIOME_AND_VISUALS_PLAN.md` · `docs/WORLD_REGIONAL_TILING_PLAN.md` · `docs/LOD_PYRAMID_PLAN.md` · `docs/research/` (ui-unified-tool, weather-model-v2, gravity-influence, engine-optimization, pipeline-order-audit, map-painting-ux, asset-candidates, ASSET_PACK_FORMAT, **tectonic-feature-graph** [mountains-as-structures plan], **terrain-rendering-enhancement** [multi-scale shading, AO, ridge crest, texture synthesis, R1–R4 phases])
 
 ## Watch-outs
 

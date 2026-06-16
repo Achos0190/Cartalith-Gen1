@@ -231,23 +231,26 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
 /* ---------- biome raster handoff (v0.042+, BIOME_AND_VISUALS_PLAN Part A) ---------- */
 {
   const raster = buildBiomeRaster();
+  const wbR = currentWaterBodies();   // v0.103: raster's water classes (1 sea → 0, 2 lake → 13)
   check('biome raster length = GW×GH', raster.length === GW * GH);
-  let valid = true, oceanMatchesSea = true, distinct = new Set();
-  const maxIdx = BIOME_KEYS.length; // ocean=0, biomes 1..maxIdx
+  let valid = true, seaMatches = true, lakeMatches = true, distinct = new Set();
+  const maxIdx = BIOME_KEYS.length; // ocean=0, biomes 1..maxIdx (incl. lake=13)
   for (let i = 0; i < raster.length; i++){
     const v = raster[i];
     if (v < 0 || v > maxIdx || (v | 0) !== v){ valid = false; break; }
     distinct.add(v);
-    const isSea = field[i] < state.seaLevel;
-    if (isSea !== (v === 0)){ oceanMatchesSea = false; }
+    if ((wbR[i] === 1) !== (v === 0)){ seaMatches = false; }            // open sea ⇔ index 0
+    if ((wbR[i] === 2) !== (v === BIOME_INDEX.lake)){ lakeMatches = false; }   // lake ⇔ index 13
   }
   check('biome raster values are valid indices (0..' + maxIdx + ')', valid);
-  check('biome raster: index 0 ⇔ below sea level', oceanMatchesSea);
+  check('biome raster: index 0 ⇔ open sea (water-body 1)', seaMatches);
+  check('biome raster: index 13 ⇔ lake (water-body 2)', lakeMatches);
   check('biome raster has multiple biomes (' + distinct.size + ' distinct)', distinct.size >= 3);
   const man = biomeIndexManifest();
   check('manifest covers every index in the raster', [...distinct].every(v => man.indices[String(v)] !== undefined));
-  check('manifest index order is frozen (ocean=0, ice=1, tropWet=12)',
-    man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' && man.indices[String(BIOME_KEYS.length)].key === 'tropWet');
+  check('manifest index order is frozen (ocean=0, ice=1, tropWet=12, lake=13)',
+    man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' &&
+    man.indices['12'].key === 'tropWet' && man.indices['13'].key === 'lake');
 }
 
 /* ---------- ocean currents (v0.045+, weather-model-v2 W3.5) ---------- */
@@ -801,6 +804,25 @@ fieldsFinite('generate(world)');
   const ser = serializeState();
   check('serializeState has viz.scaleBar, no assetPack', ser.state.viz.scaleBar === true && ser.state.assetPack === undefined);
 
+  // save/load contract: the v0.086–0.092 params round-trip through serialize→JSON→default-merge (mirrors loadZip)
+  {
+    const savedViz = JSON.parse(JSON.stringify(state.viz)), savedTect = JSON.parse(JSON.stringify(state.tect)), savedClim = JSON.parse(JSON.stringify(state.climate));
+    state.viz.crest = 0.5; state.viz.rockSlope = 0.4; state.viz.texture = 0.6; state.viz.minorStreams = 0.3; state.viz.ridgedRelief = 0.7; state.viz.ao = 0.55;
+    state.tect.foldIntensity = 1.5; state.tect.trenchDepth = 0.8; state.tect.tectonicGraph = true;
+    state.climate.albedo = 0.65;
+    const pk = JSON.parse(JSON.stringify(serializeState()));   // serialize → JSON string → parse, like params.json
+    // replicate loadZip's default-merges
+    const viz = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, pk.state.viz || {});
+    check('save round-trip: new viz sliders preserved', viz.crest === 0.5 && viz.rockSlope === 0.4 && viz.texture === 0.6 && viz.minorStreams === 0.3 && viz.ridgedRelief === 0.7 && viz.ao === 0.55);
+    const tt = pk.state.tect;   // tect uses `if(==null)` guards → explicit values survive
+    check('save round-trip: T5 tect params preserved', tt.foldIntensity === 1.5 && tt.trenchDepth === 0.8 && tt.tectonicGraph === true);
+    check('save round-trip: L6 albedo preserved', pk.state.climate.albedo === 0.65);
+    // an OLD save (missing the new fields) gets defaults, not undefined
+    const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
+    check('save round-trip: legacy save merges new viz defaults', old.crest === 0 && old.ridgedRelief === 0 && old.parchment === 0.2);
+    state.viz = savedViz; state.tect = savedTect; state.climate = savedClim;
+  }
+
   // updateScaleBar honours the toggle
   state.viz.scaleBar = false; updateScaleBar();
   check('updateScaleBar hides when off', document.getElementById('scaleBar').style.display === 'none');
@@ -1065,6 +1087,34 @@ fieldsFinite('generate(world)');
   // zero shear → zero (no transform feature without shear)
   check('transform with zero shear → zero', buildOrogenyField([{ pts, type: BTYPE.transform }], stress, cont, W, H, { ...optT, shear: new Float32Array(W * H) }).every(v => v === 0));
 
+  /* ---------- T5: fold-intensity + trench-depth tuning (v0.090) ---------- */
+  {
+    // back-compat: omitting foldK/trenchK reproduces the explicit defaults (0.16 / 1.0) bit-exactly
+    const Udef = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
+    const Uexp = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, { ...opts, foldK: 0.16, trenchK: 1.0 });
+    check('T5 omitted foldK/trenchK ⇒ legacy defaults (bit-identical)', Udef.every((v, i) => v === Uexp[i]));
+    // stronger fold intensity ⇒ larger crest-to-col ripple along the collision belt
+    const ripple = (U) => { let mx = -1e9, mn = 1e9; for (let x = 0; x < W; x++){ const v = U[48 * W + x]; if (v > 0.1){ mx = Math.max(mx, v); mn = Math.min(mn, v); } } return mx - mn; };
+    const Ulow = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, { ...opts, foldK: 0.05 });
+    const Uhigh = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, { ...opts, foldK: 0.5 });
+    check('T5 higher fold intensity ⇒ deeper intermontane cols (more ripple)', ripple(Uhigh) > ripple(Ulow));
+    // deeper trench: subduction trench min more negative with larger trenchK
+    const oceanR = new Float32Array(W * H); for (let i = 0; i < oceanR.length; i++) oceanR[i] = (i % W) > 60 ? -1 : 1;
+    const trenchMin = (U) => { let lo = 1e9; for (let i = 0; i < U.length; i++) lo = Math.min(lo, U[i]); return lo; };
+    const Ts1 = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanR, W, H, { ...opts, trenchK: 1.0 });
+    const Ts2 = buildOrogenyField([{ pts, type: BTYPE.subductionOC }], stress, oceanR, W, H, { ...opts, trenchK: 2.0 });
+    check('T5 higher trench depth ⇒ deeper subduction trench', trenchMin(Ts2) < trenchMin(Ts1) - 0.1);
+
+    // archetype wiring: deriveFromWorldStructure turns on the graph + maps fold/trench from ws params
+    const savedWS = JSON.parse(JSON.stringify(state.world_structure)), savedTect = { g: state.tect.tectonicGraph, f: state.tect.foldIntensity, t: state.tect.trenchDepth };
+    state.world_structure.tectonicEnergy = 0.9; state.world_structure.oceanDepth = 0.8;
+    deriveFromWorldStructure();
+    check('T5 archetype wiring enables structured orogeny', state.tect.tectonicGraph === true);
+    check('T5 fold intensity scales with tectonicEnergy', Math.abs(state.tect.foldIntensity - (0.6 + 0.9)) < 1e-6);
+    check('T5 trench depth scales with oceanDepth', Math.abs(state.tect.trenchDepth - (0.7 + 0.8 * 0.8)) < 1e-6);
+    state.world_structure = savedWS; state.tect.tectonicGraph = savedTect.g; state.tect.foldIntensity = savedTect.f; state.tect.trenchDepth = savedTect.t;
+  }
+
   // live-engine gate: off → on → off must round-trip bit-exactly (Invariant-10 style)
   generate();
   const base = Float32Array.from(field);
@@ -1189,6 +1239,33 @@ fieldsFinite('generate(world)');
   check('depositSediment deterministic', det2);
 }
 
+/* ---------- L6: cryosphere↔climate ice-albedo feedback (v0.091) ---------- */
+{
+  // pure applyCryosphereAlbedo: k=0 is a no-op; cold cells cool, warm cells untouched; finite + deterministic
+  const mk = () => Float32Array.from([30, 20, 10, 0, -10, -20, -30]);   // warm→cold gradient
+  const t0 = mk(); check('albedo k=0 ⇒ no-op (bit-identical)', applyCryosphereAlbedo(t0, 0).every((v, i) => v === mk()[i]));
+  const tw = mk(), base = mk(); applyCryosphereAlbedo(tw, 1);
+  check('albedo cools the cold (icy) cells', tw[6] < base[6] - 1 && tw[5] < base[5] - 1);
+  check('albedo leaves warm cells (T≫1°C) untouched', Math.abs(tw[0] - base[0]) < 1e-6 && Math.abs(tw[1] - base[1]) < 1e-6);
+  check('albedo output finite', allFinite(tw));
+  const ta = mk(), tb = mk(); applyCryosphereAlbedo(ta, 1); applyCryosphereAlbedo(tb, 1);
+  check('albedo deterministic', ta.every((v, i) => v === tb[i]));
+  const ts = mk(), tS = mk(); applyCryosphereAlbedo(ts, 0.3); applyCryosphereAlbedo(tS, 1);
+  check('albedo cooling scales with strength', tS[6] < ts[6]);
+
+  // wired on the real engine: default off ⇒ tempField unchanged; on ⇒ cold regions cool further
+  state.world = true; GW = state.resW; GH = gridH(GW); allocate(); generate();
+  const savedA = state.climate.albedo;
+  state.climate.albedo = 0; computeTemperature(); const tOff = Float32Array.from(tempField);
+  state.climate.albedo = 0.8; computeTemperature(); const tOn = Float32Array.from(tempField);
+  state.climate.albedo = savedA; computeTemperature();
+  let cooled = 0, warmedAny = false, minOff = 1e9;
+  for (let i = 0; i < tOff.length; i++){ minOff = Math.min(minOff, tOff[i]); if (tOn[i] < tOff[i] - 0.5) cooled++; if (tOn[i] > tOff[i] + 1e-6) warmedAny = true; }
+  check('engine albedo cools polar/high cells (' + cooled + ')', cooled > 0);
+  check('engine albedo never warms a cell', !warmedAny);
+  check('engine albedo keeps tempField finite', allFinite(tOn));
+}
+
 /* ---------- G3: moons & tidal-range field (v0.070) ---------- */
 {
   state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
@@ -1304,6 +1381,276 @@ fieldsFinite('generate(world)');
   _lodOn = false; _lodZoom = 1; lodCacheClear();
 }
 
+/* ---------- v0.094: burnChannels — AGREE stream-burning ---------- */
+{
+  const W = 32, H = 32, sea = 0.42;
+  // zero flow → tile unchanged
+  const base = new Float32Array(W * H).fill(0.6);
+  const zeroFlow = new Float32Array(16 * 10);   // all zero
+  burnChannels(base, W, H, zeroFlow, 16, 10, {x:0,y:0,w:15,h:9}, sea, {});
+  check('burnChannels with zero flow leaves tile unchanged', base.every(v => Math.abs(v - 0.6) < 1e-6));
+
+  // high-flow centre depresses, far cell unchanged
+  const tile2 = new Float32Array(W * H).fill(0.6);
+  const flow2 = new Float32Array(16 * 10);
+  flow2[5 * 16 + 8] = 500;   // high-flow cell near world-centre of this tile's bounds
+  const bounds2 = {x:6, y:3, w:10, h:7};
+  burnChannels(tile2, W, H, flow2, 16, 10, bounds2, sea, {thresh:0.005, burnK:0.08, widthK:3});
+  check('burnChannels depresses terrain under a high-flow cell', tile2.some(v => v < 0.6));
+  check('burnChannels leaves terrain far from flow channel unchanged', Math.abs(tile2[0] - 0.6) < 1e-6);
+
+  // never raises terrain (all deltas ≤ 0)
+  const tile3 = new Float32Array(W * H).fill(0.6);
+  const flow3 = new Float32Array(16 * 10).fill(100);
+  burnChannels(tile3, W, H, flow3, 16, 10, {x:0,y:0,w:15,h:9}, sea, {});
+  check('burnChannels never raises terrain', tile3.every(v => v <= 0.6));
+
+  // never goes below sea - 0.06
+  const tile4 = new Float32Array(W * H).fill(sea - 0.05);
+  burnChannels(tile4, W, H, flow3, 16, 10, {x:0,y:0,w:15,h:9}, sea, {burnK:1.0});
+  check('burnChannels never goes below sea - 0.06', tile4.every(v => v >= sea - 0.06 - 1e-9));
+
+  // seam-Δ: two adjacent tiles share identical values at their shared coarse-coord column
+  const cW2 = 32, cH2 = 20;
+  const coarse2 = new Float32Array(cW2 * cH2).fill(0.5);
+  coarse2[10 * cW2 + 22] = 800;   // prominent river cell well inside tB, >3px from seam
+  const bA = {x:0, y:0, w:16, h:20}, bB = {x:15, y:0, w:16, h:20};
+  const opts94 = {thresh:0.005, burnK:0.08, widthK:3};
+  const tA = new Float32Array(32 * 20).fill(0.6);
+  const tB = new Float32Array(32 * 20).fill(0.6);
+  burnChannels(tA, 32, 20, coarse2, cW2, cH2, bA, sea, opts94);
+  burnChannels(tB, 32, 20, coarse2, cW2, cH2, bB, sea, opts94);
+  // right column of tA (x=31) and left column of tB (x=0) cover the same coarse coord x=15
+  let maxSeam94 = 0;
+  for (let y = 0; y < 20; y++) {
+    const d = Math.abs(tA[y * 32 + 31] - tB[y * 32 + 0]);
+    if (d > maxSeam94) maxSeam94 = d;
+  }
+  check('burnChannels seam-Δ < 1e-4 between adjacent tiles', maxSeam94 < 1e-4);
+}
+
+/* ---------- v0.095: tileErode (Phase 2 micro-erosion) + sharpDelta (Phase 3) ---------- */
+{
+  const W = 24, H = 24;
+  // a sloped tile so droplets have somewhere to flow
+  const slope = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) slope[y * W + x] = 0.7 - 0.012 * y;
+  const tile = slope.slice();
+  tileErode(tile, W, H, {seed: 7, g: 1, droplets: 300});
+
+  // border ring is pinned (seam safety) — outer cells byte-unchanged
+  let borderMoved = false;
+  for (let x = 0; x < W; x++){ if (tile[x] !== slope[x]) borderMoved = true; if (tile[(H-1)*W+x] !== slope[(H-1)*W+x]) borderMoved = true; }
+  for (let y = 0; y < H; y++){ if (tile[y*W] !== slope[y*W]) borderMoved = true; if (tile[y*W+W-1] !== slope[y*W+W-1]) borderMoved = true; }
+  check('tileErode pins the border ring (seam safety)', !borderMoved);
+  // interior actually changes
+  let interiorMoved = false;
+  for (let y = 1; y < H-1 && !interiorMoved; y++) for (let x = 1; x < W-1; x++) if (Math.abs(tile[y*W+x] - slope[y*W+x]) > 1e-7){ interiorMoved = true; break; }
+  check('tileErode modifies the interior', interiorMoved);
+  // all finite, never NaN
+  check('tileErode output stays finite', tile.every(v => Number.isFinite(v)));
+  // deterministic: same seed → identical
+  const tile2 = slope.slice(); tileErode(tile2, W, H, {seed: 7, g: 1, droplets: 300});
+  let det = true; for (let i = 0; i < tile.length; i++) if (tile[i] !== tile2[i]){ det = false; break; }
+  check('tileErode is deterministic (same seed)', det);
+  // tiny tiles are a no-op (guard)
+  const tiny = new Float32Array(9).fill(0.5); tileErode(tiny, 3, 3, {seed: 1});
+  check('tileErode no-ops on tiles < 4 px', tiny.every(v => Math.abs(v - 0.5) < 1e-6));
+
+  // ----- sharpDelta -----
+  const sea = 0.42, cW = 16, cH = 16;
+  // zero flow → no-op
+  const sdTile = new Float32Array(W * H).fill(sea - 0.02);   // in the delta zone
+  const zeroFlow = new Float32Array(cW * cH);
+  sharpDelta(sdTile, W, H, zeroFlow, cW, cH, {x:0,y:0,w:cW-1,h:cH-1}, sea, {});
+  check('sharpDelta no-op when flow is zero', sdTile.every(v => Math.abs(v - (sea-0.02)) < 1e-6));
+
+  // a single coarse local maximum deepens the channel cells inside the delta zone
+  const flow = new Float32Array(cW * cH);
+  flow[8 * cW + 8] = 900;                                    // dominant channel peak
+  const bnds = {x:0, y:0, w:cW-1, h:cH-1};
+  const sdTile2 = new Float32Array(W * H).fill(sea - 0.02);
+  sharpDelta(sdTile2, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  check('sharpDelta deepens a local-max channel in the delta zone', sdTile2.some(v => v < sea - 0.02 - 1e-6));
+  check('sharpDelta never raises terrain', sdTile2.every(v => v <= sea - 0.02 + 1e-6));
+  check('sharpDelta never goes below sea - 0.06', sdTile2.every(v => v >= sea - 0.06 - 1e-9));
+
+  // cells above sea + zoneH are untouched (only acts in the delta zone)
+  const sdHigh = new Float32Array(W * H).fill(sea + 0.2);
+  sharpDelta(sdHigh, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  check('sharpDelta leaves cells above the delta zone unchanged', sdHigh.every(v => Math.abs(v - (sea+0.2)) < 1e-6));
+
+  // deterministic
+  const sdA = new Float32Array(W * H).fill(sea - 0.02), sdB = new Float32Array(W * H).fill(sea - 0.02);
+  sharpDelta(sdA, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  sharpDelta(sdB, W, H, flow, cW, cH, bnds, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  let sdDet = true; for (let i = 0; i < sdA.length; i++) if (sdA[i] !== sdB[i]){ sdDet = false; break; }
+  check('sharpDelta is deterministic', sdDet);
+
+  // seam safety: two adjacent tiles over a shared coarse local-max agree at the seam.
+  // The coarse local-max sits well inside both tiles' coarse bounds (one cell from the seam).
+  const cW2 = 32, cH2 = 16;
+  const flow2 = new Float32Array(cW2 * cH2);
+  flow2[8 * cW2 + 20] = 900;                                 // peak inside tile B, > 3px from seam
+  const bA = {x:0, y:0, w:16, h:15}, bB = {x:15, y:0, w:16, h:15};
+  const tA = new Float32Array(32 * 16).fill(sea - 0.02), tB = new Float32Array(32 * 16).fill(sea - 0.02);
+  sharpDelta(tA, 32, 16, flow2, cW2, cH2, bA, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  sharpDelta(tB, 32, 16, flow2, cW2, cH2, bB, sea, {thresh:0.005, sharpK:0.03, zoneH:0.06});
+  let maxSeamSD = 0;
+  for (let y = 0; y < 16; y++){ const d = Math.abs(tA[y*32 + 31] - tB[y*32 + 0]); if (d > maxSeamSD) maxSeamSD = d; }
+  check('sharpDelta seam-Δ < 1e-4 between adjacent tiles', maxSeamSD < 1e-4);
+}
+
+/* ---------- v0.096: signed distance fields (coast / river / biome control) ---------- */
+if (typeof buildCoastSDF === 'function') {
+  const W = 16, H = 16, sea = 0.42;
+  // left half land (0.6), right half ocean (0.3) → vertical coastline at x=8
+  const f = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f[y*W+x] = x < 8 ? 0.6 : 0.3;
+  const sdf = buildCoastSDF(f, W, H, sea);
+  check('buildCoastSDF finite', sdf.every(v => Number.isFinite(v)));
+  // sign convention: inland (land) negative, offshore (water) positive
+  check('buildCoastSDF land cells are negative', f[8*W+2] >= sea && sdf[8*W+2] < 0);
+  check('buildCoastSDF water cells are positive', f[8*W+12] < sea && sdf[8*W+12] > 0);
+  // magnitude grows away from the coast (deep inland more negative than near-shore land)
+  check('buildCoastSDF deepens inland', sdf[8*W+0] < sdf[8*W+7]);
+  check('buildCoastSDF grows offshore', sdf[8*W+15] > sdf[8*W+8]);
+  // near-shore magnitude is small (≈ a cell or two)
+  check('buildCoastSDF ~0 near the shoreline', Math.abs(sdf[8*W+7]) <= 2 && Math.abs(sdf[8*W+8]) <= 2);
+  // determinism
+  const sdf2 = buildCoastSDF(f, W, H, sea);
+  let det = true; for (let i = 0; i < sdf.length; i++) if (sdf[i] !== sdf2[i]) { det = false; break; }
+  check('buildCoastSDF deterministic', det);
+
+  // river SDF: a vertical line of high flow at x=8
+  const flow = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) flow[y*W+8] = 1000;
+  const rsdf = buildRiverSDF(flow, W, H, {thresh: 100});
+  check('buildRiverSDF channel cells negative', rsdf[5*W+8] < 0);
+  check('buildRiverSDF off-channel positive', rsdf[5*W+0] > 0);
+  check('buildRiverSDF grows away from channel', rsdf[5*W+0] > rsdf[5*W+6]);
+  check('buildRiverSDF finite', rsdf.every(v => Number.isFinite(v)));
+
+  // biome-boundary distance: left half biome 1, right half biome 2 → boundary at x=8
+  const bio = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) bio[y*W+x] = x < 8 ? 1 : 2;
+  const bd = buildBiomeBoundaryDist(bio, W, H);
+  check('buildBiomeBoundaryDist 0 on the boundary', bd[5*W+7] === 0 || bd[5*W+8] === 0);
+  check('buildBiomeBoundaryDist grows into interiors', bd[5*W+0] > bd[5*W+6]);
+  check('buildBiomeBoundaryDist non-negative & finite', bd.every(v => v >= 0 && Number.isFinite(v)));
+  // uniform biome → no edges → all INF-ish (large), but finite
+  const uni = new Uint8Array(W * H).fill(3);
+  const bdU = buildBiomeBoundaryDist(uni, W, H);
+  check('buildBiomeBoundaryDist uniform field has no boundary', bdU.every(v => v > 1e6));
+
+  // ----- consumer exercised on the live generated world (uses globals from the region generate above) -----
+  // find a near-shore land cell (land with a water neighbour)
+  let shore = -1;
+  for (let yy = 1; yy < GH-1 && shore < 0; yy++) for (let xx = 1; xx < GW-1; xx++) {
+    const ii = yy*GW+xx; const vw = geoidField ? field[ii]-geoidField[ii] : field[ii];
+    if (vw < state.seaLevel) continue;
+    const wn = field[ii-1] < state.seaLevel || field[ii+1] < state.seaLevel || field[ii-GW] < state.seaLevel || field[ii+GW] < state.seaLevel;
+    if (wn) { shore = ii; break; }
+  }
+  check('found a near-shore land cell for the SDF consumer test', shore >= 0);
+  if (shore >= 0) {
+    const sx = shore % GW, sy = (shore / GW) | 0, vw = geoidField ? field[shore]-geoidField[shore] : field[shore];
+    // off
+    _coastSDF = null; state.viz.sdfCoast = 0;
+    const off = surfaceColor(sx, sy, shore, vw).slice();
+    // on
+    _coastSDF = buildCoastSDF(geoidField ? (()=>{const a=new Float32Array(GW*GH);for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i];return a;})() : field, GW, GH, state.seaLevel);
+    state.viz.sdfCoast = 1;
+    const on = surfaceColor(sx, sy, shore, vw);
+    check('SDF coast band changes a near-shore land pixel when enabled', on[0]!==off[0] || on[1]!==off[1] || on[2]!==off[2]);
+    // restore the off state so later tests/cmp stay on the default path
+    _coastSDF = null; state.viz.sdfCoast = 0;
+    const back = surfaceColor(sx, sy, shore, vw);
+    check('SDF coast restores to the off render after disabling', back[0]===off[0] && back[1]===off[1] && back[2]===off[2]);
+  }
+}
+
+/* ---------- v0.097: jfaDist (Euclidean) + SDF Euclidean backend ---------- */
+if (typeof jfaDist === 'function') {
+  const W = 24, H = 24;
+  // single seed at (5,7): every cell's distance must equal exact Euclidean to it
+  const m1 = new Uint8Array(W * H); m1[7*W+5] = 1;
+  const j1 = jfaDist(m1, W, H);
+  let exact = true, maxErr = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const want = Math.hypot(x-5, y-7), got = j1[y*W+x], e = Math.abs(want-got);
+    if (e > maxErr) maxErr = e; if (e > 1e-4) exact = false;
+  }
+  check('jfaDist is exact Euclidean from a single seed', exact);
+  check('jfaDist seed cell has distance 0', j1[7*W+5] === 0);
+  check('jfaDist finite', j1.every(v => Number.isFinite(v)));
+  // vertical line seed at x=10 → distance is the horizontal offset, exactly
+  const m2 = new Uint8Array(W * H); for (let y = 0; y < H; y++) m2[y*W+10] = 1;
+  const j2 = jfaDist(m2, W, H);
+  check('jfaDist on a line = perpendicular offset', Math.abs(j2[3*W+0]-10) < 1e-4 && Math.abs(j2[3*W+15]-5) < 1e-4);
+  // deterministic
+  const j1b = jfaDist(m1, W, H);
+  let det = true; for (let i = 0; i < j1.length; i++) if (j1[i] !== j1b[i]) { det = false; break; }
+  check('jfaDist deterministic', det);
+  // relationship to chamferDist: the 1-√2 chamfer is an UPPER bound on Euclidean, within ~8%
+  const c1 = chamferDist(m1, W, H);
+  let upper = true, within8 = true;
+  for (let i = 0; i < j1.length; i++) {
+    if (j1[i] > c1[i] + 1e-3) upper = false;          // JFA (true Euclidean) never exceeds chamfer
+    if (c1[i] > j1[i] * 1.09 + 1e-3) within8 = false; // chamfer stays within its ~8.24% theoretical max above
+  }
+  check('jfaDist ≤ chamferDist (Euclidean is the tighter distance)', upper);
+  check('chamferDist within ~8% of jfaDist', within8);
+  // SDF builders honour opts.euclid: sign convention preserved, magnitude differs slightly from chamfer
+  const sea = 0.42, f = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f[y*W+x] = x < 12 ? 0.6 : 0.3;
+  const sdfJ = buildCoastSDF(f, W, H, sea, {euclid:true}), sdfC = buildCoastSDF(f, W, H, sea);
+  check('buildCoastSDF euclid keeps the sign convention', sdfJ[12*W+2] < 0 && sdfJ[12*W+20] > 0);
+  check('buildCoastSDF euclid ~matches chamfer near the coast', Math.abs(Math.abs(sdfJ[12*W+8]) - Math.abs(sdfC[12*W+8])) <= 1.5);
+}
+
+/* ---------- v0.098: physical-model tails (G4 tidal sed · L4 lithology · disturbance) ---------- */
+if (typeof applyTidalSedimentation === 'function') {
+  const W = 8, H = 8, sea = 0.42;
+  // zero tide → no-op
+  const f0 = new Float32Array(W*H).fill(0.30);
+  const r0 = applyTidalSedimentation(f0, new Float32Array(W*H), sea, W, H, {});
+  check('tidal sed no-op when tide is zero', f0.every(v => Math.abs(v-0.30) < 1e-6) && r0.deposited === 0);
+  // null tide → no-op
+  const fN = new Float32Array(W*H).fill(0.30); applyTidalSedimentation(fN, null, sea, W, H, {});
+  check('tidal sed no-op when tide is null', fN.every(v => Math.abs(v-0.30) < 1e-6));
+  // intertidal cells (depth < tr) accrete toward sea, never above it
+  const f1 = new Float32Array(W*H).fill(0.38), t1 = new Float32Array(W*H).fill(0.10);   // depth 0.04 < tr 0.10
+  const r1 = applyTidalSedimentation(f1, t1, sea, W, H, {});
+  check('tidal sed accretes in the intertidal band', f1.every(v => v > 0.38) && r1.deposited > 0);
+  check('tidal sed never exceeds sea level', f1.every(v => v <= sea));
+  // cells deeper than the tidal range are untouched
+  const f2 = new Float32Array(W*H).fill(0.20); applyTidalSedimentation(f2, new Float32Array(W*H).fill(0.10), sea, W, H, {});
+  check('tidal sed skips cells deeper than the tidal range', f2.every(v => Math.abs(v-0.20) < 1e-6));
+  // land untouched
+  const f3 = new Float32Array(W*H).fill(0.60); applyTidalSedimentation(f3, new Float32Array(W*H).fill(0.10), sea, W, H, {});
+  check('tidal sed leaves land untouched', f3.every(v => Math.abs(v-0.60) < 1e-6));
+
+  // L4 dynamic lithology
+  const LW = 6, LH = 6, resist = new Float32Array(LW*LH).fill(0.3);
+  const pre = new Float32Array(LW*LH).fill(0.5), post = pre.slice(); post[10] = 0.4;   // eroded 0.1 at cell 10
+  recomputeResistanceAfterErosion(resist, pre, post, LW, LH, {k:6});
+  check('dyn lithology hardens deeply-eroded cells', resist[10] > 0.3);
+  check('dyn lithology leaves un-eroded cells unchanged', Math.abs(resist[0]-0.3) < 1e-6);
+  check('dyn lithology clamps resistance to ≤ 1', resist.every(v => v <= 1));
+
+  // disturbance debug fields on the live generated world
+  const wt = currentWindThrowField();
+  check('wind-throw field finite & in [0,1]', wt.every(v => Number.isFinite(v) && v >= 0 && v <= 1));
+  let wtOceanZero = true; for (let i = 0; i < wt.length; i++){ if (field[i]-geoAt(i) < state.seaLevel && wt[i] !== 0){ wtOceanZero = false; break; } }
+  check('wind-throw is zero over ocean', wtOceanZero);
+  const fl = currentFloodField();
+  check('flood field finite & in [0,1]', fl.every(v => Number.isFinite(v) && v >= 0 && v <= 1));
+  let flOceanZero = true; for (let i = 0; i < fl.length; i++){ if (field[i]-geoAt(i) < state.seaLevel && fl[i] !== 0){ flOceanZero = false; break; } }
+  check('flood is zero over ocean', flOceanZero);
+  check('flood field is not flat (varies across the map)', variance(fl) > 1e-6);
+}
+
 /* ---------- Stage 3: per-tile editing (v0.075) ---------- */
 {
   // pure brush
@@ -1319,6 +1666,19 @@ fieldsFinite('generate(world)');
   for (let k = 0; k < 6; k++) brushHeight(ns, W, H, 10, 10, 8, 1, 'smooth');
   const variance = a => { let s = 0, s2 = 0, n = 0; for (let y = 6; y <= 14; y++) for (let x = 6; x <= 14; x++){ const v = a[y * W + x]; s += v; s2 += v * v; n++; } return s2 / n - (s / n) ** 2; };
   check('brush smooth reduces local variance', variance(ns) < variance(noisy));
+  // v0.085: the 8-mode unified kernel (same modes as the base sculpt brush) now lives in brushHeight too
+  const dv = new Float32Array(W * H).fill(0.5); brushHeight(dv, W, H, 10, 10, 6, 0.5, 'volcano');
+  check('brush volcano raises a conical peak', dv[10 * W + 10] > 0.5 && dv[10 * W + 11] > 0.5 && dv[10 * W + 11] < dv[10 * W + 10]);
+  const dm = new Float32Array(W * H).fill(0.3); brushHeight(dm, W, H, 10, 10, 6, 0.5, 'mesa', { centerH: 0.3 });
+  check('brush mesa builds a raised flat top (max-semantics, never lowers)', dm[10 * W + 10] > 0.3 && dm.every((v, i) => v >= (i === 0 ? 0.3 : 0)));
+  const dr = new Float32Array(W * H).fill(0.5); brushHeight(dr, W, H, 10, 10, 6, 0.5, 'ridge', { nx: 1, ny: 0 });
+  check('brush ridge crests along the stroke', dr[10 * W + 10] > 0.5);
+  const dca = new Float32Array(W * H).fill(0.5); brushHeight(dca, W, H, 10, 10, 6, 0.8, 'canyon', { nx: 1, ny: 0 });
+  check('brush canyon cuts a channel below the surface', dca[10 * W + 10] < 0.5);
+  const dcl = new Float32Array(W * H).fill(0.5); brushHeight(dcl, W, H, 10, 10, 6, 0.8, 'cliff', { nx: 1, ny: 0 });
+  check('brush cliff raises one side, lowers the other', dcl[10 * W + 13] > 0.5 && dcl[10 * W + 7] < 0.5);
+  const du = new Float32Array(W * H).fill(0.5); brushHeight(du, W, H, 10, 10, 5, 0.2);   // no mode → back-compat raise default
+  check('brush defaults to raise when mode omitted', du[10 * W + 10] > 0.5);
 
   // tile editing on a refined tile
   state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
@@ -1395,12 +1755,14 @@ fieldsFinite('generate(world)');
   state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
   const cb = buildCartBiome();
   check('buildCartBiome finite indices in 1..15', cb.length === GW * GH && cb.every(v => v >= 1 && v <= 15));
-  let oceanOk = true, landOk = true;
-  for (let i = 0; i < cb.length; i++){ const w = field[i] - geoAt(i) < state.seaLevel;
-    if (w && cb[i] !== 15) oceanOk = false;          // ocean cells → Ocean (15)
-    if (!w && cb[i] === 15) landOk = false;          // land cells never Ocean
+  const wbCB = currentWaterBodies();   // v0.103: open sea → Ocean(15), lake → Lake(14)
+  let seaOk = true, lakeOk = true, landOk = true;
+  for (let i = 0; i < cb.length; i++){
+    if (wbCB[i] === 1 && cb[i] !== 15) seaOk = false;          // open sea → Ocean (15)
+    if (wbCB[i] === 2 && cb[i] !== 14) lakeOk = false;         // lake → Lake (14)
+    if (wbCB[i] === 0 && (cb[i] === 14 || cb[i] === 15)) landOk = false;   // land never water
   }
-  check('CBiome: ocean cells → Ocean(15), land never Ocean', oceanOk && landOk);
+  check('CBiome: sea→Ocean(15), lake→Lake(14), land never water', seaOk && lakeOk && landOk);
   const cb2 = buildCartBiome();
   check('buildCartBiome deterministic', cb.every((v, i) => v === cb2[i]));
   // CBiome debug view renders opaque
@@ -1416,6 +1778,52 @@ fieldsFinite('generate(world)');
   state.viz.sharpBiomes = sv;
 }
 
+/* ---------- v0.102: Cartalith terrain-paint PoC (reuses the world generated above; no extra generate() so the shared RNG stream stays put for the later seam test) ---------- */
+{
+  const ct = buildCartTerrain();
+  check('buildCartTerrain finite indices in 0..13', ct.length === GW * GH && ct.every(v => v >= 0 && v <= 13));
+  const wbCT = currentWaterBodies();   // v0.103: all water (sea+lake) → 0; dry land → painted
+  let waterOk = true, landOk = true;
+  for (let i = 0; i < ct.length; i++){
+    if (wbCT[i] !== 0 && ct[i] !== 0) waterOk = false;   // sea & lakes → unpainted (0)
+    if (wbCT[i] === 0 && ct[i] === 0) landOk = false;    // dry land always has a terrain
+  }
+  check('CTerrain: all water → 0, dry land always painted', waterOk && landOk);
+  // human-made surfaces (Paved Road 1, Dirt Track 2, Forest Path 5, Ruins 13) never auto-generate
+  check('CTerrain: no human-made surfaces auto-generated', ct.every(v => v !== 1 && v !== 2 && v !== 5 && v !== 13));
+  const ct2 = buildCartTerrain();
+  check('buildCartTerrain deterministic', ct.every((v, i) => v === ct2[i]));
+  // CTerrain debug view renders opaque
+  state.mode = 'biome'; state.debug = 'cterrain'; _cartTerrain = null; renderNow();
+  check('CTerrain debug view renders opaque', img.data[3] === 255);
+  state.debug = 'off';
+}
+
+/* ---------- v0.103: water bodies — sea vs lakes (pure, synthetic grids; no globals/RNG touched) ---------- */
+{
+  const W = 9, H = 9, sea = 0.5;
+  // base: all land at 0.6; a big open sea fills the left 3 columns (touches the border → largest component)
+  const f = new Float32Array(W * H).fill(0.6);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 3; x++) f[y * W + x] = 0.3;
+  // an enclosed below-sea pocket in the middle, walled off from the open sea by land → inland-sea lake
+  f[4 * W + 6] = 0.3; f[4 * W + 7] = 0.3; f[5 * W + 6] = 0.3; f[5 * W + 7] = 0.3;
+  // an above-sea depression at (7,2): below its neighbours (0.6) but above sea → pooled lake when watered
+  f[2 * W + 7] = 0.54;
+  const wbWet = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.5) });
+  check('water bodies: open sea is the largest component (class 1)', wbWet[4 * W + 0] === 1 && wbWet[4 * W + 1] === 1);
+  check('water bodies: enclosed below-sea pocket → lake (class 2)', wbWet[4 * W + 6] === 2 && wbWet[5 * W + 7] === 2);
+  check('water bodies: dry land → 0', wbWet[0 * W + 5] === 0);
+  check('water bodies: watered above-sea depression → lake (class 2)', wbWet[2 * W + 7] === 2);
+  // the SAME depression with no moisture stays dry (salt flat, not a lake)
+  const wbDry = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.0) });
+  check('water bodies: arid above-sea depression stays dry (not a lake)', wbDry[2 * W + 7] === 0);
+  // the enclosed below-sea pocket is moisture-independent (it is real water)
+  check('water bodies: below-sea lake independent of moisture', wbDry[4 * W + 6] === 2);
+  // determinism
+  const wb2 = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.5) });
+  check('buildWaterBodies deterministic', wbWet.every((v, i) => v === wb2[i]));
+}
+
 /* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */
 {
   const p = chunkParent(3, 5, 6);
@@ -1427,14 +1835,193 @@ fieldsFinite('generate(world)');
   check('parent↔children round-trip', ch.every(c => { const pp = chunkParent(c.z, c.col, c.row); return pp.z === 2 && pp.col === 1 && pp.row === 1; }));
   const a = chunkColorHash(2, 3, 4), b = chunkColorHash(2, 3, 4);
   check('chunkColorHash deterministic + valid RGB', a.length === 3 && a.every((v, i) => v === b[i]) && a.every(v => v >= 0 && v <= 255));
-  // lifecycle reflects the caches, with the atlas authoritative
-  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear(); _lodTile = 512;
+  // lifecycle reflects the caches, with the atlas authoritative (v0.081: baked uses the worldKey-namespaced atlas key)
+  _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear(); _lodTile = 512; _worldKey = 'tw';
   check('chunkState unexplored by default', chunkState(2, 1, 1) === 'unexplored');
   const key = lodCacheKey(2, 1, 1, _lodTile); _lodCache.set(key, {});
   check('chunkState cached after generation', chunkState(2, 1, 1) === 'cached');
   _lodEdits.set(key, {}); check('edited overrides cached', chunkState(2, 1, 1) === 'edited');
-  _atlasBaked.add(key); check('baked overrides edited (images authoritative)', chunkState(2, 1, 1) === 'baked');
+  _atlasBaked.add(atlasChunkKey(2, 1, 1, _lodTile)); check('baked overrides edited (images authoritative)', chunkState(2, 1, 1) === 'baked');
   _lodCache.clear(); _lodEdits.clear(); _atlasBaked.clear();
+}
+
+/* ---------- Atlas Phase 2a: worldKey + IDB chunk encode/decode + ancestor coverage (v0.081) ---------- */
+{
+  // worldKey deterministic + sensitive to a generation param
+  const wk1 = worldKey(), wk2 = worldKey();
+  check('worldKey deterministic (same state → same key)', wk1 === wk2 && typeof wk1 === 'string' && wk1.length > 0);
+  const sv = state.tect.seed; state.tect.seed = sv + 1;
+  check('worldKey changes when a gen param changes', worldKey() !== wk1);
+  state.tect.seed = sv; check('worldKey restored when param restored', worldKey() === wk1);
+
+  // atlasKeyStr format + uniqueness across z/col/row/ts
+  check('atlasKeyStr format', atlasKeyStr('w', 512, 2, 3, 4) === 'w:512:2:3:4');
+  const ks = new Set([
+    atlasKeyStr('w', 512, 2, 3, 4), atlasKeyStr('w', 1024, 2, 3, 4),
+    atlasKeyStr('w', 512, 3, 3, 4), atlasKeyStr('w', 512, 2, 4, 4), atlasKeyStr('w', 512, 2, 3, 5),
+    atlasKeyStr('x', 512, 2, 3, 4)]);
+  check('atlasKeyStr unique across ts/z/col/row/worldKey', ks.size === 6);
+
+  // encode/decode round-trip ≤1 LSB, preserving dims + addressing
+  const tw = 12, th = 8, td = new Float32Array(tw * th);
+  for (let i = 0; i < td.length; i++) td[i] = i / (td.length - 1);
+  const tile = { data: td, w: tw, h: th, z: 3, col: 5, row: 6 };
+  const rec = atlasEncodeChunk(tile), dec = atlasDecodeChunk(rec);
+  let maxErr = 0; for (let i = 0; i < td.length; i++) maxErr = Math.max(maxErr, Math.abs(td[i] - dec.data[i]));
+  check('atlasEncodeChunk packs rg16 + dims', rec.rg16.length === tw * th * 4 && rec.w === tw && rec.h === th && rec.z === 3 && rec.col === 5 && rec.row === 6);
+  check('atlas chunk round-trip ≤1 LSB (max Δ=' + maxErr.toExponential(1) + ')', maxErr <= 0.5 / 65535 + 1e-9);
+  check('atlasDecodeChunk preserves addressing', dec.w === tw && dec.h === th && dec.z === 3 && dec.col === 5 && dec.row === 6);
+
+  // bakedCover: a baked ancestor covers its descendants, not a sibling subtree
+  _atlasBaked.clear(); _lodTile = 512; _worldKey = 'cw';
+  check('bakedCover false when nothing baked', bakedCover(3, 4, 4) === false);
+  _atlasBaked.add(atlasChunkKey(1, 1, 1, _lodTile));                 // bake a level-1 ancestor
+  check('bakedCover true for a descendant of a baked ancestor', bakedCover(3, 4, 4) === true);   // (1,1,1)→(2,2,2)→(3,4,4)
+  check('bakedCover true for the baked chunk itself', bakedCover(1, 1, 1) === true);
+  check('bakedCover false for a sibling subtree', bakedCover(3, 0, 0) === false);                // under (1,0,0), not baked
+  _atlasBaked.clear();
+}
+
+/* ---------- Atlas Phase 2b: metadata record helpers (pure) (v0.082) ---------- */
+{
+  check('atlasMetaKey prefixes the worldKey', atlasMetaKey('abc') === 'meta:abc');
+  check('atlasMetaKey distinct from any chunk key', atlasMetaKey('abc') !== atlasKeyStr('abc', 512, 0, 0, 0));
+  const m = atlasMetaRec('abc', { ts: 1024, chunks: 7, time: 42 });
+  check('atlasMetaRec shape', m.key === 'meta:abc' && m.ts === 1024 && m.chunks === 7 && m.ver === VERSION && m.time === 42);
+  check('atlasMetaRec has NO worldKey field (so the world index excludes it)', !('worldKey' in m));
+}
+
+/* ---------- Atlas Phase 3: biome-coloured tiles (renderBiomeTileRGBA) (v0.083) ---------- */
+{
+  // amplify a sub-region into a tile, then render it both ways
+  const region = { x: GW * 0.25, y: GH * 0.3, w: GW * 0.4, h: GH * 0.35 }, TW = 40, TH = 36;
+  const tile = amplifyRegion(field, GW, GH, region, TW, TH, { detailAmp: 0.1, sea: state.seaLevel });
+  const bounds = { x: region.x, y: region.y, w: region.w, h: region.h };
+  const bio = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  const relief = renderHeightTileRGBA(tile, TW, TH);
+  check('renderBiomeTileRGBA RGBA length + opaque', bio.length === TW * TH * 4 && bio[3] === 255 && bio[bio.length - 1] === 255);
+  let finite = true; for (let i = 0; i < bio.length; i++) if (!Number.isFinite(bio[i])) finite = false;
+  check('renderBiomeTileRGBA all finite', finite);
+  let diff = 0; for (let i = 0; i < bio.length; i++) if (bio[i] !== relief[i]) diff++;
+  check('biome tile differs from the relief tile (climate colour added)', diff > bio.length * 0.25);
+  const bio2 = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  check('renderBiomeTileRGBA deterministic', bio.every((v, i) => v === bio2[i]));
+  // an all-ocean tile renders ocean (blue-dominant), an all-high tile does not
+  const seaTile = new Float32Array(TW * TH).fill(state.seaLevel - 0.2);
+  const sea = renderBiomeTileRGBA(seaTile, TW, TH, bounds);
+  check('ocean tile is blue-dominant (B>R)', sea[2] > sea[0]);
+  const hiTile = new Float32Array(TW * TH).fill(Math.min(1, state.seaLevel + 0.5));
+  const hi = renderBiomeTileRGBA(hiTile, TW, TH, bounds);
+  let oceanish = 0; for (let i = 0; i < hiTile.length; i++){ const p = i * 4; if (hi[p + 2] > hi[p] + 20) oceanish++; }
+  check('land tile is not rendered as ocean', oceanish < hiTile.length * 0.5);
+}
+
+/* ---------- R1: ambient occlusion (aoMul + renderBiomeTileRGBA AO) (v0.084) ---------- */
+{
+  check('aoMul darkens depressions', aoMul(0.05, 1) < 1 && aoMul(0.05, 1) >= 1 - AO_MAX - 1e-9);
+  check('aoMul leaves ridges/flat unchanged', aoMul(-0.05, 1) === 1 && aoMul(0, 1) === 1);
+  check('aoMul scales with strength', aoMul(0.02, 1) < aoMul(0.02, 0.3));
+  check('aoMul clamped at max darkening', aoMul(1, 1) === 1 - AO_MAX);
+  const region = { x: GW * 0.25, y: GH * 0.3, w: GW * 0.4, h: GH * 0.35 }, TW = 40, TH = 36;
+  const tile = amplifyRegion(field, GW, GH, region, TW, TH, { detailAmp: 0.1, sea: state.seaLevel });
+  const bounds = { x: region.x, y: region.y, w: region.w, h: region.h }, saved = state.viz.ao;
+  state.viz.ao = 0;   const off = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  state.viz.ao = 0.8; const on  = renderBiomeTileRGBA(tile, TW, TH, bounds);
+  state.viz.ao = saved;
+  let d = 0, neverBrighter = true; for (let i = 0; i < off.length; i += 4){ if (on[i] !== off[i]) d++; if (on[i] > off[i] || on[i + 1] > off[i + 1] || on[i + 2] > off[i + 2]) neverBrighter = false; }
+  check('AO changes the biome tile when on', d > 0);
+  check('AO only darkens, never brightens', neverBrighter);
+  check('AO off ⇒ tile identical to no-AO render', (() => { state.viz.ao = 0; const a = renderBiomeTileRGBA(tile, TW, TH, bounds); state.viz.ao = saved; return a.every((v, i) => v === off[i]); })());
+}
+
+/* ---------- R2: ridge crest enhancement + slope-material refinement (v0.087) ---------- */
+{
+  // buildCrestField: convex (Laplacian<0) + steep → >0; concave bowl / flat / ocean → 0
+  const W = 9, H = 9, ridge = new Float32Array(W * H), bowl = new Float32Array(W * H), flat = new Float32Array(W * H).fill(0.6);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){ const d = x - 4;
+    ridge[y * W + x] = 0.4 + 0.3 * Math.exp(-(d * d) / 4);   // rounded dome ridge along x=4 (convex + sloped shoulders)
+    bowl[y * W + x]  = 0.4 + 0.01 * d * d;                   // upward parabola valley — concave (curv>0) everywhere
+  }
+  const cr = buildCrestField(ridge, W, H, 0.0);
+  check('buildCrestField fires on the convex ridge shoulders', cr.some(v => v > 0));
+  check('buildCrestField ignores concave bowls (interior)', (() => { const bc = buildCrestField(bowl, W, H, 0.0); for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) if (bc[y * W + x] !== 0) return false; return true; })());
+  check('buildCrestField ignores flat ground', buildCrestField(flat, W, H, 0.0).every(v => v === 0));
+  check('buildCrestField is land-only (ocean cells stay 0)', buildCrestField(ridge, W, H, 1.0).every(v => v === 0));
+  check('buildCrestField deterministic', buildCrestField(ridge, W, H, 0.0).every((v, i) => v === cr[i]));
+  // sx,sy scaling: a sub-cell-sampled ridge gives the same crest scale as the unit-step ridge
+  const cr1 = buildCrestField(ridge, W, H, 0.0, 1, 1);
+  check('buildCrestField sx,sy default to the unit-step result', cr1.every((v, i) => v === cr[i]));
+  // applyCrest brightens toward the highlight, clamps at s≥1
+  const c0 = [40, 60, 30]; applyCrest(c0, 0.5); check('applyCrest brightens toward the sunlit-rock stroke', c0[0] > 40 && c0[1] > 60 && c0[2] > 30);
+  const c1 = [10, 10, 10]; applyCrest(c1, 2); check('applyCrest clamps strength at 1', Math.abs(c1[0] - 240) < 1e-6);
+  const c2 = [10, 10, 10]; applyCrest(c2, 0); check('applyCrest no-op at strength 0', c2[0] === 10);
+
+  // slope-rock refinement inside landColorCore: gated, off ⇒ identical
+  {
+    const args = [16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0.0, 0.0, 0.0, state.bioBlend, 1, 50, 50, 1];
+    const savedR = state.viz.rockSlope;
+    state.viz.rockSlope = 0; const a = landColorCore(...args), a2 = landColorCore(...args);
+    state.viz.rockSlope = 0.9; const b = landColorCore(...args);
+    state.viz.rockSlope = savedR;
+    check('slope-rock off ⇒ landColorCore deterministic/unchanged', a.every((v, i) => v === a2[i]));
+    check('slope-rock on ⇒ steep land recolours toward rock', a.some((v, i) => v !== b[i]));
+  }
+}
+
+/* ---------- R3: procedural texture synthesis + minor-channel flow lines (v0.088) ---------- */
+{
+  // texture synthesis inside landColorCore: gated, off ⇒ identical, on ⇒ modulates, deterministic per-pixel
+  const args = [16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0.0, 0.0, 0.0, state.bioBlend, 1, 50, 50, 1];
+  const savedT = state.viz.texture;
+  state.viz.texture = 0;   const off = landColorCore(...args), off2 = landColorCore(...args);
+  state.viz.texture = 0.9; const on = landColorCore(...args), on2 = landColorCore(...args);
+  state.viz.texture = savedT;
+  check('texture off ⇒ landColorCore unchanged/deterministic', off.every((v, i) => v === off2[i]));
+  check('texture on ⇒ colour is modulated', off.some((v, i) => v !== on[i]));
+  check('texture on ⇒ deterministic (seamless world-coord noise)', on.every((v, i) => v === on2[i]));
+  // two different world positions get different texture (it's spatially varying)
+  state.viz.texture = 0.9;
+  const pA = landColorCore(16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0, 0, 0, state.bioBlend, 1, 17, 23, 1);
+  const pB = landColorCore(16, 0.5, 0.06, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0, 0, 0, state.bioBlend, 1, 200, 140, 1);
+  state.viz.texture = savedT;
+  check('texture varies across world coords', pA.some((v, i) => v !== pB[i]));
+
+  // minor channels: surfaceColor band below the trunk threshold, gated, off ⇒ identical
+  state.world = false; state.resW = 128; GW = 128; GH = gridH(128); allocate(); generate(); computeFlow(true);
+  const hi = GW * GH * 0.0004, lo = hi * 0.05;
+  // find a land cell whose flow sits in the minor band
+  let idx = -1; for (let i = 0; i < GW * GH; i++){ if (field[i] >= state.seaLevel && flowField[i] > lo && flowField[i] < hi){ idx = i; break; } }
+  const savedM = state.viz.minorStreams, savedR2 = state.showRivers; state.showRivers = true;
+  if (idx >= 0){ const x = idx % GW, y = (idx / GW) | 0;
+    _riverField = null; state.viz.minorStreams = 0;   const c0 = surfaceColor(x, y, idx, field[idx]);
+    _riverField = null; state.viz.minorStreams = 0;   const c0b = surfaceColor(x, y, idx, field[idx]);
+    check('minor channels off ⇒ surfaceColor unchanged/deterministic', c0.every((v, i) => v === c0b[i]));
+    _riverField = null; state.viz.minorStreams = 0.9; const c1 = surfaceColor(x, y, idx, field[idx]);
+    check('minor channels on ⇒ band cell shifts blue-grey', c1.some((v, i) => v !== c0[i]) && c1[2] >= c1[0]);
+  } else { console.log('skip - no minor-band cell found at this seed/res'); check('minor channels band lookup', true); }
+  state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverField = null;
+}
+
+/* ---------- R4: ridged-noise elevation-weighted relief detail (v0.089) ---------- */
+{
+  // ridgedFbm pure: [0,1], deterministic, octave-count matters, and ridgedFbm(...,6,..) === ridged(...)
+  let inRange = true; for (let k = 0; k < 50; k++){ const v = ridgedFbm(k * 0.37, k * 0.21, 5, 9); if (v < 0 || v > 1) inRange = false; }
+  check('ridgedFbm stays in [0,1]', inRange);
+  check('ridgedFbm deterministic', ridgedFbm(1.3, 2.7, 5, 9) === ridgedFbm(1.3, 2.7, 5, 9));
+  check('ridgedFbm octave count changes detail', ridgedFbm(1.3, 2.7, 1, 9) !== ridgedFbm(1.3, 2.7, 5, 9));
+  check('ridgedFbm(…,6,…) matches the legacy ridged()', Math.abs(ridgedFbm(1.3, 2.7, 6, 9) - ridged(1.3, 2.7, 9)) < 1e-12);
+
+  // landColorCore ridged relief: gated; off ⇒ identical; lowland (r=0) untouched even when on (H² gate); highland changes
+  const base = [16, 0.5, 0.06, /*r*/0.8, 0.5, 0.5, 0.5, 0.8, 0.8, 0.0, 0.0, 0.0, state.bioBlend, 1, 50, 50, 1];
+  const low  = base.slice(); low[3] = 0.0;   // r=0 ⇒ H² gate = 0
+  const savedRR = state.viz.ridgedRelief;
+  state.viz.ridgedRelief = 0;   const off = landColorCore(...base), off2 = landColorCore(...base);
+  state.viz.ridgedRelief = 0.9; const on = landColorCore(...base), onLow = landColorCore(...low);
+  state.viz.ridgedRelief = 0;   const offLow = landColorCore(...low);
+  state.viz.ridgedRelief = savedRR;
+  check('ridged relief off ⇒ landColorCore unchanged/deterministic', off.every((v, i) => v === off2[i]));
+  check('ridged relief on ⇒ highland colour changes', off.some((v, i) => v !== on[i]));
+  check('ridged relief H² gate ⇒ lowland (r=0) untouched', onLow.every((v, i) => v === offLow[i]));
 }
 
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
@@ -1496,6 +2083,75 @@ fieldsFinite('generate(world)');
       const z2 = await unzipAny(zipBuf.buffer.slice(zipBuf.byteOffset, zipBuf.byteOffset + zipBuf.byteLength));
       check('unzipAny inflates a DEFLATED entry', !!z2['a.txt'] && new TextDecoder().decode(z2['a.txt']) === 'hello deflate world '.repeat(20));
     } else { console.log('skip - DecompressionStream unavailable'); }
+  }
+
+  /* ---------- Atlas Phase 2b: IndexedDB persistence round-trip via the test-only shim (v0.082) ---------- */
+  {
+    global.indexedDB = __makeIDBShim(); _atlasDBp = null;          // install the shim; reset the engine's cached open promise
+    _worldKey = 'rt'; _atlasBaked.clear(); _lodTile = 512;
+    // bake 3 chunk records + a meta record
+    for (let i = 0; i < 3; i++){
+      const ak = atlasChunkKey(2, i, 0, _lodTile);
+      await atlasPut({ key: ak, worldKey: 'rt', ts: 512, z: 2, col: i, row: 0, w: 2, h: 2, rg16: new Uint8Array(16), png: null, ver: VERSION, time: 1 });
+      _atlasBaked.add(ak);
+    }
+    await atlasPutMeta('rt');
+    const keys = await atlasKeysForWorld('rt');
+    check('atlasKeysForWorld returns the 3 baked chunk keys', Array.isArray(keys) && keys.length === 3);
+    check('atlasKeysForWorld excludes the meta record', !keys.includes(atlasMetaKey('rt')));
+    const got = await atlasGet(atlasChunkKey(2, 1, 0, _lodTile));
+    check('atlasGet round-trips a chunk record', !!got && got.col === 1 && got.rg16.length === 16);
+    const meta = await atlasGetMeta('rt');
+    check('atlasGetMeta round-trips the metadata', !!meta && meta.chunks === 3 && meta.ts === 512 && meta.ver === VERSION);
+    // simulate a fresh session: drop the in-memory set + cached handle, rediscover from IDB
+    _atlasBaked.clear(); _atlasImg.clear(); _atlasDBp = null;
+    await atlasSyncWorld();
+    check('atlasSyncWorld rediscovers baked chunks (persistence)', _atlasBaked.size === 3 && _atlasMeta && _atlasMeta.chunks === 3);
+    // a different world sees an empty atlas
+    _worldKey = 'other'; _atlasBaked.clear(); await atlasSyncWorld();
+    check('a different worldKey has no baked chunks', _atlasBaked.size === 0);
+    // clear wipes the world's chunks + meta
+    _worldKey = 'rt'; await atlasClearWorld('rt');
+    check('atlasClearWorld removes all chunk keys', (await atlasKeysForWorld('rt')).length === 0);
+    check('atlasClearWorld removes the meta record', (await atlasGetMeta('rt')) == null);
+    delete global.indexedDB; _atlasDBp = null; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta = null; _worldKey = '';
+  }
+
+  /* ---------- Atlas Phase 4: portable World/ ZIP export+import (v0.086) ---------- */
+  {
+    // pure manifest + chunk-file naming
+    check('atlasChunkFile groups by LOD level', atlasChunkFile(3, 5, 6, 'bin') === 'World/LOD3/3_5_6.bin');
+    check('atlasChunkFile carries the .gz / .png extension', atlasChunkFile(1, 0, 0, 'bin.gz') === 'World/LOD1/1_0_0.bin.gz' && atlasChunkFile(1, 0, 0, 'png') === 'World/LOD1/1_0_0.png');
+    const man0 = buildAtlasManifest('wk1', [{ z: 2, col: 1, row: 0, w: 4, h: 4, gzip: true, png: true }, { z: 2, col: 0, row: 0, w: 4, h: 4, gzip: false, png: false }], { tileSize: 512 });
+    check('buildAtlasManifest tags kind + worldKey + count', man0.kind === 'cartalith-atlas' && man0.worldKey === 'wk1' && man0.count === 2 && man0.tileSize === 512);
+    check('buildAtlasManifest bin name reflects gzip flag', man0.chunks[0].bin.endsWith('.bin.gz') && man0.chunks[1].bin.endsWith('.bin') && !man0.chunks[1].bin.endsWith('.gz'));
+    check('buildAtlasManifest png is null when chunk has none', man0.chunks[0].png && man0.chunks[1].png === null);
+
+    // round-trip through IDB → entries → ZIP → unzip → fresh IDB
+    if (typeof CompressionStream !== 'undefined' && typeof DecompressionStream !== 'undefined') {
+      global.indexedDB = __makeIDBShim(); _atlasDBp = null;
+      _worldKey = 'ax'; _atlasBaked.clear(); _lodTile = 512;
+      const d0 = Float32Array.from({ length: 16 }, (_, i) => (i % 7) / 7), d1 = Float32Array.from({ length: 16 }, (_, i) => 1 - (i % 5) / 5);
+      await atlasPut({ key: atlasKeyStr('ax', 512, 1, 2, 3), worldKey: 'ax', ts: 512, z: 1, col: 2, row: 3, w: 4, h: 4, rg16: packHeight16(d0, 16), png: null, ver: VERSION, time: 1 });
+      await atlasPut({ key: atlasKeyStr('ax', 512, 0, 0, 0), worldKey: 'ax', ts: 512, z: 0, col: 0, row: 0, w: 4, h: 4, rg16: packHeight16(d1, 16), png: null, ver: VERSION, time: 1 });
+      const exp = await atlasExportEntries(true);
+      check('atlasExportEntries gathers both chunks + a manifest', exp && exp.manifest.count === 2 && exp.entries.some(e => e.name === 'World/atlas.json'));
+      const blob = zipStore(exp.entries), zip = await unzipAny(await blob.arrayBuffer());
+      check('exported ZIP contains the gzipped chunk bins', !!zip['World/LOD1/1_2_3.bin.gz'] && !!zip['World/LOD0/0_0_0.bin.gz']);
+      // fresh "machine": new shim, same worldKey so import repopulates _atlasBaked
+      global.indexedDB = __makeIDBShim(); _atlasDBp = null; _atlasBaked.clear();
+      const n = await atlasImportEntries(zip);
+      check('atlasImportEntries writes both chunks back to IDB', n === 2);
+      check('import repopulates _atlasBaked for the current world', _atlasBaked.has(atlasKeyStr('ax', 512, 1, 2, 3)));
+      const keys2 = await atlasKeysForWorld('ax');
+      check('imported atlas is queryable by world index', keys2.length === 2);
+      const rec = await atlasGet(atlasKeyStr('ax', 512, 1, 2, 3)), back = unpackHeight16(rec.rg16, 16);
+      let maxd = 0; for (let i = 0; i < 16; i++) maxd = Math.max(maxd, Math.abs(back[i] - d0[i]));
+      check('imported chunk height round-trips ≤ 1 LSB', maxd <= 1 / 65535 + 1e-9);
+      const imeta = await atlasGetMeta('ax');
+      check('import writes a metadata record', !!imeta && imeta.chunks === 2);
+      delete global.indexedDB; _atlasDBp = null; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta = null; _worldKey = '';
+    } else { console.log('skip - CompressionStream/DecompressionStream unavailable'); }
   }
 
   console.log('\n' + __pass + ' passed, ' + __fail + ' failed');

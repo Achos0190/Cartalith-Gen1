@@ -78,3 +78,37 @@ global.localStorage = { getItem(){ return null; }, setItem(){}, removeItem(){} }
 try { global.navigator = { userAgent: 'node-headless' }; } catch (_) { /* node ≥21: read-only global, built-in is fine */ }
 if (!global.URL.createObjectURL){ global.URL.createObjectURL = () => 'blob:stub'; global.URL.revokeObjectURL = () => {}; }
 if (typeof global.alert === 'undefined') global.alert = () => {};
+// IndexedDB is intentionally NOT installed by default: the Atlas (v0.081+) feature-detects
+// `typeof indexedDB==='undefined'` and no-ops headless, so the default suite + cross-version cmp stay on the
+// genuine no-IDB path (bit-identical proof intact). The factory below is opt-in: a Phase-2b test assigns
+// `global.indexedDB = __makeIDBShim()` (and resets the engine's cached `_atlasDBp`) to exercise the real
+// put/get/delete/index round-trip, then restores. Minimal in-memory shim — only the ops the atlas uses.
+global.IDBKeyRange = { only: v => ({ _only: v }) };
+global.__makeIDBShim = function (){
+  const dbs = {};                                              // name → { version, stores:{ store:{keyPath,data:Map,indexes:{name:{keyPath}}} } }
+  const soon = (fn) => setTimeout(fn, 0);
+  function req(result){ const r = { result, onsuccess:null, onerror:null }; soon(() => { if (r.onsuccess) r.onsuccess(); }); return r; }
+  function storeAPI(s){
+    return {
+      put(rec){ s.data.set(rec[s.keyPath], rec); return req(undefined); },
+      get(key){ return req(s.data.has(key) ? s.data.get(key) : undefined); },
+      delete(key){ s.data.delete(key); return req(undefined); },
+      index(iname){ const ix = s.indexes[iname];
+        return { getAllKeys(range){ const out = []; for (const [k, rec] of s.data){ const v = rec[ix.keyPath]; if (v === undefined) continue; if (range == null || v === range._only) out.push(k); } return req(out); } }; }
+    };
+  }
+  function dbAPI(db){
+    return {
+      objectStoreNames: { contains: n => !!db.stores[n] },
+      createObjectStore(n, opts){ db.stores[n] = { keyPath: opts.keyPath, data: new Map(), indexes: {} };
+        const st = db.stores[n]; return { createIndex(iname, keyPath){ st.indexes[iname] = { keyPath }; } }; },
+      transaction(n){ const tx = { oncomplete:null, onerror:null, onabort:null, objectStore: () => storeAPI(db.stores[n]) };
+        soon(() => { if (tx.oncomplete) tx.oncomplete(); }); return tx; }
+    };
+  }
+  return { open(name, ver){ const fresh = !dbs[name]; const db = dbs[name] || (dbs[name] = { version: 0, stores: {} });
+      const need = fresh || ver > db.version; if (need) db.version = ver;
+      const r = { result: dbAPI(db), onupgradeneeded:null, onsuccess:null, onerror:null, onblocked:null };
+      soon(() => { if (need && r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); });
+      return r; } };
+};

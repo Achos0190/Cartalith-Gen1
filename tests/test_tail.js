@@ -231,23 +231,26 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
 /* ---------- biome raster handoff (v0.042+, BIOME_AND_VISUALS_PLAN Part A) ---------- */
 {
   const raster = buildBiomeRaster();
+  const wbR = currentWaterBodies();   // v0.103: raster's water classes (1 sea → 0, 2 lake → 13)
   check('biome raster length = GW×GH', raster.length === GW * GH);
-  let valid = true, oceanMatchesSea = true, distinct = new Set();
-  const maxIdx = BIOME_KEYS.length; // ocean=0, biomes 1..maxIdx
+  let valid = true, seaMatches = true, lakeMatches = true, distinct = new Set();
+  const maxIdx = BIOME_KEYS.length; // ocean=0, biomes 1..maxIdx (incl. lake=13)
   for (let i = 0; i < raster.length; i++){
     const v = raster[i];
     if (v < 0 || v > maxIdx || (v | 0) !== v){ valid = false; break; }
     distinct.add(v);
-    const isSea = field[i] < state.seaLevel;
-    if (isSea !== (v === 0)){ oceanMatchesSea = false; }
+    if ((wbR[i] === 1) !== (v === 0)){ seaMatches = false; }            // open sea ⇔ index 0
+    if ((wbR[i] === 2) !== (v === BIOME_INDEX.lake)){ lakeMatches = false; }   // lake ⇔ index 13
   }
   check('biome raster values are valid indices (0..' + maxIdx + ')', valid);
-  check('biome raster: index 0 ⇔ below sea level', oceanMatchesSea);
+  check('biome raster: index 0 ⇔ open sea (water-body 1)', seaMatches);
+  check('biome raster: index 13 ⇔ lake (water-body 2)', lakeMatches);
   check('biome raster has multiple biomes (' + distinct.size + ' distinct)', distinct.size >= 3);
   const man = biomeIndexManifest();
   check('manifest covers every index in the raster', [...distinct].every(v => man.indices[String(v)] !== undefined));
-  check('manifest index order is frozen (ocean=0, ice=1, tropWet=12)',
-    man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' && man.indices[String(BIOME_KEYS.length)].key === 'tropWet');
+  check('manifest index order is frozen (ocean=0, ice=1, tropWet=12, lake=13)',
+    man.indices['0'].key === 'ocean' && man.indices['1'].key === 'ice' &&
+    man.indices['12'].key === 'tropWet' && man.indices['13'].key === 'lake');
 }
 
 /* ---------- ocean currents (v0.045+, weather-model-v2 W3.5) ---------- */
@@ -1752,12 +1755,14 @@ if (typeof applyTidalSedimentation === 'function') {
   state.world = false; state.resW = 256; GW = 256; GH = gridH(256); allocate(); generate();
   const cb = buildCartBiome();
   check('buildCartBiome finite indices in 1..15', cb.length === GW * GH && cb.every(v => v >= 1 && v <= 15));
-  let oceanOk = true, landOk = true;
-  for (let i = 0; i < cb.length; i++){ const w = field[i] - geoAt(i) < state.seaLevel;
-    if (w && cb[i] !== 15) oceanOk = false;          // ocean cells → Ocean (15)
-    if (!w && cb[i] === 15) landOk = false;          // land cells never Ocean
+  const wbCB = currentWaterBodies();   // v0.103: open sea → Ocean(15), lake → Lake(14)
+  let seaOk = true, lakeOk = true, landOk = true;
+  for (let i = 0; i < cb.length; i++){
+    if (wbCB[i] === 1 && cb[i] !== 15) seaOk = false;          // open sea → Ocean (15)
+    if (wbCB[i] === 2 && cb[i] !== 14) lakeOk = false;         // lake → Lake (14)
+    if (wbCB[i] === 0 && (cb[i] === 14 || cb[i] === 15)) landOk = false;   // land never water
   }
-  check('CBiome: ocean cells → Ocean(15), land never Ocean', oceanOk && landOk);
+  check('CBiome: sea→Ocean(15), lake→Lake(14), land never water', seaOk && lakeOk && landOk);
   const cb2 = buildCartBiome();
   check('buildCartBiome deterministic', cb.every((v, i) => v === cb2[i]));
   // CBiome debug view renders opaque
@@ -1777,12 +1782,13 @@ if (typeof applyTidalSedimentation === 'function') {
 {
   const ct = buildCartTerrain();
   check('buildCartTerrain finite indices in 0..13', ct.length === GW * GH && ct.every(v => v >= 0 && v <= 13));
-  let oceanOk = true, landOk = true;
-  for (let i = 0; i < ct.length; i++){ const w = field[i] - geoAt(i) < state.seaLevel;
-    if (w && ct[i] !== 0) oceanOk = false;           // ocean cells → unpainted (0)
-    if (!w && ct[i] === 0) landOk = false;           // land cells always have a terrain
+  const wbCT = currentWaterBodies();   // v0.103: all water (sea+lake) → 0; dry land → painted
+  let waterOk = true, landOk = true;
+  for (let i = 0; i < ct.length; i++){
+    if (wbCT[i] !== 0 && ct[i] !== 0) waterOk = false;   // sea & lakes → unpainted (0)
+    if (wbCT[i] === 0 && ct[i] === 0) landOk = false;    // dry land always has a terrain
   }
-  check('CTerrain: ocean cells → 0, land always painted', oceanOk && landOk);
+  check('CTerrain: all water → 0, dry land always painted', waterOk && landOk);
   // human-made surfaces (Paved Road 1, Dirt Track 2, Forest Path 5, Ruins 13) never auto-generate
   check('CTerrain: no human-made surfaces auto-generated', ct.every(v => v !== 1 && v !== 2 && v !== 5 && v !== 13));
   const ct2 = buildCartTerrain();
@@ -1791,6 +1797,31 @@ if (typeof applyTidalSedimentation === 'function') {
   state.mode = 'biome'; state.debug = 'cterrain'; _cartTerrain = null; renderNow();
   check('CTerrain debug view renders opaque', img.data[3] === 255);
   state.debug = 'off';
+}
+
+/* ---------- v0.103: water bodies — sea vs lakes (pure, synthetic grids; no globals/RNG touched) ---------- */
+{
+  const W = 9, H = 9, sea = 0.5;
+  // base: all land at 0.6; a big open sea fills the left 3 columns (touches the border → largest component)
+  const f = new Float32Array(W * H).fill(0.6);
+  for (let y = 0; y < H; y++) for (let x = 0; x < 3; x++) f[y * W + x] = 0.3;
+  // an enclosed below-sea pocket in the middle, walled off from the open sea by land → inland-sea lake
+  f[4 * W + 6] = 0.3; f[4 * W + 7] = 0.3; f[5 * W + 6] = 0.3; f[5 * W + 7] = 0.3;
+  // an above-sea depression at (7,2): below its neighbours (0.6) but above sea → pooled lake when watered
+  f[2 * W + 7] = 0.54;
+  const wbWet = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.5) });
+  check('water bodies: open sea is the largest component (class 1)', wbWet[4 * W + 0] === 1 && wbWet[4 * W + 1] === 1);
+  check('water bodies: enclosed below-sea pocket → lake (class 2)', wbWet[4 * W + 6] === 2 && wbWet[5 * W + 7] === 2);
+  check('water bodies: dry land → 0', wbWet[0 * W + 5] === 0);
+  check('water bodies: watered above-sea depression → lake (class 2)', wbWet[2 * W + 7] === 2);
+  // the SAME depression with no moisture stays dry (salt flat, not a lake)
+  const wbDry = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.0) });
+  check('water bodies: arid above-sea depression stays dry (not a lake)', wbDry[2 * W + 7] === 0);
+  // the enclosed below-sea pocket is moisture-independent (it is real water)
+  check('water bodies: below-sea lake independent of moisture', wbDry[4 * W + 6] === 2);
+  // determinism
+  const wb2 = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.5) });
+  check('buildWaterBodies deterministic', wbWet.every((v, i) => v === wb2[i]));
 }
 
 /* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */

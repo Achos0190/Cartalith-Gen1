@@ -1773,6 +1773,26 @@ if (typeof applyTidalSedimentation === 'function') {
   state.viz.sharpBiomes = sv;
 }
 
+/* ---------- v0.102: Cartalith terrain-paint PoC (reuses the world generated above; no extra generate() so the shared RNG stream stays put for the later seam test) ---------- */
+{
+  const ct = buildCartTerrain();
+  check('buildCartTerrain finite indices in 0..13', ct.length === GW * GH && ct.every(v => v >= 0 && v <= 13));
+  let oceanOk = true, landOk = true;
+  for (let i = 0; i < ct.length; i++){ const w = field[i] - geoAt(i) < state.seaLevel;
+    if (w && ct[i] !== 0) oceanOk = false;           // ocean cells → unpainted (0)
+    if (!w && ct[i] === 0) landOk = false;           // land cells always have a terrain
+  }
+  check('CTerrain: ocean cells → 0, land always painted', oceanOk && landOk);
+  // human-made surfaces (Paved Road 1, Dirt Track 2, Forest Path 5, Ruins 13) never auto-generate
+  check('CTerrain: no human-made surfaces auto-generated', ct.every(v => v !== 1 && v !== 2 && v !== 5 && v !== 13));
+  const ct2 = buildCartTerrain();
+  check('buildCartTerrain deterministic', ct.every((v, i) => v === ct2[i]));
+  // CTerrain debug view renders opaque
+  state.mode = 'biome'; state.debug = 'cterrain'; _cartTerrain = null; renderNow();
+  check('CTerrain debug view renders opaque', img.data[3] === 255);
+  state.debug = 'off';
+}
+
 /* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */
 {
   const p = chunkParent(3, 5, 6);

@@ -492,11 +492,12 @@ details.acc[open]>summary{color:var(--accent)}
           <button data-brush="canyon">Canyon</button>
           <button data-brush="mesa">Mesa</button>
           <button data-brush="volcano">Volc.</button>
+          <button data-brush="water">Water</button>
         </div>
         <div class="row" style="margin-top:12px"><label>Radius</label><input type="range" id="brad" min="2" max="80" step="1" value="22"><span class="val" id="bradV">22</span></div>
         <div class="row"><label>Strength</label><input type="range" id="bstr" min="1" max="100" step="1" value="35"><span class="val" id="bstrV">35%</span></div>
         <label class="chk"><input type="checkbox" id="lodEditChk"> Edit LOD tiles (sculpt the refined detail)</label>
-        <div class="hint">Drag to edit — <b>only while this Sculpt tab is open</b> (in the Terrain/Style tabs the canvas drag never sculpts; pan with middle-drag, space-drag or the wheel). Disabled in debug views. <b>Cliff / Ridge / Canyon</b> follow drag direction. <b>Mesa / Volc.</b> stamp once on tap. With <b>Edit LOD tiles</b> on, the same brush sculpts the refined Tiled-LOD detail (turn on Tiled LOD + Refine in the Terrain tab first); edits persist per tile, Ctrl-Z undoes.</div>
+        <div class="hint">Drag to edit — <b>only while this Sculpt tab is open</b> (in the Terrain/Style tabs the canvas drag never sculpts; pan with middle-drag, space-drag or the wheel). Disabled in debug views. <b>Cliff / Ridge / Canyon</b> follow drag direction. <b>Mesa / Volc.</b> stamp once on tap. <b>Water</b> deposits a lake filled to the clicked height (over the circle shown at the cursor) without raising sea level — drag to extend; cleared on Generate. With <b>Edit LOD tiles</b> on, the same brush sculpts the refined Tiled-LOD detail (turn on Tiled LOD + Refine in the Terrain tab first); edits persist per tile, Ctrl-Z undoes.</div>
       </div>
 
       <div class="sec">
@@ -528,6 +529,7 @@ details.acc[open]>summary{color:var(--accent)}
         <label class="chk"><input type="checkbox" id="showRivers" checked> Show rivers in biome view</label>
         <label class="chk"><input type="checkbox" id="smoothRivers" checked> Smooth widening rivers (discharge-scaled)</label>
         <label class="chk"><input type="checkbox" id="sharpBiomes" checked> Sharper biome detail (finer ecotones)</label>
+        <label class="chk"><input type="checkbox" id="showLakes" checked> Show lakes as water (inland seas + deposited water)</label>
         <div class="hint">Parchment multiplies a paper-fibre grain and warm tint into the map colours. The icon layer finds ridgelines and forest cover and draws mountain, hill and tree glyphs over the relief &mdash; largest peaks claim the range spine first. Wave lines add concentric foam contours hugging the shore. Rivers overlay the drainage network as blue channels on the biome view. All are render-only (PNG bakes/layer exports are unchanged) and work with zero assets.</div>
       </div>
       <div class="sec">
@@ -604,7 +606,7 @@ const state = {
            geoid:{ enabled:false, amp:0.015 },
            tides:{ enabled:false, k2:1.0, moons:[{massRel:1.0, distRel:1.0, phase:0}] } },   /* planetary parameters (gravity-influence.md, G1 + G2 geoid + G3 tides; both off ⇒ bit-identical) */
   showRivers: true,
-  viz:{ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0 },   /* B1/B3/B4 layers + splat + river overlay + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome control fields (all default 0 = off) */
+  viz:{ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, showLakes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0 },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome control fields (all default 0 = off) */
   climate:{ latN:55, latS:5, equatorTemp:30, poleTemp:-25, lapseRate:6.5, rainK:1.0, rainDep:0.35, oceanHum:1.0, windDir:0, windMode:'auto', pressK:0.6, zonalK:0.5, bulkEvap:true, seasons:false, maxRainMm:3000, currents:false, currentK:1.0, albedo:0, evap:0.12, ocean:1.0, wIters:70 }   /* L6: ice-albedo cooling feedback (0 = off → bit-identical) */
 };
 
@@ -1102,7 +1104,7 @@ function generate(){
   _boundaryGraph=null; _oroPrev=null; _lodGen++; lodCacheClear(); _lodEdits.clear(); _lodUndo.length=0;   // T1/T2 caches + Stage-2 tiles + Stage-3 edits invalidate on regenerate
   { const nk=worldKey(); if(nk!==_worldKey){ _worldKey=nk; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta=null; } atlasSyncWorld(); }   // Phase 2a: changed world ⇒ fresh atlas; 2b: rediscover this world's baked chunks from IDB (cross-session)
   if(riverMask){ riverMask.fill(0); _riverAny=false; }                       // v0.077: new world ⇒ no locked rivers
-  _cartBiome=null; _cartTerrain=null; _waterBody=null;                       // v0.078/0.102/0.103: invalidate auto-filled biome/terrain-paint PoCs + water bodies
+  _cartBiome=null; _cartTerrain=null; _waterBody=null; lakeMask=null;        // v0.078/0.102/0.103: invalidate auto-filled biome/terrain-paint PoCs + water bodies; deposited lakes don't survive a regenerate (terrain rebuilt)
   refreshGeoid();                                                            // G2: rebuild (or clear) the sea-level offset for current res/seed/planet
   generateContinentalityField();
   computeWarp(); buildPlates(); assignPlates(); computeStress();
@@ -2555,10 +2557,13 @@ function buildWaterBodies(fld, W, H, sea, opts){
   }
   for(let i=0;i<n;i++){ if(out[i]===0){ const depth=filled[i]-fld[i];
     if(depth>lakeDepth && (!rain || rain[i]>=lakeRain)) out[i]=2; } }   // pooled, well-watered depression → lake
+  const force=opts.forceLake;                                          // v0.103: user-deposited lakes (Water brush) → always lake
+  if(force) for(let i=0;i<n;i++) if(force[i]) out[i]=2;
   return out;
 }
-let _waterBody=null;
-function currentWaterBodies(){ if(!_waterBody) _waterBody=buildWaterBodies(field,GW,GH,state.seaLevel,{wrap:!!state.world,geo:geoidField,rain:rainField}); return _waterBody; }   // cached; cleared each generate()/computeFlow()
+let _waterBody=null, lakeMask=null;   // _waterBody: cached classification (cleared each generate()/computeFlow()); lakeMask: user-deposited lakes (Water brush), cleared each generate()
+function currentWaterBodies(){ if(!_waterBody){ const fl=(lakeMask&&lakeMask.length===GW*GH)?lakeMask:null;
+  _waterBody=buildWaterBodies(field,GW,GH,state.seaLevel,{wrap:!!state.world,geo:geoidField,rain:rainField,forceLake:fl}); } return _waterBody; }
 
 /* ---- biome raster handoff to Cartalith (docs/BIOME_AND_VISUALS_PLAN.md, Part A) ----
    Stable index: 0 = ocean, then a FROZEN order (append-only; never renumber — the
@@ -3216,6 +3221,20 @@ function seaColor(x,y,i,vw){
   const T=tempField[i], depth=state.seaLevel<=0?0:clamp01((state.seaLevel-h)/state.seaLevel);
   return seaColorCore(depth,T,vnoise(x*25.6/GW,y*25.6/GW,5),_seaShade?_seaShade[i]:shadeFactor(x,y),vignetteAt(x,y));   /* v0.065 shade smoothed bathy; v0.068 resolution-independent water grain (×25.6/GW = the old ×0.05 at 512 → no finer-grained noise at 2K/4K) */
 }
+/* v0.103: flat freshwater-lake colour — reuses the sea shader at a fixed shallow depth (no deep gradient),
+   shifted slightly brighter/greener than the sea. Used for above-sea lakes (a mountain pond reads as water,
+   not a deep ocean trench). x,y in grid coords; i = cell index. */
+function lakeColor(x,y,i){
+  const T=tempField[i], vig=vignetteAt(x,y), grain=vnoise(x*25.6/GW,y*25.6/GW,5);
+  const c=seaColorCore(0.30,T,grain,0.95,vig);
+  return [Math.min(255,c[0]*0.9+12), Math.min(255,c[1]*0.96+16), Math.min(255,c[2]*0.94+6)];
+}
+function lakeColorSampled(gx,gy){   // bake variant: nearest-sample tempField; flat-water shade
+  const ix=Math.min(GW-1,Math.max(0,Math.round(gx))), iy=Math.min(GH-1,Math.max(0,Math.round(gy))), i=iy*GW+ix;
+  const T=tempField[i], vig=vignetteAt(gx,gy), grain=vnoise(gx*25.6/GW,gy*25.6/GW,5);
+  const c=seaColorCore(0.30,T,grain,0.95,vig);
+  return [Math.min(255,c[0]*0.9+12), Math.min(255,c[1]*0.96+16), Math.min(255,c[2]*0.94+6)];
+}
 function tempColor(tC){ const stops=[[40,60,150],[90,170,210],[235,235,200],[225,150,60],[200,60,50]];
   const f=Math.max(0,Math.min(1,(tC+30)/65))*(stops.length-1), i=Math.min(stops.length-2,f|0), k=f-i;
   return [lerp(stops[i][0],stops[i+1][0],k),lerp(stops[i][1],stops[i+1][1],k),lerp(stops[i][2],stops[i+1][2],k)]; }
@@ -3272,6 +3291,7 @@ function renderNow(){
   /* B4 coastal wave lines — precompute distance-to-coast once; off by default (skips the transform) */
   const wavesOn=!!(state.viz&&mapView&&state.viz.waves);
   const effFld=(geoidField&&(wavesOn||(state.viz&&state.viz.icons&&mapView)))?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field;
+  _lakeWB=(mapView&&state.mode==='biome'&&state.viz&&state.viz.showLakes!==false)?currentWaterBodies():null;   /* v0.103: render lakes (water-body class 2) as water on the biome map */
   _seaH=(mapView&&state.mode==='biome')?smoothSeaH(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field):null;   /* v0.063: smoothed bathymetry for the biome map's seas (Relief mode keeps the height ramp) */
   _seaShade=_seaH?seaShadeFrom(_seaH):null;   /* v0.065: hillshade the smoothed sea floor (broad relief, no seabed bumps) */
   _aoField=(mapView&&state.mode==='biome'&&state.viz&&state.viz.ao>0)?buildAOField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, state.viz.ao):null;   /* R1: ambient occlusion (off ⇒ null ⇒ ao=1) */
@@ -3327,9 +3347,12 @@ function renderNow(){
     else if(state.mode==='gray'){ const c=v*255; r=g=b=c; }
     else if(state.mode==='shade'){ const s=0.15+0.85*shadeFactor(x,y); let c=s*235; r=g=b=c; if(isWater(vw)){ r=c*0.45;g=c*0.6;b=Math.min(255,c*0.9+40); } }
     else if(state.mode==='biome'){
+      /* v0.103: above-sea lakes render as flat freshwater (below-sea lakes/inland seas already pass the isWater
+         test → rendered as sea). Intercepted before the coast-AA/sea-land split. */
+      if(_lakeWB && _lakeWB[i]===2 && vw>=state.seaLevel){ const c=lakeColor(x,y,i); r=c[0];g=c[1];b=c[2]; }
       /* v0.097 (d): sub-pixel coastline AA — when the coast SDF is on, blend sea↔land over a sub-cell
          band (smoothstep on _coastSDF) instead of the hard isWater step. Off ⇒ the exact v0.096 branch. */
-      if(_coastSDF && state.viz.sdfCoast>0){ const S=Math.max(1,GW/256), sd=_coastSDF[i]/S, t=smoothstep(-0.6,0.6,sd);   // t: 0 = full land, 1 = full sea
+      else if(_coastSDF && state.viz.sdfCoast>0){ const S=Math.max(1,GW/256), sd=_coastSDF[i]/S, t=smoothstep(-0.6,0.6,sd);   // t: 0 = full land, 1 = full sea
         if(t<=0){ const c=surfaceColor(x,y,i,vw); r=c[0];g=c[1];b=c[2]; }
         else if(t>=1){ const c=seaColor(x,y,i,vw); r=c[0];g=c[1];b=c[2]; }
         else { const cl=surfaceColor(x,y,i,Math.max(vw,state.seaLevel)), cs=seaColor(x,y,i,Math.min(vw,state.seaLevel-1e-4));
@@ -3414,7 +3437,21 @@ function render(){ scheduleRender(); }
 let _prevGx=NaN, _prevGy=NaN;
 const STAMP_BRUSHES = new Set(['mesa','volcano']);
 const STROKE_BRUSHES = new Set(['cliff','ridge','canyon']);
+/* v0.103: deposit a local body of water — flood the brush radius up to the clicked terrain level (+ a touch),
+   marking cells lower than that as lake WITHOUT touching the heightmap or global sea level. Lets you drop a
+   lake into a valley or onto a mountain; drag to extend it. Cleared on the next generate(). */
+function depositWater(gx,gy){
+  if(!lakeMask || lakeMask.length!==GW*GH) lakeMask=new Uint8Array(GW*GH);
+  const rad=state.radius, r2=rad*rad, geo=geoidField;
+  const ci=(Math.round(gy)*GW+Math.round(gx))|0, ch=(ci>=0&&ci<GW*GH)?(field[ci]-(geo?geo[ci]:0)):0.5, L=ch+0.012;   // flood to clicked level + a small depth so the click point always wets
+  const x0=Math.max(0,(gx-rad)|0), x1=Math.min(GW-1,(gx+rad)|0), y0=Math.max(0,(gy-rad)|0), y1=Math.min(GH-1,(gy+rad)|0);
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){ const dx=x-gx, dy=y-gy; if(dx*dx+dy*dy>r2) continue;
+    const i=y*GW+x; if((field[i]-(geo?geo[i]:0))<L) lakeMask[i]=1; }
+  _waterBody=null; _cartBiome=null; _cartTerrain=null;   // water-derived caches stale
+  render();
+}
 function sculpt(gx,gy){
+  if(state.brush==='water'){ depositWater(gx,gy); return; }
   const rad=state.radius, r2=rad*rad, str=state.strength, br=state.brush;
   const x0=Math.max(0,(gx-rad)|0), x1=Math.min(GW-1,(gx+rad)|0), y0=Math.max(0,(gy-rad)|0), y1=Math.min(GH-1,(gy+rad)|0);
   /* stroke direction (cliff / ridge) — perpendicular normal */
@@ -3717,7 +3754,23 @@ function renderRegionOverlay(){
   ctx.strokeStyle='rgba(120,180,255,0.95)'; ctx.lineWidth=1.5; ctx.setLineDash([6,4]);
   ctx.strokeRect(r.x*sx,r.y*sy,r.w*sx,r.h*sy); ctx.setLineDash([]);
 }
-function endPaintStroke(){ if(painting){ painting=false; _prevGx=NaN; _prevGy=NaN; if(!STAMP_BRUSHES.has(state.brush))pushUndo(); recomputeClimate(); render(); } }
+/* v0.103: show the brush radius as a circle under the cursor while the Sculpt tab is active (esp. the Water
+   brush — the user asked for a visible affected-area circle). Drawn on the shared polyOverlay, which nothing
+   else uses in the Sculpt tab (region/guide selection are armed from other tabs). */
+function renderBrushCursor(gx,gy){
+  const oc=document.getElementById('polyOverlay'); if(!oc) return;
+  const ctx=oc.getContext('2d'); ctx.clearRect(0,0,oc.width,oc.height);
+  if(_lodOn||state.debug!=='off'||_activeTab!=='sculpt'||gx==null||regionSelMode||guideDrawMode) return;
+  const sx=oc.width/GW, sy=oc.height/GH, rad=state.radius, water=state.brush==='water';
+  ctx.beginPath(); ctx.ellipse(gx*sx, gy*sy, rad*sx, rad*sy, 0, 0, 7);
+  if(water){ ctx.fillStyle='rgba(90,170,235,0.16)'; ctx.fill(); ctx.strokeStyle='rgba(90,170,235,0.95)'; }
+  else ctx.strokeStyle='rgba(255,255,255,0.75)';
+  ctx.lineWidth=1.5; ctx.stroke();
+}
+function clearBrushCursor(){ const oc=document.getElementById('polyOverlay'); if(oc) oc.getContext('2d').clearRect(0,0,oc.width,oc.height); }
+function endPaintStroke(){ if(painting){ painting=false; _prevGx=NaN; _prevGy=NaN;
+  if(state.brush==='water'){ render(); return; }   /* v0.103: water deposit doesn't change the heightmap → no undo snapshot / climate recompute */
+  if(!STAMP_BRUSHES.has(state.brush))pushUndo(); recomputeClimate(); render(); } }
 view.addEventListener('pointerdown',e=>{
   if(e.button===1||panMode||spaceDown){ panDrag={x:e.clientX,y:e.clientY,px:viewT.panX,py:viewT.panY}; view.setPointerCapture(e.pointerId); e.preventDefault(); return; }
   if(regionSelMode){ const[gx,gy]=evtToGrid(e); regionDrag={x0:gx,y0:gy,x1:gx,y1:gy}; view.setPointerCapture(e.pointerId); renderRegionOverlay(); return; }
@@ -3729,6 +3782,9 @@ view.addEventListener('pointermove',e=>{
   if(guideCapturing){ const[gx,gy]=evtToGrid(e); const last=guideRaw[guideRaw.length-1];
     if(Math.hypot(gx-last.x,gy-last.y)>=0.5){ guideRaw.push({x:gx,y:gy}); renderGuideOverlay(); } return; }
   if(_lodOn||!painting)return; if(STAMP_BRUSHES.has(state.brush))return; const[gx,gy]=evtToGrid(e); sculpt(gx,gy); });
+/* v0.103: brush-radius cursor circle (Sculpt tab only) */
+view.addEventListener('pointermove',e=>{ if(_activeTab!=='sculpt'||_lodOn||state.debug!=='off'||panDrag||regionSelMode||guideDrawMode){ return; } const[gx,gy]=evtToGrid(e); renderBrushCursor(gx,gy); });
+view.addEventListener('pointerleave',()=>{ if(_activeTab==='sculpt') clearBrushCursor(); });
 view.addEventListener('pointerup',()=>{
   if(panDrag){ panDrag=null; return; }
   if(regionDrag){
@@ -4773,6 +4829,7 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
   const lx=Math.cos(alt)*Math.sin(az), ly=-Math.cos(alt)*Math.cos(az), lz=Math.sin(alt), ex=state.exag;
   const cx=bounds.w/Math.max(1,W-1), cy=bounds.h/Math.max(1,H-1);            // coarse cells per tile pixel
   const ms=Math.max(2,(Math.min(W,H)/64)|0), sl=state.seaLevel, denom=(1-sl)>0?(1-sl):1;
+  const lakeWB=(state.mode==='biome'&&state.viz&&state.viz.showLakes!==false)?currentWaterBodies():null;   // v0.103: coarse water-body lake mask, sampled (nearest) per tile pixel at world coords
   const aoK=(state.viz&&state.viz.ao>0)?state.viz.ao:0;                      // R1: local AO from the tile's own heightmap
   let aoB=null; if(aoK>0){ const rad=Math.max(2,(Math.min(W,H)/24)|0); aoB=tile.slice(); const tmp=new Float32Array(W*H); for(let p=0;p<2;p++){ boxH(aoB,tmp,W,H,rad,false); boxV(tmp,aoB,W,H,rad); } }
   const crestK=(state.viz&&state.viz.crest>0)?state.viz.crest:0;             // R2: local ridge crests from the tile's own heightmap (coarse-scaled by cx,cy)
@@ -4813,6 +4870,9 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
       if(h<sl){ const hh=seaH?seaH[i]:h, shw=seaSh?seaSh[i]:sh, depth=sl<=0?0:clamp01((sl-hh)/sl);
         const grain=vnoise(wx*25.6/GW,wy*25.6/GW,5);                          // resolution-independent water grain (matches v0.068 main map)
         const c=seaColorCore(depth,T,grain,shw,vig); out[p]=c[0]; out[p+1]=c[1]; out[p+2]=c[2]; out[p+3]=255; continue; }
+      if(lakeWB){ const ix=Math.min(GW-1,Math.max(0,Math.round(wx))), iy=Math.min(GH-1,Math.max(0,Math.round(wy)));   // v0.103: above-sea lake → flat freshwater (coarse water-body sampled at world coords)
+        if(lakeWB[iy*GW+ix]===2){ const grain=vnoise(wx*25.6/GW,wy*25.6/GW,5), c=seaColorCore(0.30,T,grain,0.95,vig);
+          out[p]=Math.min(255,c[0]*0.9+12); out[p+1]=Math.min(255,c[1]*0.96+16); out[p+2]=Math.min(255,c[2]*0.94+6); out[p+3]=255; continue; } }
       const L2=tile[y*W+(x>=ms?x-ms:x)], R2=tile[y*W+(x<W-ms?x+ms:x)], U2=tile[(y>=ms?y-ms:y)*W+x], D2=tile[(y<H-ms?y+ms:y)*W+x];
       let mx=-(R2-L2)*ex, my=-(D2-U2)*ex, mz=1; il=1/Math.hypot(mx,my,mz); mx*=il; my*=il; mz*=il;
       const shM=Math.max(0, mx*lx+my*ly+mz*lz);
@@ -4878,6 +4938,7 @@ async function exportRegionTiles(sel, cols, rows, ts, wantGzip, onP){
 
 function buildGridFields(){ gridSlope=new Float32Array(GW*GH); gridShade=new Float32Array(GW*GH); gridShadeMeso=new Float32Array(GW*GH);
   _splatK=(assetPack&&assetPack.texAny)?(state.viz.splat||0):0;   /* B2: bakes splat consistently with the on-screen biome map (no pack ⇒ 0 ⇒ unchanged) */
+  _lakeWB=(state.mode==='biome'&&state.viz&&state.viz.showLakes!==false)?currentWaterBodies():null;   /* v0.103: bake lakes as water consistently with the on-screen biome map */
   _seaH=smoothSeaH(field); _seaShade=seaShadeFrom(_seaH);   /* v0.063/v0.065: smoothed bathymetry + its hillshade so PNG bakes match the screen seas */
   _aoField=(state.mode==='biome'&&state.viz&&state.viz.ao>0)?buildAOField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, state.viz.ao):null;   /* R1: bake AO consistently with the on-screen biome map */
   _crestField=(state.mode==='biome'&&state.viz&&state.viz.crest>0)?buildCrestField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.seaLevel):null;   /* R2: bake ridge crests consistently */
@@ -4893,6 +4954,7 @@ function bakePixel(gx,gy){
   const fl=sampleArr(flowField,gx,gy);
   const nLow=vnoise(gx*0.06,gy*0.06,11), nHi=vnoise(gx*0.45,gy*0.45,23), nBio=bioJitter(gx,gy), vig=vignetteAt(gx,gy);
   if(h<state.seaLevel){ const hs=_seaH?sampleArr(_seaH,gx,gy):h, shw=_seaShade?sampleArr(_seaShade,gx,gy):shd; const depth=state.seaLevel<=0?0:clamp01((state.seaLevel-hs)/state.seaLevel); return seaColorCore(depth,T,nLow,shw,vig); }   /* v0.063/v0.065: smoothed depth + smoothed shade, raw-field mask */
+  if(_lakeWB){ const ix=Math.min(GW-1,Math.max(0,Math.round(gx))), iy=Math.min(GH-1,Math.max(0,Math.round(gy))); if(_lakeWB[iy*GW+ix]===2) return lakeColorSampled(gx,gy); }   /* v0.103: above-sea lakes → flat freshwater */
   const r=(1-state.seaLevel)<=0?0:(h-state.seaLevel)/(1-state.seaLevel);
   const a=Math.max(1e-4,fl/(GW*GH)), beta=Math.max(0.002,sl), twi=Math.log(a/beta);
   const asp=aspectFactor(Math.round(gx),Math.round(gy)), curv=curvatureAt(Math.round(gx),Math.round(gy));
@@ -4943,6 +5005,7 @@ const PACK_TEX_SLOTS  = ['grass','rock','sand','snow','wetland','canopy','parchm
 const PACK_ICON_SLOTS = ['mountain','hill','tree_conifer','tree_broadleaf'];
 let assetPack = null;            // {name,author,license,textures:{slot:{w,h,data,inv,bmp}},icons:{slot:[{w,h,data,bmp}]},texAny}
 let _splatK = 0;                 // B2: per-render texture-splat strength (0 when no pack/off → splat block skipped)
+let _lakeWB = null;              // v0.103: water-body classification used to render lakes as water on the biome map (null ⇒ lakes not shown)
 let _seaH = null;                // v0.063: smoothed sea-floor height for water shading (render-only; null ⇒ seaColor falls back to raw field)
 let _seaShade = null;            // v0.065: hillshade of the smoothed sea floor (null ⇒ seaColor falls back to raw shadeFactor)
 let _aoField = null;             // R1: per-cell ambient-occlusion multiplier for the biome map (null ⇒ ao=1, render unchanged)
@@ -5092,7 +5155,7 @@ async function exportZip(){
 }
 async function loadZip(file){ showBusy('loading…');
   try{ const z=unzipStore(await file.arrayBuffer()); if(!z['params.json']) throw new Error('not an Elevation Foundation save');
-    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); if(typeof state.showRivers!=='boolean')state.showRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; state.viz=Object.assign({parchment:0,icons:false,waves:false,scaleBar:true,splat:0.7,smoothRivers:true,sharpBiomes:true,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0},state.viz||{}); if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
+    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); if(typeof state.showRivers!=='boolean')state.showRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; state.viz=Object.assign({parchment:0,icons:false,waves:false,scaleBar:true,splat:0.7,smoothRivers:true,sharpBiomes:true,showLakes:true,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0},state.viz||{}); if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
     if(z['heightmap.f32']){ const fa=new Float32Array(z['heightmap.f32'].buffer); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }
     else if(z['heightmap_rg16.bin']){ const fa=unpackHeight16(z['heightmap_rg16.bin'],GW*GH); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }   /* portable 16-bit fallback */
     if(z['temperature.f32']){ const fa=new Float32Array(z['temperature.f32'].buffer); tempField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else computeTemperature();
@@ -5126,6 +5189,7 @@ function syncUI(){ suspendRender=true;
   { const el=document.getElementById('showRivers'); if(el) el.checked=state.showRivers!==false; }
   { const el=document.getElementById('smoothRivers'); if(el) el.checked=!state.viz||state.viz.smoothRivers!==false; }
   { const el=document.getElementById('sharpBiomes'); if(el) el.checked=!state.viz||state.viz.sharpBiomes!==false; }
+  { const el=document.getElementById('showLakes'); if(el) el.checked=!state.viz||state.viz.showLakes!==false; }
   const co=state.coastal||{}; v('cWave',Math.round((co.waveStr||0.5)*100)); lab('cWaveV',(co.waveStr||0.5).toFixed(2)); v('cEst',Math.round((co.estuaryDepth||0.08)/0.2*100)); lab('cEstV',(co.estuaryDepth||0.08).toFixed(3)); v('cMar',Math.round((co.marshBand||0.03)/0.1*100)); lab('cMarV',(co.marshBand||0.03).toFixed(3)); v('cPas',co.passes||4); lab('cPasV',''+(co.passes||4));
   v('sea',Math.round(state.seaLevel*100)); lab('seaV',Math.round(state.seaLevel*100)+'%'); v('peak',state.peakM); v('mapw',state.mapWidthKm);
   { const p=state.planet||{}; const pg=p.g==null?1:p.g, pr=p.rotationHours==null?24:p.rotationHours, pt=p.axialTiltDeg==null?23.4:p.axialTiltDeg;
@@ -5258,6 +5322,7 @@ eparam('cPas', v=>state.coastal.passes=v,             v=>''+v);
 { const el=document.getElementById('showRivers'); if(el){ el.addEventListener('change',()=>{ state.showRivers=el.checked; render(); }); } }
 { const el=document.getElementById('smoothRivers'); if(el){ el.addEventListener('change',()=>{ state.viz.smoothRivers=el.checked; _riverField=null; render(); }); } }
 { const el=document.getElementById('sharpBiomes'); if(el){ el.addEventListener('change',()=>{ state.viz.sharpBiomes=el.checked; render(); }); } }
+{ const el=document.getElementById('showLakes'); if(el){ el.addEventListener('change',()=>{ state.viz.showLakes=el.checked; render(); }); } }
 /* climate params: update state, recompute climate fields live, re-render (terrain unchanged) */
 function cparam(id, apply, label){ const el=document.getElementById(id), vEl=document.getElementById(id+'V'); el.addEventListener('input',()=>{ apply(+el.value); if(vEl&&label) vEl.textContent=label(+el.value); recomputeClimate(); render(); }); }
 cparam('latN',   v=>state.climate.latN=v,        v=>v+'°');
@@ -5315,7 +5380,7 @@ document.getElementById('coastBtn').onclick=()=>{ pushUndo(); withBusy('shaping 
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
   const tp=b.dataset.tab; _activeTab=tp;
-  if(tp!=='sculpt'){ painting=false; _prevGx=NaN; _prevGy=NaN; }   /* leaving Sculpt cancels any in-progress freehand stroke */
+  if(tp!=='sculpt'){ painting=false; _prevGx=NaN; _prevGy=NaN; clearBrushCursor(); }   /* leaving Sculpt cancels any in-progress freehand stroke + brush cursor */
   document.getElementById('terrainPanel').style.display=tp==='terrain'?'block':'none';
   document.getElementById('sculptPanel').style.display=tp==='sculpt'?'block':'none';
   document.getElementById('stylePanel').style.display=tp==='style'?'block':'none';

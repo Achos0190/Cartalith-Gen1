@@ -1822,6 +1822,29 @@ if (typeof applyTidalSedimentation === 'function') {
   // determinism
   const wb2 = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.5) });
   check('buildWaterBodies deterministic', wbWet.every((v, i) => v === wb2[i]));
+  // forceLake: a deposited (user-painted) lake cell is always class 2, even on dry arid land
+  const force = new Uint8Array(W * H); force[3 * W + 4] = 1;   // a dry land cell (0.6) far from any water
+  const wbF = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.0), forceLake: force });
+  check('buildWaterBodies forceLake → forced cell is lake (class 2)', wbF[3 * W + 4] === 2 && wbF[0 * W + 5] === 0);
+}
+
+/* ---------- v0.103: deposit-water tool — a lake on a mountain without raising sea level ---------- */
+{
+  // reuse the 256 region world generated for the CBiome/CTerrain blocks above (no regenerate → seam RNG untouched)
+  let hi = -1, hc = 0;
+  for (let i = 0; i < field.length; i++){ const h = field[i] - geoAt(i); if (h >= state.seaLevel && h > hi){ hi = h; hc = i; } }
+  const mx = hc % GW, my = (hc / GW) | 0;
+  state.radius = 8; lakeMask = null; _waterBody = null; _cartBiome = null;
+  depositWater(mx, my);
+  check('depositWater marks the clicked (highest) land cell as lake', !!lakeMask && lakeMask[hc] === 1);
+  const wb = currentWaterBodies();
+  check('deposited water classifies as lake (class 2) above sea level', wb[hc] === 2 && hi >= state.seaLevel);
+  check('deposited lake exports as biome raster index 13', buildBiomeRaster()[hc] === BIOME_INDEX.lake);
+  _cartBiome = null;
+  check('deposited lake → Cartalith Lake(14)', buildCartBiome()[hc] === 14);
+  const lc = lakeColor(mx, my, hc);
+  check('lakeColor finite RGB in [0,255]', lc.length === 3 && lc.every(v => Number.isFinite(v) && v >= 0 && v <= 255));
+  lakeMask = null; _waterBody = null; _cartBiome = null; _cartTerrain = null;   // clean up so later blocks aren't polluted
 }
 
 /* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */

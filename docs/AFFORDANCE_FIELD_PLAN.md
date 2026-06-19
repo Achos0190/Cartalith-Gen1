@@ -22,10 +22,10 @@ for settlement suggestion and route cost surfaces.
 - **Phase A — Affordance fields (this doc).** Lithology → soil → water access → resources →
   carrying capacity → settlement suitability.
 - **Phase B — Tectonic inversion for imported heightmaps (shipped, v0.106).**
-- Phase C — Multi-channel RGBA atlasing export.
-- Phase D — "The Painter" NPR (D1 multi-sun shipped in v0.104; hachure/ink/watercolor/contour-veins follow).
-- Phase E — Anisotropic cost surface + lazy A*/Eikonal route solver (inline; no libs).
-- Phase F — Unification with Cartalith (the AGFK sampler + merged UI). **Last.**
+- **Phase C — Multi-channel RGBA atlasing export (shipped, v0.107).**
+- Phase D — "The Painter" NPR (D1 multi-sun shipped in v0.104; contour-veins/ink/hachure/watercolor follow). **(in progress, v0.108)**
+- Phase F — Unification with Cartalith (the AGFK sampler + merged UI).
+- Phase E — Anisotropic cost surface + lazy A*/Eikonal route solver (inline; no libs). **Moved to AFTER unification** (per user, 2026-06-19) — routing lands once the merged tool exists to consume it.
 
 GitHub-doc library recommendations are adopted as **inline zero-dependency techniques** (RDP,
 gzip via `CompressionStream`, JFA, MinHeap already inline; A*/FMM and multi-channel packing land
@@ -151,3 +151,35 @@ tests/run.sh elevation_foundation_v0.106.html   # 615 assertions, 0 failed (+23)
 Bit-identical at defaults to v0.105 (FIELD/TEMP/RENDER cross-version cmp-clean — inversion never runs
 in `generate()`). Browser pass owed: import a real DEM → *Infer tectonics* → confirm the Tect graph
 follows the mountain belts and Lith/Resources views populate sensibly.
+
+## Phase C — multi-channel RGBA atlasing export (shipped, v0.107)
+
+### Why
+
+The affordance stack exports ~11 separate single-field blobs (soil/water/carry/settle + 6 resource
+`.f32` + biome/lith/koppen `.bin`). Phase C packs them into a handful of compact, viewable,
+GPU-samplable 8-bit RGB PNGs + a decode manifest — the form the merged tool will sample directly.
+
+### Approach
+
+8-bit per channel, **alpha forced to 255** — a data-carrying alpha channel would be corrupted by the
+canvas premultiplied-alpha round-trip, so only R/G/B carry data. `'unit'` channels are `[0,1]`→`·255`
+(≤1/255 round-trip); `'index'` channels are categorical rasters (raw clamp, exact). The full-precision
+`.f32`/`_raster.bin` blobs **remain** the master copies; the atlas is the compact convenience layer.
+
+### Primitives (pure, headless-tested) + browser shell
+
+- `packRGB8(specs,n)` / `unpackRGB8(rgba,n,kinds)` — channel pack/unpack (alpha=255).
+- `channelAtlasGroups()` → 5-PNG plan: `habitat` (soil/water/carrying-capacity), `settlement`,
+  `resources_a` (copper/tin/iron), `resources_b` (gold/salt/timber), `classes` (biome/lithology/köppen).
+- `channelAtlasManifest(groups)` → schema-1 `{kind:'cartalith-channel-atlas', encoding:'rgb8', files:[…]}`.
+- Browser: `rgbaToPngBytes(rgba,w,h)` (canvas → PNG, null headless), `channelAtlasEntries()` (PNGs +
+  `atlas/index.json`), wired into `exportZip` behind the opt-in **"Channel atlas"** checkbox.
+
+### Verification
+
+```bash
+tests/run.sh elevation_foundation_v0.107.html   # 627 assertions, 0 failed (+12)
+```
+Off ⇒ export unchanged; `generate()`/render bit-identical to v0.106 (FIELD/TEMP/RENDER cmp-clean).
+Browser pass owed: confirm the atlas PNGs decode via the canvas round-trip and the manifest reads.

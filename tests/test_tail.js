@@ -2311,6 +2311,39 @@ if (typeof applyTidalSedimentation === 'function') {
   }
 }
 
+/* ---------- v0.107 Phase C: multi-channel RGBA channel-atlas export ---------- */
+{
+  const n = 32;
+  // packRGB8 / unpackRGB8 round-trip — unit ≤1/255, index exact, alpha forced 255
+  const u0 = new Float32Array(n), u1 = new Float32Array(n), idx = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { u0[i] = i / (n - 1); u1[i] = 1 - i / (n - 1); idx[i] = i % 14; }
+  const rgba = packRGB8([{ src: u0, kind: 'unit' }, { src: u1, kind: 'unit' }, { src: idx, kind: 'index' }], n);
+  check('packRGB8: alpha forced to 255', (() => { for (let i = 0; i < n; i++) if (rgba[i * 4 + 3] !== 255) return false; return true; })());
+  const dec = unpackRGB8(rgba, n, ['unit', 'unit', 'index']);
+  check('packRGB8/unpackRGB8: unit round-trip ≤ 1/255', (() => { let mx = 0; for (let i = 0; i < n; i++) mx = Math.max(mx, Math.abs(dec.r[i] - u0[i]), Math.abs(dec.g[i] - u1[i])); return mx <= 1 / 255 + 1e-6; })());
+  check('packRGB8/unpackRGB8: index round-trip exact', (() => { for (let i = 0; i < n; i++) if (dec.b[i] !== idx[i]) return false; return true; })());
+  check('packRGB8: null channel ⇒ 0', (() => { const r = packRGB8([null, { src: u1, kind: 'unit' }, null], n); for (let i = 0; i < n; i++) if (r[i * 4] !== 0 || r[i * 4 + 2] !== 0) return false; return true; })());
+  check('_chanEnc clamps out-of-range', _chanEnc(2, 'unit') === 255 && _chanEnc(-1, 'unit') === 0 && _chanEnc(300, 'index') === 255 && _chanEnc(-5, 'index') === 0);
+
+  // channelAtlasGroups + manifest structure (on the live world)
+  const groups = channelAtlasGroups();
+  check('channelAtlasGroups: 5 groups', groups.length === 5);
+  check('channelAtlasGroups: every non-null channel src is length GW*GH', (() => {
+    for (const g of groups) for (const c of g.channels) if (c.src && c.src.length !== GW * GH) return false; return true;
+  })());
+  check('channelAtlasGroups: resource channels cover all 6 RESOURCE_KEYS', (() => {
+    const keys = new Set(); for (const g of groups) for (const c of g.channels) keys.add(c.key);
+    return RESOURCE_KEYS.every(k => keys.has(k));
+  })());
+  const man = channelAtlasManifest(groups);
+  check('channelAtlasManifest: kind + encoding + dims', man.kind === 'cartalith-channel-atlas' && man.encoding === 'rgb8' && man.width === GW && man.height === GH);
+  check('channelAtlasManifest: one entry per group with channel map', man.files.length === groups.length && man.files.every(f => f.channels && (f.channels.r || f.channels.g || f.channels.b)));
+  check('channelAtlasManifest: unit channels report [0,1] range, index report categorical', (() => {
+    for (const f of man.files) for (const ch of ['r', 'g', 'b']) { const c = f.channels[ch]; if (!c) continue; if (c.kind === 'unit' && !(Array.isArray(c.range) && c.range[0] === 0 && c.range[1] === 1)) return false; if (c.kind === 'index' && c.range !== 'categorical') return false; } return true;
+  })());
+  check('channelAtlasGroups deterministic (manifest JSON stable)', JSON.stringify(channelAtlasManifest(channelAtlasGroups())) === JSON.stringify(man));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

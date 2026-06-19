@@ -2239,6 +2239,78 @@ if (typeof applyTidalSedimentation === 'function') {
   }
 }
 
+/* ---------- v0.106 tectonic inversion (Phase B): reconstruct proxy plates + tectonic fields
+   from an imported heightmap's morphology, re-enabling the affordance stack for DEMs ---------- */
+{
+  const W = 40, H = 30, n = W * H;
+
+  // buildReliefField: flat field with one elevated ridge column → high relief there, low elsewhere
+  const f1 = new Float32Array(n).fill(0.5);
+  for (let y = 0; y < H; y++) f1[y * W + (W >> 1)] = 0.95;
+  const rel1 = buildReliefField(f1, W, H, {});
+  check('buildReliefField finite & in [0,1]', allFinite(rel1) && (([mn, mx]) => mn >= 0 && mx <= 1 + 1e-6)(minMax(rel1)));
+  check('buildReliefField high on ridge vs flat corner', rel1[(H >> 1) * W + (W >> 1)] > rel1[0] + 0.1);
+  check('buildReliefField deterministic', (() => { const r = buildReliefField(f1, W, H, {}); for (let i = 0; i < n; i++) if (r[i] !== rel1[i]) return false; return true; })());
+
+  // pickPlateSeeds: seeds land in low-relief interiors (avoid the high band)
+  const seeds = pickPlateSeeds(rel1, W, H, { count: 12 });
+  check('pickPlateSeeds returns ≥2 seeds', seeds.length >= 2);
+  check('pickPlateSeeds prefer low-relief cells', (() => { let mean = 0; for (let i = 0; i < n; i++) mean += rel1[i]; mean /= n; let s = 0; for (const sd of seeds) s += rel1[sd.y * W + sd.x]; return s / seeds.length < mean; })());
+  check('pickPlateSeeds deterministic', (() => { const s2 = pickPlateSeeds(rel1, W, H, { count: 12 }); return s2.length === seeds.length && s2.every((p, i) => p.x === seeds[i].x && p.y === seeds[i].y); })());
+
+  // classifyPlateCrust: low-elevation plate → oceanic (base<0), high → continental (base>0)
+  {
+    const pid = new Int16Array(n), fC = new Float32Array(n);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (x < W / 2) { pid[i] = 0; fC[i] = 0.2; } else { pid[i] = 1; fC[i] = 0.7; } }
+    const base = classifyPlateCrust(fC, pid, 2, W, H, 0.42);
+    check('classifyPlateCrust: low plate oceanic (base<0)', base[0] < 0);
+    check('classifyPlateCrust: high plate continental (base>0)', base[1] > 0);
+  }
+
+  // reconstructBoundaryStress: an elevated belt on the plate boundary ⇒ convergent (stress>0)
+  {
+    const f = new Float32Array(n).fill(0.5), pid = new Int16Array(n), mid = W >> 1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; pid[i] = x < mid ? 0 : 1; if (Math.abs(x - mid) <= 1) f[i] = 0.95; }
+    const rel = buildReliefField(f, W, H, {});
+    const r = reconstructBoundaryStress(f, pid, [0.8, 0.8], rel, W, H, 0.42, {});
+    check('reconstructBoundaryStress: boundaryMask only at plate edge', (() => { for (let y = 2; y < H - 2; y++) for (let x = 0; x < W; x++) { if (r.boundaryMask[y * W + x] === 1 && Math.abs(x - mid) > 1) return false; } return true; })());
+    check('reconstructBoundaryStress: elevated belt ⇒ convergent (stress>0)', r.stressField[(H >> 1) * W + mid] > 0.05);
+    check('reconstructBoundaryStress: boundaryType ∈ valid BTYPE set', (() => { for (let i = 0; i < n; i++) if (r.boundaryType[i] > 5) return false; return true; })());
+    check('reconstructBoundaryStress: stress & shear finite', allFinite(r.stressField) && allFinite(r.shearField));
+    check('reconstructBoundaryStress deterministic', (() => { const r2 = reconstructBoundaryStress(f, pid, [0.8, 0.8], rel, W, H, 0.42, {}); for (let i = 0; i < n; i++) if (r2.stressField[i] !== r.stressField[i]) return false; return true; })());
+  }
+
+  // reconstructBoundaryStress: a depressed trough on the boundary ⇒ divergent (stress<0)
+  {
+    const f = new Float32Array(n).fill(0.5), pid = new Int16Array(n), mid = W >> 1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; pid[i] = x < mid ? 0 : 1; if (Math.abs(x - mid) <= 1) f[i] = 0.15; }
+    const rel = buildReliefField(f, W, H, {});
+    const r = reconstructBoundaryStress(f, pid, [0.8, 0.8], rel, W, H, 0.42, {});
+    check('reconstructBoundaryStress: depressed trough ⇒ divergent (stress<0)', r.stressField[(H >> 1) * W + mid] < -0.05);
+  }
+
+  // stampVolcanicArcs: decay from subduction/arc cells; empty input ⇒ all zero
+  {
+    const bt = new Uint8Array(n); bt[(H >> 1) * W + (W >> 1)] = BTYPE.subductionOC;
+    const v = stampVolcanicArcs(bt, W, H, {});
+    check('stampVolcanicArcs: nonzero at arc, ~0 far, finite', v[(H >> 1) * W + (W >> 1)] > 0.5 && v[0] < 0.1 && allFinite(v));
+    check('stampVolcanicArcs: empty input ⇒ all zero', stampVolcanicArcs(new Uint8Array(n), W, H, {}).every(x => x === 0));
+  }
+
+  // payoff: run inferTectonics on the live generated world's field (leaves `field` untouched) →
+  // re-populates plates/boundaries/stress/age and re-enables the affordance stack
+  {
+    inferTectonics();
+    check('inferTectonics: plateId multi-valued', new Set(plateId).size >= 3);
+    check('inferTectonics: boundaryMask has boundary cells', boundaryMask.some(v => v === 1));
+    check('inferTectonics: tectonic fields finite', allFinite(stressField) && allFinite(shearField) && allFinite(ageField) && allFinite(resistanceField) && allFinite(volcanicField) && allFinite(baseField));
+    check('inferTectonics: ageField in [0,1]', (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(ageField)));
+    check('inferTectonics: lithology ≥3 rock types after inversion', new Set(currentLithology()).size >= 3);
+    check('inferTectonics: resource potentials finite', (() => { const rp = currentResourcePotentials(); return RESOURCE_KEYS.every(k => allFinite(rp[k])); })());
+    check('inferTectonics: deterministic plateId', (() => { const p1 = Int16Array.from(plateId); inferTectonics(); for (let i = 0; i < plateId.length; i++) if (plateId[i] !== p1[i]) return false; return true; })());
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

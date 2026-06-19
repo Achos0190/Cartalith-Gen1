@@ -21,7 +21,7 @@ for settlement suggestion and route cost surfaces.
 
 - **Phase A — Affordance fields (this doc).** Lithology → soil → water access → resources →
   carrying capacity → settlement suitability.
-- Phase B — Tectonic inversion for imported heightmaps.
+- **Phase B — Tectonic inversion for imported heightmaps (shipped, v0.106).**
 - Phase C — Multi-channel RGBA atlasing export.
 - Phase D — "The Painter" NPR (D1 multi-sun shipped in v0.104; hachure/ink/watercolor/contour-veins follow).
 - Phase E — Anisotropic cost surface + lazy A*/Eikonal route solver (inline; no libs).
@@ -105,3 +105,49 @@ debug-view + export only; bit-identical defaults preserved. 592 assertions, 0 fa
 tests/run.sh elevation_foundation_v0.105.html   # 592 assertions, 0 failed
 ```
 Browser pass owed: resource/carry/settle debug-view legibility + advisory seed-dot overlay aesthetics.
+
+## Phase B — tectonic inversion for imported heightmaps (shipped, v0.106)
+
+### Why
+
+An imported DEM (`loadImage`/`loadZip`) arrives with `field[]` populated but every tectonic proxy
+field zeroed (`allocate()`) and `plates=[]`. The Phase A affordance fields (and the engine's relief,
+biome, orogeny layers) all read those proxies — `plateCrust()`, `ageField`, `volcanicField`,
+`resistanceField`, `boundaryType`, `shearField`, `stressField` — so for any real-world heightmap the
+whole civilization stack and the Tect/Lith/Resources debug views + exports are dead. Phase B
+reconstructs a *plausible* proxy set from the imported terrain so those layers work for DEMs too.
+
+### Approach
+
+Reduce inversion to **reconstruct `plates[]` + `plateId`, then run the forward downstream stages**.
+Mountains/rifts mark plate **boundaries**; cratonic plains & ocean basins mark **interiors**. Seed
+plates in low-relief interiors, partition by the existing `assignPlates()` JFA Voronoi (boundaries
+fall along the relief belts), classify crust from elevation, and synthesise stress **directly from
+relief** (velocity inversion is ill-posed). Deterministic from the heightmap alone — no RNG/seed.
+
+### Primitives (pure, headless-tested; amplifyRegion mold)
+
+- `buildReliefField(fld,W,H,opts)` → `[0,1]` boundary-probability (blurred gradient magnitude).
+- `pickPlateSeeds(relief,W,H,opts)` → `[{x,y}]` lowest-relief cell per aspect-preserving grid cell.
+- `classifyPlateCrust(fld,plateId,nPlates,W,H,sea)` → `base[]` (mean-elevation → sign, |base|∈[0.55,1]).
+- `reconstructBoundaryStress(fld,plateId,base,relief,W,H,sea,opts)` → `{stressField, shearField,
+  boundaryMask, boundaryType}` — the novel core (parallel to `computeStress`, reuses
+  `classifyBoundary` + `gaussBlur`): `C` = relief × sign of updip (boundary elev vs `gaussBlur`
+  trend) → convergent on belts / divergent in troughs; `S` = along-strike gradient → transforms.
+- `stampVolcanicArcs(boundaryType,W,H,opts)` → `[0,1]` (`chamferDist` decay from subduction/arc cells).
+
+### Orchestrator (reuses forward machinery)
+
+`inferTectonics()` builds the above, sets module `plates`/`plateId`, then runs `distanceToBoundary()`
+→`ageField`, `computeHeterogeneity()`, `computeResistance()`, `computeFlexure()`, blurred `baseField`,
+and clears the affordance/graph caches. Opt-in **"Infer tectonics from heightmap"** Import-menu button
+(`_canInvert` after import); **never called from `generate()`**. Leaves `field` untouched.
+
+### Verification
+
+```bash
+tests/run.sh elevation_foundation_v0.106.html   # 615 assertions, 0 failed (+23)
+```
+Bit-identical at defaults to v0.105 (FIELD/TEMP/RENDER cross-version cmp-clean — inversion never runs
+in `generate()`). Browser pass owed: import a real DEM → *Infer tectonics* → confirm the Tect graph
+follows the mountain belts and Lith/Resources views populate sensibly.

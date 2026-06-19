@@ -40,14 +40,22 @@ with the repo's existing "Nortantis studied, not copied" stance; SebLague is MIT
 - Sinuosity is modelled (width/order scaling) but **true meandering is realised in Pillar 2** (centrifugal
   shear), which owns oxbow/meander generation.
 
-## Pillar 2 — Micro-Physics: velocity-field hydraulic erosion (planned)
+## Pillar 2 — Micro-Physics: velocity-field hydraulic erosion — **shipped, v0.112**
 
-A **new erosion op** (separate button/kernel; existing kernels untouched). 2D velocity field
-`v=(vx,vy)` over `GW×GH`; semi-Lagrangian momentum advection
-`v_new = v_old(x − v_old·Δt) + a_gravity`; bank shear / centrifugal acceleration drives outer-bank erosion
-+ inner-bank deposition (meanders, oxbows); adaptive priority-flood lake pooling at closed basins (spill at
-the lowest sill). Sediment capacity loops credited to SebLague/Beyer; advection to LanLou123/Mei et al.;
-pooling to weigert/SimpleHydrology.
+A **new erosion op** (the proven droplet/stream/glacial worker kernels and Invariant 11 are untouched; it
+never auto-runs ⇒ default `generate()`/render bit-identical to v0.111).
+
+- `centrifugalShear(vx,vy,nvx,nvy)` → `{ox,oy,mag}` — outer-bank direction + turn magnitude (pure).
+- `velocityErodeKernel(fld,rain,W,H,P,onProgress)` — grid (virtual-pipes, Mei et al. 2007 / LanLou123)
+  shallow-water hydraulic erosion; mutates `fld`, returns `{water,vx,vy}`. Per iter: rain → virtual-pipe flux
+  (outflow capped at available water ⇒ **emergent lake pooling**; sea = open sink, border reflective) → water
+  + flux→velocity → **semi-Lagrangian momentum advection** `v_new=v_old(x−v_old·Δt)+g·∇` (+ sediment advect)
+  → capacity erode/deposit (SebLague/Beyer) with **centrifugal outer-bank bias** (meanders/oxbows) →
+  evaporation. Every write clamped (Invariant 2); suspended load settled at the end; flux ∝ planet g.
+- `velocityErode()` sync wrapper → `enforceRiverChannels`→`computeFlow(true)`→`refreshClimate`→`renderNow`
+  (no isostatic rebound). Stores `_veloVx/_veloVy/_veloWater` for the **Velocity** debug view + Pillar 3.
+- UI: **Velocity (momentum)** Erosion accordion (Iterations/Strength/Meander, `state.velo`).
+- 680 assertions. Worker-ification (blob-URL, like the other ops) is a follow-up — sync for now.
 
 ## Pillar 3 — Optical realism: water shading (planned)
 

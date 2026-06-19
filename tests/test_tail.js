@@ -2546,6 +2546,53 @@ if (typeof strahlerFromReceivers === 'function') {
   }
 }
 
+/* ---------- v0.112 Pillar 2: velocity-field hydraulic erosion ---------- */
+if (typeof velocityErodeKernel === 'function') {
+  // centrifugalShear: straight flow ⇒ ~0; sharper turn ⇒ larger; opposite turns ⇒ opposite outer direction
+  {
+    const straight = centrifugalShear(1, 0, 1, 0);
+    check('centrifugalShear: straight flow ⇒ ~0 turn', straight.mag < 1e-6);
+    const left = centrifugalShear(1, 0, 1, 0.6), right = centrifugalShear(1, 0, 1, -0.6);
+    check('centrifugalShear: a turn produces a nonzero outward vector', left.mag > 0 && (left.ox !== 0 || left.oy !== 0));
+    check('centrifugalShear: opposite turns ⇒ opposite outer banks', Math.sign(left.oy) === -Math.sign(right.oy) && left.oy !== 0);
+    const gentle = centrifugalShear(1, 0, 1, 0.2), sharp = centrifugalShear(1, 0, 1, 0.9);
+    check('centrifugalShear: sharper turn ⇒ larger magnitude', sharp.mag > gentle.mag);
+  }
+
+  // kernel on a tilted plane with a central trough: stays finite, carries velocity, incises, pools, deterministic
+  {
+    const W = 32, H = 40, n = W * H, sea = 0.30;
+    const mk = () => { const f = new Float32Array(n);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+        let h = 0.85 - y * 0.012;                                 // gentle slope to the south (all above sea)
+        h -= 0.06 * Math.exp(-((x - W / 2) * (x - W / 2)) / 18);  // a shallow central valley → concentrates flow
+        f[y * W + x] = h;
+      }
+      // a closed pit (below its surroundings, above sea) to test pooling
+      for (let y = 30; y < 34; y++) for (let x = 6; x < 10; x++) f[y * W + x] = 0.42;
+      return f; };
+    const rain = new Float32Array(n).fill(0.5);
+    const P = { iters: 50, dt: 0.02, gravity: 9.8, rainRate: 0.012, evap: 0.05, capacity: 1.2, erodeK: 0.4, depositK: 0.25, minSlope: 0.001, centrifugalK: 1.2, sea, world: false };
+    const f = mk(), pre = f.slice();
+    const out = velocityErodeKernel(f, rain, W, H, P);
+    check('velocityErode: field stays finite (Invariant 2)', allFinite(f));
+    check('velocityErode: returns finite velocity + water fields', allFinite(out.vx) && allFinite(out.vy) && allFinite(out.water));
+    check('velocityErode: water actually flows (|v| > 0 somewhere)', (() => { for (let i = 0; i < n; i++) if (Math.hypot(out.vx[i], out.vy[i]) > 1e-3) return true; return false; })());
+    // net incision along the valley centre (some valley cells lowered)
+    check('velocityErode: incises the drainage valley', (() => { let lowered = 0; for (let y = 4; y < 28; y++){ const i = y * W + (W / 2 | 0); if (f[i] < pre[i] - 1e-5) lowered++; } return lowered > 4; })());
+    // adaptive pooling: the closed pit holds standing water
+    check('velocityErode: closed basin pools water (adaptive lake)', out.water[32 * W + 8] > 1e-4);
+    // determinism
+    const f2 = mk(); velocityErodeKernel(f2, rain, W, H, P);
+    check('velocityErode deterministic', f.every((h, i) => h === f2[i]));
+    // meander bias is active: centrifugalK>0 diverges from centrifugalK=0
+    const fa = mk(), fb = mk();
+    velocityErodeKernel(fa, rain, W, H, Object.assign({}, P, { centrifugalK: 0 }));
+    velocityErodeKernel(fb, rain, W, H, Object.assign({}, P, { centrifugalK: 2.0 }));
+    check('velocityErode: meander (centrifugal) bias changes the result', (() => { for (let i = 0; i < n; i++) if (Math.abs(fa[i] - fb[i]) > 1e-6) return true; return false; })());
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

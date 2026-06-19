@@ -70,13 +70,38 @@ Cross-version determinism (pinned seed 12345, region 256): FIELD/TEMP/RAIN/RENDE
 byte-identical between v0.103 and v0.104. Browser pass owed: Lith/Soil/Water legibility and
 multi-sun relief.
 
-## Phase A — step 2 (next, v0.105–0.106)
+## Phase A — step 2 (shipped, v0.105)
 
-- Resource/ore potential fields (copper, tin, iron, gold, salt, timber, freshwater) from
-  lithology + tectonic setting (subduction → Cu, granite+orogeny → Sn, craton/bog → Fe, fault →
-  Au, evaporite → salt) — `Civilisation_placement.md §8`, all `[0,1]` scalar fields.
-- Food/carrying capacity `K = agriculture·efficiency` and settlement suitability
-  `P_settle = σ(w·[F,W,A,D,C])` (logistic) — `Cartalith_Raster_Civilization_Layer.md §3`.
-- Emergent settlement markers = local maxima of `P_settle` above a threshold with a suppression
-  radius (advisory overlay, never auto-placed).
-- All debug-view + export only; bit-identical default preserved.
+Six resource potential fields, carrying capacity, settlement suitability, and advisory seeds. All
+debug-view + export only; bit-identical defaults preserved. 592 assertions, 0 failed.
+
+### Primitives (pure, headless-tested)
+
+- `buildResourcePotentials(lith, boundaryType, shearField, flowField, biome, fld, rain, age, W, H, sea)` → `{copper,tin,iron,gold,salt,timber}` — six `Float32Array [0,1]`.
+  Copper: chamferDist decay from subduction/arcOO boundary cells × lith amplifier (andesite×1, basalt×0.8, other×0.55).
+  Tin: old granite shields (lith=0, age>0.6) → 0.70; metamorphic skarn → 0.45.
+  Iron: old craton BIF (granite, old, no boundary) → 0.65; bog iron (shale + wet + lowland) → 0.55.
+  Gold: transform fault (BTYPE=5, shear) → up to 1.0; sheared granite → 0.55; old shield → 0.12 background.
+  Salt: arid lowland limestone/sandstone (rain<0.22, r<0.25) → up to 0.90.
+  Timber: closed-canopy biomes (3=boreal/4=conifer/5=tempForest/6=tempRain/12=tropWet) → rain-scaled [0.40–1.0].
+- `buildCarryingCapacity(soil, water, biome, temp, fld, W, H, sea)` → `Float32Array [0,1]`.
+  `K = soil × tempBell(18°C,σ²=800) × (0.25+0.75·water)`. Ocean → 0.
+- `buildSettlementSuitability(soil, water, carryingCap, fld, slopeN, W, H, sea)` → `Float32Array [0,1]`.
+  `P = σ(6·(Z−0.5))` where `Z = 0.35·K + 0.25·W + 0.15·A + 0.10·D + 0.15·C`.
+  A = accessibility (1−slope/slopeMax), D = defensibility (peak at r≈0.35), C = coast/trade.
+- `findSettlementSeeds(suit, W, H, opts)` → `Array<{x,y,score}>` sorted desc. Local maxima above
+  threshold (default 0.65) with greedy suppression radius (default W/20). Never auto-places.
+
+### Integration (zero default effect)
+
+- Caches `_resourcePots/_carryCapField/_settleSuitField`, cleared in `generate()` + `computeFlow()`.
+- `currentResourcePotentials/currentCarryingCapacity/currentSettlementSuitability` lazy builders.
+- Debug views **Resources / Carry Cap / Settlement** (+ vctx seed-dot overlay for Settlement).
+- Export adds `copper/iron/gold/salt/timber_potential.f32` + `carrying_capacity.f32` + `settlement_suitability.f32` + `resource_index.json`.
+
+### Verification
+
+```bash
+tests/run.sh elevation_foundation_v0.105.html   # 592 assertions, 0 failed
+```
+Browser pass owed: resource/carry/settle debug-view legibility + advisory seed-dot overlay aesthetics.

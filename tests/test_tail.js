@@ -2128,6 +2128,117 @@ if (typeof applyTidalSedimentation === 'function') {
   }
 }
 
+/* ---------- v0.105 Resource potentials / Carrying capacity / Settlement suitability ---------- */
+{
+  const W = 24, H = 20, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n), lith = new Uint8Array(n), age = new Float32Array(n),
+        bt = new Uint8Array(n), shear = new Float32Array(n), flow = new Float32Array(n),
+        rain = new Float32Array(n), temp = new Float32Array(n), slopeN = new Float32Array(n),
+        biome = new Uint8Array(n), water = new Float32Array(n), soil = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const i = y * W + x;
+    fld[i] = 0.55;                          // land (above sea=0.42)
+    lith[i] = 0;                            // granite default
+    age[i] = 0.7;                           // old (> ageOld=0.6)
+    rain[i] = 0.4; temp[i] = 18;
+    biome[i] = 5;                           // tempForest (closed canopy)
+    water[i] = 0.7; soil[i] = 0.6;
+  }
+  /* copper test: put a subduction boundary at x=4 row */
+  for (let y = 0; y < H; y++) bt[y * W + 4] = 2;  // subductionOC
+  /* transform fault at x=20 */
+  for (let y = 0; y < H; y++){ bt[y * W + 20] = 5; shear[y * W + 20] = 0.8; }
+  /* salt basin: arid lowland in limestone at column x=12 */
+  for (let y = 0; y < H; y++){ const i = y * W + 12; lith[i] = 3; rain[i] = 0.10; fld[i] = 0.50; }
+
+  const rp = buildResourcePotentials(lith, bt, shear, flow, biome, fld, rain, age, W, H, sea);
+  const keys = ['copper','tin','iron','gold','salt','timber'];
+  for (const k of keys){
+    const [mn, mx] = minMax(rp[k]);
+    check('resource ' + k + ' in [0,1]', mn >= 0 && mx <= 1.0 + 1e-6);
+    check('resource ' + k + ' finite', allFinite(rp[k]));
+  }
+  /* copper: cell on subduction boundary should be higher than an interior cell */
+  check('copper: subduction boundary > interior', rp.copper[10 * W + 4] > rp.copper[10 * W + 15]);
+  /* timber: canopy cell (biome=5) > 0; land cell with biome=9 (desert) = 0 */
+  const bioMix = new Uint8Array(n); bioMix.set(biome);
+  for (let y = 0; y < H; y++) bioMix[y * W + 18] = 9;  // desert column
+  const rp2 = buildResourcePotentials(lith, bt, shear, flow, bioMix, fld, rain, age, W, H, sea);
+  check('timber: closed-canopy biome > 0', rp2.timber[10 * W + 6] > 0);
+  check('timber: desert biome = 0', rp2.timber[10 * W + 18] === 0);
+  /* salt: arid lowland column (x=12 limestone) > wet interior */
+  check('salt: arid limestone lowland > wet interior', rp.salt[10 * W + 12] > rp.salt[10 * W + 6]);
+  /* gold: transform fault cell > non-fault cell */
+  check('gold: transform fault > non-fault', rp.gold[10 * W + 20] > rp.gold[10 * W + 6]);
+  /* determinism */
+  const rp3 = buildResourcePotentials(lith, bt, shear, flow, biome, fld, rain, age, W, H, sea);
+  check('resource potentials deterministic', keys.every(k => rp[k].every((v, i) => v === rp3[k][i])));
+
+  /* buildCarryingCapacity */
+  const noFld = new Float32Array(n).fill(0.30);   // ocean cells
+  const carryLand = buildCarryingCapacity(soil, water, biome, temp, fld, W, H, sea);
+  const carrySea  = buildCarryingCapacity(soil, water, biome, temp, noFld, W, H, sea);
+  check('carryingCapacity finite & in [0,1]', allFinite(carryLand) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(carryLand)));
+  check('carryingCapacity: ocean (fld<sea) = 0', carrySea.every(v => v === 0));
+  /* higher soil → higher carry cap (same water/temp row) */
+  const soilHi = new Float32Array(n).fill(0.9), soilLo = new Float32Array(n).fill(0.1);
+  const cHi = buildCarryingCapacity(soilHi, water, biome, temp, fld, W, H, sea);
+  const cLo = buildCarryingCapacity(soilLo, water, biome, temp, fld, W, H, sea);
+  check('carryingCapacity rises with soil fertility', cHi[10 * W + 6] > cLo[10 * W + 6]);
+  const carry2 = buildCarryingCapacity(soil, water, biome, temp, fld, W, H, sea);
+  check('carryingCapacity deterministic', carryLand.every((v, i) => v === carry2[i]));
+
+  /* buildSettlementSuitability */
+  const slopeFlat = new Float32Array(n).fill(0.5), slopeCliff = new Float32Array(n).fill(6.0);
+  const carry = buildCarryingCapacity(soil, water, null, temp, fld, W, H, sea);
+  const suit = buildSettlementSuitability(soil, water, carry, fld, slopeFlat, W, H, sea);
+  const suitSea = buildSettlementSuitability(soil, water, carry, noFld, slopeFlat, W, H, sea);
+  check('settleSuitability finite & in [0,1]', allFinite(suit) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(suit)));
+  check('settleSuitability: ocean = 0', suitSea.every(v => v === 0));
+  /* logistic: max < 1 (never saturates), min ≥ 0 on land */
+  const [sMin, sMax] = minMax(suit);
+  check('settleSuitability logistic shape (0 ≤ min, max < 1)', sMin >= 0 && sMax < 1.0);
+  /* flat > cliff for same inputs */
+  const suitCliff = buildSettlementSuitability(soil, water, carry, fld, slopeCliff, W, H, sea);
+  check('settleSuitability: flat terrain > cliff terrain', suit[10 * W + 6] > suitCliff[10 * W + 6]);
+  const suit2 = buildSettlementSuitability(soil, water, carry, fld, slopeFlat, W, H, sea);
+  check('settleSuitability deterministic', suit.every((v, i) => v === suit2[i]));
+
+  /* findSettlementSeeds */
+  /* create a synthetic suitability field with two clear peaks */
+  const synthSuit = new Float32Array(W * H);
+  synthSuit[8 * W + 6] = 0.85;  synthSuit[8 * W + 5] = 0.70;  synthSuit[8 * W + 7] = 0.70;  // peak A
+  synthSuit[8 * W + 18] = 0.80; synthSuit[8 * W + 17] = 0.65; synthSuit[8 * W + 19] = 0.65; // peak B
+  const seeds = findSettlementSeeds(synthSuit, W, H, {thresh: 0.75, suppR: 4});
+  check('findSettlementSeeds returns array with {x,y,score}', Array.isArray(seeds) && seeds.length > 0 && 'x' in seeds[0] && 'score' in seeds[0]);
+  check('findSettlementSeeds: all scores ≥ threshold', seeds.every(s => s.score >= 0.75));
+  check('findSettlementSeeds: sorted by score desc', seeds.every((s, i) => i === 0 || s.score <= seeds[i - 1].score));
+  check('findSettlementSeeds: suppression radius respected', (() => {
+    for (let i = 0; i < seeds.length; i++) for (let j = i + 1; j < seeds.length; j++){
+      const dx = seeds[i].x - seeds[j].x, dy = seeds[i].y - seeds[j].y;
+      if (dx * dx + dy * dy < 16) return false;  // suppR=4, suppR²=16
+    }
+    return true;
+  })());
+
+  /* live builders on the generated world */
+  check('currentResourcePotentials has correct keys', (() => { const rp = currentResourcePotentials(); return RESOURCE_KEYS.every(k => k in rp && allFinite(rp[k])); })());
+  check('currentCarryingCapacity finite & in [0,1]', (() => { const a = currentCarryingCapacity(); return allFinite(a) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(a)); })());
+  check('currentSettlementSuitability finite & in [0,1]', (() => { const a = currentSettlementSuitability(); return allFinite(a) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(a)); })());
+
+  /* default-neutrality: rsrc/carry/settle debug views off ⇒ render bit-identical to base */
+  {
+    state.mode = 'biome'; state.debug = 'off'; renderNow();
+    const base = Uint8ClampedArray.from(img.data);
+    for (const d of ['rsrc','carry','settle']){
+      state.debug = d; renderNow();
+      state.debug = 'off'; renderNow();
+      let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
+      check('debug view ' + d + ' off ⇒ render bit-identical', same);
+    }
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

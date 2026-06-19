@@ -2344,6 +2344,72 @@ if (typeof applyTidalSedimentation === 'function') {
   check('channelAtlasGroups deterministic (manifest JSON stable)', JSON.stringify(channelAtlasManifest(channelAtlasGroups())) === JSON.stringify(man));
 }
 
+/* ---------- v0.108 Phase D: "The Painter" NPR (contour veins / ink / hachure / watercolor) ----------
+   All four live inside landColorCore, gated on per-style state.viz sliders; off ⇒ bit-identical.
+   landColorCore signature: (T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py,ao,ecoK,gx,gy) */
+if (typeof landColorCore === 'function') {
+  const callLC = (over, px, py, gx, gy) => {
+    // a representative land pixel: temperate, mid-moisture, moderate slope, mid elevation
+    return landColorCore(15, 0.5, 0.05, 0.5, 0.5, 0.5, 0.5, 0.7, 0.7, 5, 0, 0.01, state.bioBlend, 1,
+      px === undefined ? 100 : px, py === undefined ? 100 : py, 1, 1, gx || 0, gy || 0);
+  };
+  const savedViz = JSON.parse(JSON.stringify(state.viz));
+  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0 };
+  Object.assign(state.viz, off);
+  const base = callLC();
+  check('NPR: all-off baseline finite RGB', base.every(Number.isFinite));
+
+  // each style off ⇒ identical to baseline; on ⇒ changes the pixel; output stays finite & in [0,255]
+  const sameAsBase = c => c.every((v, i) => v === base[i]);
+  const finiteRGB = c => c.length === 3 && c.every(v => Number.isFinite(v) && v >= 0 && v <= 255 + 1e-6);
+
+  // contours: pick an elevation right on a contour level (r multiple of 0.05) so the line fires
+  { Object.assign(state.viz, off); state.viz.contours = 0;
+    const onLine = landColorCore(15, 0.5, 0.02, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    state.viz.contours = 0.8;
+    const lit = landColorCore(15, 0.5, 0.02, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    check('NPR contours: darkens a pixel on a contour level', lit[0] < onLine[0] && finiteRGB(lit));
+    Object.assign(state.viz, off);
+    check('NPR contours: off ⇒ bit-identical', sameAsBase(callLC()));
+  }
+  // ink: high curvature edge ⇒ darkens
+  { Object.assign(state.viz, off);
+    const eBase = landColorCore(15, 0.5, 0.05, 0.5, .5, .5, .5, .7, .7, 5, 0, 0.02, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    state.viz.ink = 0.9;
+    const eLit = landColorCore(15, 0.5, 0.05, 0.5, .5, .5, .5, .7, .7, 5, 0, 0.02, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    check('NPR ink: darkens a high-curvature edge', eLit[0] < eBase[0] && finiteRGB(eLit));
+    Object.assign(state.viz, off);
+    check('NPR ink: off ⇒ bit-identical', sameAsBase(callLC()));
+  }
+  // hachure: needs gradient; with gx,gy=0 it's a no-op even when on
+  { Object.assign(state.viz, off); state.viz.hachure = 0.9;
+    check('NPR hachure: no-op without gradient (gx=gy=0)', sameAsBase(callLC(undefined, 100, 100, 0, 0)));
+    // with a gradient + steep slope, some sample along the stripe must darken
+    let changed = false;
+    for (let p = 0; p < 40 && !changed; p++) { const c = landColorCore(15, 0.5, 0.12, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, p * 3, p * 2, 1, 1, 1, 0.3); const b = landColorCore(15, 0.5, 0.12, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, p * 3, p * 2, 1, 1, 0, 0); if (c[0] < b[0]) changed = true; }
+    check('NPR hachure: hatches steep slopes along the gradient', changed);
+    Object.assign(state.viz, off);
+    check('NPR hachure: off ⇒ bit-identical', sameAsBase(callLC(undefined, 100, 100, 1, 0.3)));
+  }
+  // watercolor: pigment wash modulates the pixel; finite
+  { Object.assign(state.viz, off); state.viz.watercolor = 0.9;
+    const wLit = callLC(undefined, 37, 91, 0, 0);
+    const wBase = (Object.assign(state.viz, off), callLC(undefined, 37, 91, 0, 0));
+    state.viz.watercolor = 0.9;
+    check('NPR watercolor: modulates the pixel & stays finite', finiteRGB(callLC(undefined, 37, 91, 0, 0)));
+    Object.assign(state.viz, off);
+    check('NPR watercolor: off ⇒ bit-identical', sameAsBase(callLC()));
+  }
+  // water/below-sea (r<=0) is never touched by NPR
+  { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1 });
+    const wOff = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
+    state.viz.contours = state.viz.ink = state.viz.hachure = state.viz.watercolor = 0;
+    const wOn = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
+    check('NPR: r<=0 (at/below sea) untouched by all four styles', wOff.every((v, i) => v === wOn[i]));
+  }
+  Object.assign(state.viz, savedViz);   // restore so later tests/cmp stay on the default path
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

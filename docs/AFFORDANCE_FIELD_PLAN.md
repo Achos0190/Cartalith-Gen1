@@ -23,7 +23,7 @@ for settlement suggestion and route cost surfaces.
   carrying capacity → settlement suitability.
 - **Phase B — Tectonic inversion for imported heightmaps (shipped, v0.106).**
 - **Phase C — Multi-channel RGBA atlasing export (shipped, v0.107).**
-- Phase D — "The Painter" NPR (D1 multi-sun shipped in v0.104; contour-veins/ink/hachure/watercolor follow). **(in progress, v0.108)**
+- **Phase D — "The Painter" NPR (shipped: D1 multi-sun v0.104; contour-veins/ink/hachure/watercolor v0.108).**
 - Phase F — Unification with Cartalith (the AGFK sampler + merged UI).
 - Phase E — Anisotropic cost surface + lazy A*/Eikonal route solver (inline; no libs). **Moved to AFTER unification** (per user, 2026-06-19) — routing lands once the merged tool exists to consume it.
 
@@ -183,3 +183,34 @@ tests/run.sh elevation_foundation_v0.107.html   # 627 assertions, 0 failed (+12)
 ```
 Off ⇒ export unchanged; `generate()`/render bit-identical to v0.106 (FIELD/TEMP/RENDER cmp-clean).
 Browser pass owed: confirm the atlas PNGs decode via the canvas round-trip and the manifest reads.
+
+## Phase D — "The Painter" NPR (shipped: D1 v0.104, D2–D5 v0.108)
+
+### Why
+
+Approach the hand-drawn cartographic look (the R-series framework's goal) with non-photorealistic
+styling, render-only and seamless at high zoom. D1 (multi-sun hillshade) shipped in v0.104; v0.108
+adds the four line/wash styles, each independently toggleable with its own intensity slider.
+
+### Approach
+
+All four live in **one gated block at the tail of `landColorCore`** (after hillshade/haze, on the
+`lit` colour, **land-only** `r>0`), so they apply identically across screen / PNG bake / LOD-tile
+paths and stay tile-seamless (evaluated in shared grid-coordinate `px,py` space). Every slider 0 ⇒
+the block is skipped ⇒ bit-identical. `state.viz.{contours,ink,hachure,watercolor}` default 0
+(legacy saves merge them); a new Style-tab **"Painter (NPR)"** slider group drives them.
+
+- **Contour veins** (`contours`): constant-(map)-width isolines (`iv=0.05`, half-width tracks slope),
+  every 5th an index line.
+- **Ink linework** (`ink`): `min(1,|curv|·55·wob)·min(1,slope·6)` edge darkening, `fbm` weight wobble.
+- **Hachure** (`hachure`): downslope hatch stripes; needs the gradient — new optional `gx,gy` params on
+  `landColorCore` + pure `gradAt(x,y)` (main map), neighbour samples (bake), tile-px ∇→coarse (tiles).
+- **Watercolor** (`watercolor`): `fbm` pigment pooling + `vnoise` granulation + curvature edge blooms.
+
+### Verification
+
+```bash
+tests/run.sh elevation_foundation_v0.108.html   # 638 assertions, 0 failed (+11)
+```
+Off ⇒ render bit-identical to v0.107 (FIELD/TEMP/RENDER cmp-clean). Browser pass owed: the four
+styles' aesthetics + screen/bake/tile parity at zoom.

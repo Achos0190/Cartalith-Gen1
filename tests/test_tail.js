@@ -2410,6 +2410,57 @@ if (typeof landColorCore === 'function') {
   Object.assign(state.viz, savedViz);   // restore so later tests/cmp stay on the default path
 }
 
+/* ---------- v0.109 Phase A LOD follow-up: affordance debug tiles + multi-sun in tiles ---------- */
+if (typeof renderAffordanceTileRGBA === 'function') {
+  // multiSunFromNormal: in [0,1], sun-facing brighter than away-facing, flat ground above ambient floor
+  check('multiSunFromNormal in [0,1]', (() => { const a = multiSunFromNormal(0, 0, 1); return a >= 0 && a <= 1; })());
+  check('multiSunFromNormal flat ground ≥ ambient floor', multiSunFromNormal(0, 0, 1) >= 0.10);
+  // refactor wiring: multiSunShade == multiSunFromNormal(normal computed the same way)
+  check('multiSunShade matches multiSunFromNormal', (() => {
+    for (const [x, y] of [[40, 30], [120, 80], [200, 120]]) {
+      const L = field[y * GW + (x - 1)], R = field[y * GW + (x + 1)], U = field[(y - 1) * GW + x], D = field[(y + 1) * GW + x];
+      const ex = state.exag; let nx = -(R - L) * ex, ny = -(D - U) * ex, nz = 1; const il = 1 / Math.hypot(nx, ny, nz); nx *= il; ny *= il; nz *= il;
+      if (Math.abs(multiSunShade(x, y) - multiSunFromNormal(nx, ny, nz)) > 1e-9) return false;
+    } return true;
+  })());
+
+  // multi-sun in biome tiles: on vs off differs, output finite + opaque
+  {
+    const W = 8, H = 8, bounds = { x: 20, y: 20, w: 8, h: 8 }, tile = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) tile[i] = 0.55 + 0.1 * Math.sin(i);   // some relief so the normal varies
+    const sm = state.mode, sv = !!state.viz.multiSun; state.mode = 'biome';
+    state.viz.multiSun = false; const a = renderBiomeTileRGBA(tile, W, H, bounds);
+    state.viz.multiSun = true; const b = renderBiomeTileRGBA(tile, W, H, bounds);
+    check('renderBiomeTileRGBA tiles finite + opaque', (() => { for (let i = 0; i < a.length; i++){ if (!Number.isFinite(a[i])) return false; if (i % 4 === 3 && a[i] !== 255) return false; } return true; })());
+    check('multi-sun changes the tile hillshade', (() => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return true; return false; })());
+    state.mode = sm; state.viz.multiSun = sv;
+  }
+
+  // affordance tiles: lith/soil/water colormaps mirror the main-map debug path
+  {
+    const W = 8, H = 8, bounds = { x: 20, y: 20, w: 8, h: 8 }, tile = new Float32Array(W * H).fill(0.6);
+    tile[0] = state.seaLevel - 0.2;   // one water cell
+    for (const which of ['lith', 'soil', 'water']) {
+      const out = renderAffordanceTileRGBA(tile, W, H, bounds, which);
+      check('renderAffordanceTileRGBA ' + which + ': finite + opaque', (() => { for (let i = 0; i < out.length; i++){ if (!Number.isFinite(out[i])) return false; if (i % 4 === 3 && out[i] !== 255) return false; } return true; })());
+    }
+    const wl = renderAffordanceTileRGBA(tile, W, H, bounds, 'lith');
+    check('affordance lith: water cell gets debug water colour', wl[0] === 20 && wl[1] === 26 && wl[2] === 40);
+    const ws = renderAffordanceTileRGBA(tile, W, H, bounds, 'soil');
+    check('affordance soil: water cell gets debug water colour', ws[0] === 18 && ws[1] === 34 && ws[2] === 64);
+    const ww = renderAffordanceTileRGBA(tile, W, H, bounds, 'water');
+    check('affordance water: water cell gets debug water colour', ww[0] === 30 && ww[1] === 90 && ww[2] === 150);
+    // a land lith cell equals LITH_COLS[ sampled coarse index ] (nearest)
+    check('affordance lith: land cell matches LITH_COLS at sampled coarse cell', (() => {
+      const lith = currentLithology(), cx = bounds.w / (W - 1), cy = bounds.h / (H - 1);
+      const x = 4, y = 4, ix = Math.min(GW - 1, Math.max(0, Math.round(bounds.x + x * cx))), iy = Math.min(GH - 1, Math.max(0, Math.round(bounds.y + y * cy)));
+      const c = LITH_COLS[lith[iy * GW + ix]], p = (y * W + x) * 4;
+      return wl[p] === c[0] && wl[p + 1] === c[1] && wl[p + 2] === c[2];
+    })());
+    check('affordance tiles deterministic', (() => { const a = renderAffordanceTileRGBA(tile, W, H, bounds, 'soil'); for (let i = 0; i < a.length; i++) if (a[i] !== ws[i]) return false; return true; })());
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

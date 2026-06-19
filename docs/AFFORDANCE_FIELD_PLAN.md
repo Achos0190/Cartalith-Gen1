@@ -24,6 +24,7 @@ for settlement suggestion and route cost surfaces.
 - **Phase B — Tectonic inversion for imported heightmaps (shipped, v0.106).**
 - **Phase C — Multi-channel RGBA atlasing export (shipped, v0.107).**
 - **Phase D — "The Painter" NPR (shipped: D1 multi-sun v0.104; contour-veins/ink/hachure/watercolor v0.108).**
+- **Phase A LOD follow-up (shipped, v0.109):** lithology/soil/water debug fields + multi-sun hillshade now render in the LOD/atlas tiles (`renderAffordanceTileRGBA`, `multiSunFromNormal`), not just the main map + exports.
 - Phase F — Unification with Cartalith (the AGFK sampler + merged UI).
 - Phase E — Anisotropic cost surface + lazy A*/Eikonal route solver (inline; no libs). **Moved to AFTER unification** (per user, 2026-06-19) — routing lands once the merged tool exists to consume it.
 

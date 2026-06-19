@@ -2493,6 +2493,59 @@ if (typeof settlementSeedInfo === 'function') {
   }
 }
 
+/* ---------- v0.111 Pillar 1: Strahler stream order + Rosgen river network ---------- */
+if (typeof strahlerFromReceivers === 'function') {
+  // Y-confluence: two order-1 headwaters join → order 2; the single downstream link stays order 2
+  {
+    const chan = new Uint8Array([1, 1, 1, 1]);          // 0,1 = heads; 2 = confluence; 3 = mouth
+    const recv = new Int32Array([2, 2, 3, -1]);
+    const flow = new Float32Array([1, 1, 2, 3]);
+    const o = strahlerFromReceivers(recv, flow, chan, 4);
+    check('Strahler: two order-1 streams join → order 2', o[0] === 1 && o[1] === 1 && o[2] === 2 && o[3] === 2);
+  }
+  // three equal-order sources into one node → +1 (max shared by ≥2)
+  {
+    const o = strahlerFromReceivers(new Int32Array([3, 3, 3, -1]), new Float32Array([1, 1, 1, 3]), new Uint8Array([1, 1, 1, 1]), 4);
+    check('Strahler: ≥2 equal-max donors increments order', o[3] === 2);
+  }
+  // unequal join: order-2 trunk + an order-1 tributary → stays order 2
+  {
+    // 0,1 → 2 (becomes order2); 2 → 4; 3 (order-1 head) → 4
+    const o = strahlerFromReceivers(new Int32Array([2, 2, 4, 4, -1]), new Float32Array([1, 1, 2, 1, 4]), new Uint8Array([1, 1, 1, 1, 1]), 5);
+    check('Strahler: order-2 + order-1 tributary stays order 2', o[2] === 2 && o[4] === 2);
+  }
+
+  // buildRiverNetwork on a south-sloping field with a painted channel
+  {
+    const W = 24, H = 24, fld = new Float32Array(W * H), flow = new Float32Array(W * H), thr = W * H * 0.0004;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.9 - y * 0.015;   // descends south, all > sea 0.42
+    for (let y = 2; y < 22; y++) { flow[y * W + 12] = thr * (5 + y * 25); }                      // a channel gaining discharge downstream
+    const net = buildRiverNetwork(fld, flow, W, H, 0.42, {});
+    check('buildRiverNetwork: order/intensity/depth present & finite', net.order && allFinite(net.intensity) && allFinite(net.depth));
+    check('buildRiverNetwork: intensity & depth in [0,1]', (([a, b]) => a >= 0 && b <= 1)(minMax(net.intensity)) && (([a, b]) => a >= 0 && b <= 1)(minMax(net.depth)));
+    check('buildRiverNetwork: channel cells get order ≥ 1, others 0', net.order[10 * W + 12] >= 1 && net.order[0] === 0);
+    // ocean ⇒ no network
+    const fldSea = new Float32Array(W * H).fill(0.1);
+    const netSea = buildRiverNetwork(fldSea, flow, W, H, 0.42, {});
+    check('buildRiverNetwork: ocean cells carry no river', netSea.intensity.every(v => v === 0) && netSea.order.every(o => o === 0));
+    // determinism
+    const net2 = buildRiverNetwork(fld, flow, W, H, 0.42, {});
+    check('buildRiverNetwork deterministic', net.order.every((o, i) => o === net2.order[i]) && net.intensity.every((v, i) => v === net2.intensity[i]));
+  }
+
+  // Rosgen: at equal discharge & order, a steeper channel is narrower than a gentle one
+  {
+    const W = 16, H = 24, thr = W * H * 0.0004;
+    const mk = (dropPerRow) => { const fld = new Float32Array(W * H), flow = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.95 - y * dropPerRow;
+      for (let y = 2; y < 20; y++) flow[y * W + 8] = thr * 60;                                   // same discharge both cases
+      return buildRiverNetwork(fld, flow, W, H, 0.42, {}); };
+    const gentle = mk(0.004), steep = mk(0.02);
+    const widthAt = (net, row) => { let w = 0; for (let x = 0; x < W; x++) if (net.intensity[row * W + x] > 0.01) w++; return w; };
+    check('Rosgen: steeper channel narrower than gentle at equal discharge (' + widthAt(steep, 10) + ' ≤ ' + widthAt(gentle, 10) + ')', widthAt(steep, 10) <= widthAt(gentle, 10));
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

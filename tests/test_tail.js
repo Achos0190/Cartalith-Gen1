@@ -2047,6 +2047,87 @@ if (typeof applyTidalSedimentation === 'function') {
   check('ridged relief H² gate ⇒ lowland (r=0) untouched', onLow.every((v, i) => v === offLow[i]));
 }
 
+/* ---------- v0.104 Affordance Field Foundation: lithology / soil / water access + multi-sun ---------- */
+{
+  /* synthetic inputs for the pure builders */
+  const W = 32, H = 24, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n), age = new Float32Array(n), het = new Float32Array(n),
+        volc = new Float32Array(n), crust = new Float32Array(n), resist = new Float32Array(n),
+        rain = new Float32Array(n), temp = new Float32Array(n), slopeN = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const i = y * W + x;
+    fld[i] = x < W / 2 ? 0.30 : 0.70;          // left lowland / right upland
+    crust[i] = x < 4 ? -0.2 : 0.3;             // far-left oceanic crust
+    volc[i] = (x === 6) ? 0.8 : 0.0;           // a volcanic column
+    resist[i] = x > W * 0.7 ? 0.8 : 0.2;       // hard basement on the right
+    age[i] = x / (W - 1);                       // young → old left→right
+    rain[i] = y / (H - 1);                      // dry → wet top→bottom
+    temp[i] = 18;                               // optimal for soil bell
+    slopeN[i] = x < W / 2 ? 0.0 : 3.0;         // upland is steep
+  }
+
+  /* buildLithology */
+  const lith = buildLithology(fld, age, het, volc, crust, resist, rain, W, H, sea);
+  check('lithology length = n', lith.length === n);
+  let lithValid = true, distinctL = new Set();
+  for (let i = 0; i < n; i++){ const v = lith[i]; if (v < 0 || v >= LITH_KEYS.length || (v | 0) !== v) lithValid = false; distinctL.add(v); }
+  check('lithology values are valid indices', lithValid);
+  check('lithology: oceanic crust ⇒ basalt (idx 1)', lith[0] === 1 && lith[2 * W + 1] === 1);
+  check('lithology: volcanic column ⇒ andesite (idx 2)', lith[10 * W + 6] === 2);
+  check('lithology has multiple rock types (' + distinctL.size + ')', distinctL.size >= 3);
+  const lith2 = buildLithology(fld, age, het, volc, crust, resist, rain, W, H, sea);
+  check('lithology deterministic', lith.every((v, i) => v === lith2[i]));
+
+  /* buildSoilFertility — range, determinism, monotonic in rain (↑) and slope (↓) */
+  const soil = buildSoilFertility(lith, temp, rain, slopeN, age, W, H);
+  check('soil finite & in [0,1]', allFinite(soil) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(soil)));
+  const soil2 = buildSoilFertility(lith, temp, rain, slopeN, age, W, H);
+  check('soil deterministic', soil.every((v, i) => v === soil2[i]));
+  /* two lowland cells, same column, dry (y=2) vs wet (y=H-2) → wetter has more soil */
+  const colx = 8; check('soil rises with rainfall', soil[(H - 2) * W + colx] > soil[2 * W + colx]);
+  /* same rain row, flat lowland (x=8) vs steep upland (x=W-4) → flat keeps more soil */
+  const rowy = H - 2; check('soil falls with slope', soil[rowy * W + 8] > soil[rowy * W + (W - 4)]);
+
+  /* buildWaterAccess — water cells = 1, decays inland, deterministic */
+  const flow = new Float32Array(n);              // one trunk river down column x=16
+  for (let y = 0; y < H; y++) flow[y * W + 16] = n;   // well above threshold
+  const wa = buildWaterAccess(flow, fld, W, H, sea);
+  check('water access finite & in [0,1]', allFinite(wa) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(wa)));
+  check('water access: on the river ⇒ 1', Math.abs(wa[10 * W + 16] - 1) < 1e-6);
+  check('water access decays away from the river', wa[10 * W + 17] > wa[10 * W + 22]);
+  const wa2 = buildWaterAccess(flow, fld, W, H, sea);
+  check('water access deterministic', wa.every((v, i) => v === wa2[i]));
+
+  /* live cached builders run on the generated world */
+  check('currentLithology finite indices', (() => { const a = currentLithology(); return a.length === GW * GH && a.every(v => v >= 0 && v < LITH_KEYS.length); })());
+  check('currentSoil finite & in [0,1]', (() => { const a = currentSoil(); return allFinite(a) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(a)); })());
+  check('currentWaterAccess finite & in [0,1]', (() => { const a = currentWaterAccess(); return allFinite(a) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(a)); })());
+  check('lithology manifest covers every key', (() => { const m = lithIndexManifest(); return LITH_KEYS.every((k, i) => m.indices[String(i)] && m.indices[String(i)].key === k); })());
+
+  /* multiSunShade: in [0,1], floor ≥ 0.10 (no black voids), deterministic */
+  {
+    const sv = state.viz.multiSun; let mn = 2, mx = -1, fin = true;
+    for (let y = 1; y < GH - 1; y++) for (let x = 1; x < GW - 1; x++){ const s = multiSunShade(x, y); if (!Number.isFinite(s)) fin = false; if (s < mn) mn = s; if (s > mx) mx = s; }
+    check('multiSunShade finite & in [0,1]', fin && mn >= 0 && mx <= 1);
+    check('multiSunShade ambient floor ≥ 0.10 (no black voids)', mn >= 0.10 - 1e-9);
+    state.viz.multiSun = sv;
+  }
+
+  /* default-neutrality: new debug views OFF + multiSun OFF ⇒ render bit-identical */
+  {
+    const sv = state.viz.multiSun;
+    state.mode = 'biome'; state.debug = 'off'; state.viz.multiSun = false;
+    renderNow(); const base = Uint8ClampedArray.from(img.data);
+    state.viz.multiSun = true; renderNow();
+    let diff = 0; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]) diff++;
+    check('multi-sun on changes the render', diff > 100);
+    state.viz.multiSun = false; renderNow();
+    let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
+    check('multi-sun off ⇒ render bit-identical (default neutrality)', same);
+    state.viz.multiSun = sv; renderNow();
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

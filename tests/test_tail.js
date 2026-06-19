@@ -2461,6 +2461,38 @@ if (typeof renderAffordanceTileRGBA === 'function') {
   }
 }
 
+/* ---------- v0.110: debug-layer opacity + clickable settlement seed "why" ---------- */
+if (typeof settlementSeedInfo === 'function') {
+  // settlementSeedInfo: structured breakdown at a settlement seed
+  const seeds = findSettlementSeeds(currentSettlementSuitability(), GW, GH);
+  check('findSettlementSeeds returns advisory seeds', Array.isArray(seeds) && seeds.length > 0);
+  const info = settlementSeedInfo(seeds[0].x, seeds[0].y);
+  check('settlementSeedInfo: core fields present & finite', info && Number.isFinite(info.score) && Number.isFinite(info.soil) && Number.isFinite(info.waterAccess) && Number.isFinite(info.carryingCapacity));
+  check('settlementSeedInfo: score in [0,1]', info.score >= 0 && info.score <= 1);
+  check('settlementSeedInfo: resources is a sorted array of {key,name,value≥0.35}', (() => {
+    if (!Array.isArray(info.resources)) return false;
+    for (let i = 0; i < info.resources.length; i++) { const o = info.resources[i]; if (!o.key || typeof o.value !== 'number' || o.value < 0.35) return false; if (i > 0 && info.resources[i - 1].value < o.value) return false; }
+    return true;
+  })());
+  check('settlementSeedInfo: resource keys are valid', info.resources.every(o => RESOURCE_KEYS.indexOf(o.key) >= 0));
+  check('settlementSeedInfo: biome + lithology labelled, summary non-empty', typeof info.biome === 'string' && typeof info.lithology === 'string' && typeof info.summary === 'string' && info.summary.length > 0);
+  check('settlementSeedInfo: deterministic', JSON.stringify(settlementSeedInfo(seeds[0].x, seeds[0].y)) === JSON.stringify(info));
+
+  // debugBaseColor: returns a finite RGB triple for the base map under an overlay
+  if (typeof debugBaseColor === 'function') {
+    const sm = state.mode; state.mode = 'biome';
+    const c = debugBaseColor(40, 30, 30 * GW + 40, field[30 * GW + 40]);
+    check('debugBaseColor: finite RGB triple', Array.isArray(c) && c.length === 3 && c.every(Number.isFinite));
+    state.mode = sm;
+  }
+
+  // settlement_seeds export payload shape (what exportZip emits)
+  {
+    const payloadSeeds = seeds.map(s => settlementSeedInfo(s.x, s.y));
+    check('settlement_seeds export: every seed carries x/y/score/resources/summary', payloadSeeds.every(o => Number.isFinite(o.x) && Number.isFinite(o.y) && Number.isFinite(o.score) && Array.isArray(o.resources) && typeof o.summary === 'string'));
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

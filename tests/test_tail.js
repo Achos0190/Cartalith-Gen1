@@ -824,6 +824,12 @@ fieldsFinite('generate(world)');
     // an OLD save (missing the new fields) gets defaults, not undefined
     const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
     check('save round-trip: legacy save merges new viz defaults', old.crest === 0 && old.ridgedRelief === 0 && old.parchment === 0.2);
+    // v0.128: places + roads persist (designated places & their network travel with the project)
+    const sp = state.places, sr = state.roads;
+    state.places = [{ x: 11, y: 22 }, { x: 33, y: 44 }]; state.roads = { edges: [{ path: [[1, 2], [3, 4], [5, 6]] }] };
+    const pk2 = JSON.parse(JSON.stringify(serializeState()));
+    check('save round-trip: designated places + roads preserved', pk2.state.places.length === 2 && pk2.state.places[1].x === 33 && pk2.state.roads.edges[0].path.length === 3);
+    state.places = sp; state.roads = sr;
     state.viz = savedViz; state.tect = savedTect; state.climate = savedClim;
   }
 

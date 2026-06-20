@@ -55,7 +55,10 @@ never auto-runs ⇒ default `generate()`/render bit-identical to v0.111).
 - `velocityErode()` sync wrapper → `enforceRiverChannels`→`computeFlow(true)`→`refreshClimate`→`renderNow`
   (no isostatic rebound). Stores `_veloVx/_veloVy/_veloWater` for the **Velocity** debug view + Pillar 3.
 - UI: **Velocity (momentum)** Erosion accordion (Iterations/Strength/Meander, `state.velo`).
-- 680 assertions. Worker-ification (blob-URL, like the other ops) is a follow-up — sync for now.
+- **v0.114 worker-ification (DONE):** `velocityErodeKernel` made fully self-contained (inlined
+  `_bilin`/`centrifugalShear`) → runs off-thread via `velocityEroseAsync()` (dedicated blob-URL runner
+  transferring field+vx+vy+water back; sync fallback; shared `veloFinish()` tail). Invariant 11 now covers all
+  four kernels. Bit-identical to v0.113. 692 assertions.
 
 ## Pillar 3 — Optical realism: water shading — **shipped, v0.113** (overhaul feature-complete)
 
@@ -70,6 +73,6 @@ never auto-runs ⇒ default `generate()`/render bit-identical to v0.111).
   runs. Browser-only — the live animation needs a manual pass. Credited to Premože & Ashikhmin.
 - 688 assertions.
 
-## Status: P1–P3 shipped (v0.111–v0.113); P4 (provenance) threaded throughout. Follow-ups: worker-ify the
-P2 velocity op (blob-URL, like the other erosion kernels); browser pass on meander/oxbow emergence, the
-Beer–Lambert water look, and the flow-map animation.
+## Status: P1–P3 shipped (v0.111–v0.113), P2 velocity op worker-ified (v0.114); P4 (provenance) threaded
+throughout. **All code tasks complete.** Remaining = browser passes only: meander/oxbow emergence + the
+Velocity view, the Beer–Lambert water look, the flow-map animation, and worker progress %/sync parity.

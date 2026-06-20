@@ -189,7 +189,8 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   // to undefined (the Worker environment). Any closure leak throws or corrupts the output.
   const shadows = ['field', 'stressField', 'resistanceField', 'rainField', 'tempField', 'GW', 'GH',
                    'state', 'isostaticRebound', 'computeFlow', 'refreshClimate', 'renderNow',
-                   'gaussBlur', 'mbuf', 'ibuf', 'ubuf', 'MinHeap', 'computeFlowRouting'];
+                   'gaussBlur', 'mbuf', 'ibuf', 'ubuf', 'MinHeap', 'computeFlowRouting',
+                   '_bilin', 'centrifugalShear'];   // v0.114: velocityErodeKernel inlines these → must survive shadowing
   const W = 60, H = 44, n = W * H;
   // a tilted dome so routing, MFD area and incision all have work to do
   const mk = () => { const a = new Float32Array(n);
@@ -206,7 +207,10 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     ['glacialKernel', glacialKernel,
       'fld, temp', () => [new Float32Array(n).fill(-12)],
       { kg: 0.15, mg: 0.4, snowline: 0.02, uFactor: 0.6, passes: 8, g: 1, sea: 0.42, world: false }],
-  ]){
+    ['velocityErodeKernel', typeof velocityErodeKernel === 'function' ? velocityErodeKernel : null,   // v0.114 Pillar 2 worker-ification
+      'fld, rain', () => [rain],
+      { iters: 40, dt: 0.02, gravity: 9.8, rainRate: 0.012, evap: 0.05, capacity: 1.2, erodeK: 0.4, depositK: 0.25, minSlope: 0.001, centrifugalK: 1.2, sea: 0.42, world: false }],
+  ].filter(r => r[1])){
     let rebuilt = null, evalOk = true;
     try {
       rebuilt = new Function(...shadows, 'return (' + fn.toString() + ')').apply(null, shadows.map(() => undefined));

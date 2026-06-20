@@ -176,3 +176,52 @@ repo as a reference + smoke test once you approve the candidate art.
 
 Tell me if the slot vocabulary, the variant scheme, or the JSON-vs-CSV split should change, and whether
 the sample pack should ship in-repo. Then I'll build the importer.
+
+---
+
+## Schema 2 — compiler superset (unified-app forward-prep)
+
+The standalone **Asset Pack Compiler** (`asset_pack_compiler.html`) authors packs at `"schema": 2`. This is a
+**strict superset of schema 1**: the `textures` and `icons` sections are byte-for-byte the same vocabulary and
+shape, so the *current* elevation-foundation importer (`parsePackManifest`) reads them unchanged and silently
+ignores everything else (it only iterates `PACK_TEX_SLOTS`/`PACK_ICON_SLOTS`, and only warns on unknown keys
+*inside* `textures`/`icons` — the new top-level sections are never inspected). One pack therefore serves both
+the shipping generator and the future unified Cartalith app.
+
+The new sections carry the vocabulary the **downstream Cartalith editor** already defines (`BIOMES`, `TERRAINS`,
+`SETTLEMENT_CLASSES`, `SETTLEMENT_TRAITS`, `POI_TYPES`) — currently drawn as procedural Unicode/SVG glyphs, so
+custom art is greenfield and inert until the unified app wires it.
+
+```json
+{
+  "schema": 2,
+  "name": "...", "author": "...", "license": "CC0",
+
+  "textures": { "grass": "textures/grass.png", ... },          // schema-1, engine-active
+  "icons":    { "mountain": ["icons/mountain_01.png", ...], ... }, // schema-1, engine-active
+
+  "biomes":   { "coastal": "biomes/coastal.png", ... },        // 15 Cartalith biome paint tiles (512², opaque, seamless)
+  "terrains": { "paved": "terrains/paved.png", ... },          // 13 Cartalith terrain paint tiles (512², opaque, seamless)
+
+  "structures": {                                              // map symbols (256², RGBA, center-anchored, 1..N variants)
+    "settlement": { "hamlet": ["structures/settlement/hamlet_01.png", ...], ... },  // 9 size classes
+    "trait":      { "port":   ["structures/trait/port_01.png", ...], ... },         // 7 role overlays
+    "poi":        { "ruin":   ["structures/poi/ruin_01.png", ...], ... }            // 10 POI markers
+  }
+}
+```
+
+### New fixed keys
+
+| Section | Keys (fixed vocabulary, mirrors Cartalith storage order) | Render rules |
+|---|---|---|
+| `biomes` (15) | `coastal` `temperate_forest` `mediterranean` `wetlands` `steppe` `jungle` `boreal` `mountain` `cold_desert` `hot_desert` `tundra` `ruined` `hills` `lake_river` `ocean` | 512×512, opaque (alpha flattened on black), seamless — paint-grid fills |
+| `terrains` (13) | `paved` `dirt` `hardpack` `plains` `forest_path` `hills` `rocky` `mtn_pass` `mtn_trail` `swamp` `deep_sand` `snow` `ruins` | 512×512, opaque, seamless — terrain paint layer |
+| `structures.settlement` (9) | `hamlet` `village` `town` `city` `capital` `monastery` `fortress` `university` `industrial` | 256×256, RGBA, **center-anchored** pin; 1..N variants |
+| `structures.trait` (7) | `fortified` `mining` `port` `administrative` `trade_hub` `military` `religious` | 256×256, RGBA, center-anchored overlay |
+| `structures.poi` (10) | `ruin` `landmark` `mountain_peak` `lake` `named_forest` `battlefield` `shrine` `cave` `bridge` `other` | 256×256, RGBA, center-anchored marker |
+
+Biome/terrain keys are the suffixes of Cartalith's `--biome-*` / `--terrain-*` CSS tokens; structure keys are the
+`key` fields of `SETTLEMENT_CLASSES` / `SETTLEMENT_TRAITS` / `POI_TYPES`. Anchor differs by family: feature icons
+(`mountain`/`hill`/trees) stay **bottom-anchored** (glyph base on the cell); settlement/trait/POI symbols are
+**center-anchored** (centered on the point), matching how Cartalith places pins today.

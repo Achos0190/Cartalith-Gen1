@@ -189,7 +189,8 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
   // to undefined (the Worker environment). Any closure leak throws or corrupts the output.
   const shadows = ['field', 'stressField', 'resistanceField', 'rainField', 'tempField', 'GW', 'GH',
                    'state', 'isostaticRebound', 'computeFlow', 'refreshClimate', 'renderNow',
-                   'gaussBlur', 'mbuf', 'ibuf', 'ubuf', 'MinHeap', 'computeFlowRouting'];
+                   'gaussBlur', 'mbuf', 'ibuf', 'ubuf', 'MinHeap', 'computeFlowRouting',
+                   '_bilin', 'centrifugalShear'];   // v0.114: velocityErodeKernel inlines these → must survive shadowing
   const W = 60, H = 44, n = W * H;
   // a tilted dome so routing, MFD area and incision all have work to do
   const mk = () => { const a = new Float32Array(n);
@@ -206,7 +207,10 @@ check('state.planet has Earth defaults', !!state.planet && state.planet.g === 1 
     ['glacialKernel', glacialKernel,
       'fld, temp', () => [new Float32Array(n).fill(-12)],
       { kg: 0.15, mg: 0.4, snowline: 0.02, uFactor: 0.6, passes: 8, g: 1, sea: 0.42, world: false }],
-  ]){
+    ['velocityErodeKernel', typeof velocityErodeKernel === 'function' ? velocityErodeKernel : null,   // v0.114 Pillar 2 worker-ification
+      'fld, rain', () => [rain],
+      { iters: 40, dt: 0.02, gravity: 9.8, rainRate: 0.012, evap: 0.05, capacity: 1.2, erodeK: 0.4, depositK: 0.25, minSlope: 0.001, centrifugalK: 1.2, sea: 0.42, world: false }],
+  ].filter(r => r[1])){
     let rebuilt = null, evalOk = true;
     try {
       rebuilt = new Function(...shadows, 'return (' + fn.toString() + ')').apply(null, shadows.map(() => undefined));
@@ -537,7 +541,17 @@ check('render wrote opaque pixels', img.data.length === GW * GH * 4 && img.data[
   }
   check('waves on: water pixels change (' + waterDiff + ')', waterDiff > 50);
   check('waves on: land pixels untouched (' + landChanged + ' changed)', landChanged === 0);
-  state.viz.waves = false; renderNow();
+  // v0.132: wave-reach slider — default 1× is bit-identical to the legacy band; a wider reach paints MORE foam water cells
+  if (state.viz.waveDist === undefined) state.viz.waveDist = 1;
+  state.viz.waves = true; state.viz.waveDist = 1; renderNow();
+  const wave1 = Uint8ClampedArray.from(img.data);
+  state.viz.waveDist = 2; renderNow();
+  let foamGrew = 0; for (let i = 0; i < GW * GH; i++){ const p = i * 4; if (field[i] < state.seaLevel && (img.data[p] !== wave1[p] || img.data[p + 1] !== wave1[p + 1] || img.data[p + 2] !== wave1[p + 2])) foamGrew++; }
+  check('wave reach 2× extends foam to more offshore cells (' + foamGrew + ')', foamGrew > 0);
+  state.viz.waveDist = 1; renderNow();
+  let same1 = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== wave1[i]){ same1 = false; break; }
+  check('wave reach 1× → bit-identical to legacy band', same1);
+  state.viz.waves = false; state.viz.waveDist = 1; renderNow();
   let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
   check('waves off → bit-identical (default neutrality)', same);
 }
@@ -812,14 +826,20 @@ fieldsFinite('generate(world)');
     state.climate.albedo = 0.65;
     const pk = JSON.parse(JSON.stringify(serializeState()));   // serialize → JSON string → parse, like params.json
     // replicate loadZip's default-merges
-    const viz = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, pk.state.viz || {});
+    const viz = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, pk.state.viz || {});
     check('save round-trip: new viz sliders preserved', viz.crest === 0.5 && viz.rockSlope === 0.4 && viz.texture === 0.6 && viz.minorStreams === 0.3 && viz.ridgedRelief === 0.7 && viz.ao === 0.55);
     const tt = pk.state.tect;   // tect uses `if(==null)` guards → explicit values survive
     check('save round-trip: T5 tect params preserved', tt.foldIntensity === 1.5 && tt.trenchDepth === 0.8 && tt.tectonicGraph === true);
     check('save round-trip: L6 albedo preserved', pk.state.climate.albedo === 0.65);
     // an OLD save (missing the new fields) gets defaults, not undefined
-    const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
+    const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
     check('save round-trip: legacy save merges new viz defaults', old.crest === 0 && old.ridgedRelief === 0 && old.parchment === 0.2);
+    // v0.128: places + roads persist (designated places & their network travel with the project)
+    const sp = state.places, sr = state.roads;
+    state.places = [{ x: 11, y: 22 }, { x: 33, y: 44 }]; state.roads = { edges: [{ path: [[1, 2], [3, 4], [5, 6]] }] };
+    const pk2 = JSON.parse(JSON.stringify(serializeState()));
+    check('save round-trip: designated places + roads preserved', pk2.state.places.length === 2 && pk2.state.places[1].x === 33 && pk2.state.roads.edges[0].path.length === 3);
+    state.places = sp; state.roads = sr;
     state.viz = savedViz; state.tect = savedTect; state.climate = savedClim;
   }
 
@@ -1065,6 +1085,16 @@ fieldsFinite('generate(world)');
   // T3 rift: axial graben notch (negative at the margin) flanked by uplifted shoulders
   const Urift = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, opts);
   check('rift → axial graben below shoulders', Urift[48 * W + 60] < 0 && Urift.some(v => v > 0.1));
+
+  // v0.121 Phase 2: fault-block repetition. faultBlockK=0 ⇒ bit-identical to the plain graben; >0 ⇒ extra parallel ridge/valley alternations across the rift
+  const UriftB0 = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, Object.assign({ faultBlockK: 0 }, opts));
+  check('fault-block faultBlockK=0 ⇒ bit-identical to plain rift', Urift.every((v, i) => v === UriftB0[i]));
+  const UriftB = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, Object.assign({}, opts, { faultBlockK: 1.0 }));
+  check('fault-block faultBlockK>0 changes the rift profile', UriftB.some((v, i) => Math.abs(v - Urift[i]) > 1e-4));
+  // the fault-block CONTRIBUTION (UriftB − Urift) is a periodic sawtooth across the margin ⇒ several sign alternations
+  const fbDiff = new Float32Array(W * H); for (let i = 0; i < fbDiff.length; i++) fbDiff[i] = UriftB[i] - Urift[i];
+  let alt = 0, prev = 0; for (let x = 36; x < 84; x++){ const s = Math.sign(fbDiff[48 * W + x]); if (s !== 0){ if (prev !== 0 && s !== prev) alt++; prev = s; } }
+  check('fault-block adds repeating parallel ridge/valley blocks (' + alt + ' alternations)', alt >= 3);
 
   // T4 transform: amplitude from SHEAR; linear fault valley + a pressure ridge offset laterally ∝ shear sense/size
   const shearP = new Float32Array(W * H); for (const p of pts) shearP[p[1] * W + p[0]] = 0.8;   // uniform + shear along the fault
@@ -1700,14 +1730,14 @@ if (typeof applyTidalSedimentation === 'function') {
   _lodEdit = false; _lodOn = false; _lodEdits.clear(); _lodUndo.length = 0; lodCacheClear();
 }
 
-/* ---------- v0.076: discharge-widened smooth rivers ---------- */
+/* ---------- discharge-widened rivers (v0.076 render-overlay properties, now via the v0.111 network) ---------- */
 {
   // synthetic land with a trunk river (high discharge) and a tributary (low discharge)
   const W = 40, H = 40, fld = new Float32Array(W * H).fill(0.6), flow = new Float32Array(W * H);
   const thresh = W * H * 0.0004;
   for (let y = 5; y < 35; y++) flow[y * W + 20] = thresh * 200;   // trunk down the middle
   for (let x = 20; x < 35; x++) flow[10 * W + x] = thresh * 8;    // thin tributary
-  const rf = buildRiverField(flow, fld, W, H, 0.42);
+  const rf = buildRiverNetwork(fld, flow, W, H, 0.42, {}).intensity;   // v0.115: buildRiverField removed — the network's intensity is the overlay
   check('river field finite', allFinite(rf));
   // width: count lit cells across the trunk row vs the tributary column
   let trunkW = 0, tribW = 0;
@@ -1716,11 +1746,11 @@ if (typeof applyTidalSedimentation === 'function') {
   check('trunk river is wider than the tributary (' + trunkW + ' vs ' + tribW + ')', trunkW > tribW && trunkW >= 3);
   // ocean cells get no river
   const fldSea = new Float32Array(W * H).fill(0.2);   // all below sea
-  const rfSea = buildRiverField(flow, fldSea, W, H, 0.42);
+  const rfSea = buildRiverNetwork(fldSea, flow, W, H, 0.42, {}).intensity;
   check('no river overlay on ocean cells', rfSea.every(v => v === 0));
   // deterministic
-  const rf2 = buildRiverField(flow, fld, W, H, 0.42);
-  check('buildRiverField deterministic', rf.every((v, i) => v === rf2[i]));
+  const rf2 = buildRiverNetwork(fld, flow, W, H, 0.42, {}).intensity;
+  check('river overlay deterministic', rf.every((v, i) => v === rf2[i]));
 }
 
 /* ---------- v0.077: river carving interplay (monotonic channel + entrenchment) ---------- */
@@ -1822,6 +1852,29 @@ if (typeof applyTidalSedimentation === 'function') {
   // determinism
   const wb2 = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.5) });
   check('buildWaterBodies deterministic', wbWet.every((v, i) => v === wb2[i]));
+  // forceLake: a deposited (user-painted) lake cell is always class 2, even on dry arid land
+  const force = new Uint8Array(W * H); force[3 * W + 4] = 1;   // a dry land cell (0.6) far from any water
+  const wbF = buildWaterBodies(f, W, H, sea, { rain: new Float32Array(W * H).fill(0.0), forceLake: force });
+  check('buildWaterBodies forceLake → forced cell is lake (class 2)', wbF[3 * W + 4] === 2 && wbF[0 * W + 5] === 0);
+}
+
+/* ---------- v0.103: deposit-water tool — a lake on a mountain without raising sea level ---------- */
+{
+  // reuse the 256 region world generated for the CBiome/CTerrain blocks above (no regenerate → seam RNG untouched)
+  let hi = -1, hc = 0;
+  for (let i = 0; i < field.length; i++){ const h = field[i] - geoAt(i); if (h >= state.seaLevel && h > hi){ hi = h; hc = i; } }
+  const mx = hc % GW, my = (hc / GW) | 0;
+  state.radius = 8; lakeMask = null; _waterBody = null; _cartBiome = null;
+  depositWater(mx, my);
+  check('depositWater marks the clicked (highest) land cell as lake', !!lakeMask && lakeMask[hc] === 1);
+  const wb = currentWaterBodies();
+  check('deposited water classifies as lake (class 2) above sea level', wb[hc] === 2 && hi >= state.seaLevel);
+  check('deposited lake exports as biome raster index 13', buildBiomeRaster()[hc] === BIOME_INDEX.lake);
+  _cartBiome = null;
+  check('deposited lake → Cartalith Lake(14)', buildCartBiome()[hc] === 14);
+  const lc = lakeColor(mx, my, hc);
+  check('lakeColor finite RGB in [0,255]', lc.length === 3 && lc.every(v => Number.isFinite(v) && v >= 0 && v <= 255));
+  lakeMask = null; _waterBody = null; _cartBiome = null; _cartTerrain = null;   // clean up so later blocks aren't polluted
 }
 
 /* ---------- Atlas Phase 1: chunk model + lifecycle (v0.079) ---------- */
@@ -1993,13 +2046,13 @@ if (typeof applyTidalSedimentation === 'function') {
   let idx = -1; for (let i = 0; i < GW * GH; i++){ if (field[i] >= state.seaLevel && flowField[i] > lo && flowField[i] < hi){ idx = i; break; } }
   const savedM = state.viz.minorStreams, savedR2 = state.showRivers; state.showRivers = true;
   if (idx >= 0){ const x = idx % GW, y = (idx / GW) | 0;
-    _riverField = null; state.viz.minorStreams = 0;   const c0 = surfaceColor(x, y, idx, field[idx]);
-    _riverField = null; state.viz.minorStreams = 0;   const c0b = surfaceColor(x, y, idx, field[idx]);
+    _riverNet = null; state.viz.minorStreams = 0;   const c0 = surfaceColor(x, y, idx, field[idx]);
+    _riverNet = null; state.viz.minorStreams = 0;   const c0b = surfaceColor(x, y, idx, field[idx]);
     check('minor channels off ⇒ surfaceColor unchanged/deterministic', c0.every((v, i) => v === c0b[i]));
-    _riverField = null; state.viz.minorStreams = 0.9; const c1 = surfaceColor(x, y, idx, field[idx]);
+    _riverNet = null; state.viz.minorStreams = 0.9; const c1 = surfaceColor(x, y, idx, field[idx]);
     check('minor channels on ⇒ band cell shifts blue-grey', c1.some((v, i) => v !== c0[i]) && c1[2] >= c1[0]);
   } else { console.log('skip - no minor-band cell found at this seed/res'); check('minor channels band lookup', true); }
-  state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverField = null;
+  state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverNet = null;
 }
 
 /* ---------- R4: ridged-noise elevation-weighted relief detail (v0.089) ---------- */
@@ -2022,6 +2075,914 @@ if (typeof applyTidalSedimentation === 'function') {
   check('ridged relief off ⇒ landColorCore unchanged/deterministic', off.every((v, i) => v === off2[i]));
   check('ridged relief on ⇒ highland colour changes', off.some((v, i) => v !== on[i]));
   check('ridged relief H² gate ⇒ lowland (r=0) untouched', onLow.every((v, i) => v === offLow[i]));
+}
+
+/* ---------- v0.104 Affordance Field Foundation: lithology / soil / water access + multi-sun ---------- */
+{
+  /* synthetic inputs for the pure builders */
+  const W = 32, H = 24, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n), age = new Float32Array(n), het = new Float32Array(n),
+        volc = new Float32Array(n), crust = new Float32Array(n), resist = new Float32Array(n),
+        rain = new Float32Array(n), temp = new Float32Array(n), slopeN = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const i = y * W + x;
+    fld[i] = x < W / 2 ? 0.30 : 0.70;          // left lowland / right upland
+    crust[i] = x < 4 ? -0.2 : 0.3;             // far-left oceanic crust
+    volc[i] = (x === 6) ? 0.8 : 0.0;           // a volcanic column
+    resist[i] = x > W * 0.7 ? 0.8 : 0.2;       // hard basement on the right
+    age[i] = x / (W - 1);                       // young → old left→right
+    rain[i] = y / (H - 1);                      // dry → wet top→bottom
+    temp[i] = 18;                               // optimal for soil bell
+    slopeN[i] = x < W / 2 ? 0.0 : 3.0;         // upland is steep
+  }
+
+  /* buildLithology */
+  const lith = buildLithology(fld, age, het, volc, crust, resist, rain, W, H, sea);
+  check('lithology length = n', lith.length === n);
+  let lithValid = true, distinctL = new Set();
+  for (let i = 0; i < n; i++){ const v = lith[i]; if (v < 0 || v >= LITH_KEYS.length || (v | 0) !== v) lithValid = false; distinctL.add(v); }
+  check('lithology values are valid indices', lithValid);
+  check('lithology: oceanic crust ⇒ basalt (idx 1)', lith[0] === 1 && lith[2 * W + 1] === 1);
+  check('lithology: volcanic column ⇒ andesite (idx 2)', lith[10 * W + 6] === 2);
+  check('lithology has multiple rock types (' + distinctL.size + ')', distinctL.size >= 3);
+  const lith2 = buildLithology(fld, age, het, volc, crust, resist, rain, W, H, sea);
+  check('lithology deterministic', lith.every((v, i) => v === lith2[i]));
+
+  /* buildSoilFertility — range, determinism, monotonic in rain (↑) and slope (↓) */
+  const soil = buildSoilFertility(lith, temp, rain, slopeN, age, W, H);
+  check('soil finite & in [0,1]', allFinite(soil) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(soil)));
+  const soil2 = buildSoilFertility(lith, temp, rain, slopeN, age, W, H);
+  check('soil deterministic', soil.every((v, i) => v === soil2[i]));
+  /* two lowland cells, same column, dry (y=2) vs wet (y=H-2) → wetter has more soil */
+  const colx = 8; check('soil rises with rainfall', soil[(H - 2) * W + colx] > soil[2 * W + colx]);
+  /* same rain row, flat lowland (x=8) vs steep upland (x=W-4) → flat keeps more soil */
+  const rowy = H - 2; check('soil falls with slope', soil[rowy * W + 8] > soil[rowy * W + (W - 4)]);
+
+  /* buildWaterAccess — water cells = 1, decays inland, deterministic */
+  const flow = new Float32Array(n);              // one trunk river down column x=16
+  for (let y = 0; y < H; y++) flow[y * W + 16] = n;   // well above threshold
+  const wa = buildWaterAccess(flow, fld, W, H, sea);
+  check('water access finite & in [0,1]', allFinite(wa) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(wa)));
+  check('water access: on the river ⇒ 1', Math.abs(wa[10 * W + 16] - 1) < 1e-6);
+  check('water access decays away from the river', wa[10 * W + 17] > wa[10 * W + 22]);
+  const wa2 = buildWaterAccess(flow, fld, W, H, sea);
+  check('water access deterministic', wa.every((v, i) => v === wa2[i]));
+
+  /* live cached builders run on the generated world */
+  check('currentLithology finite indices', (() => { const a = currentLithology(); return a.length === GW * GH && a.every(v => v >= 0 && v < LITH_KEYS.length); })());
+  check('currentSoil finite & in [0,1]', (() => { const a = currentSoil(); return allFinite(a) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(a)); })());
+  check('currentWaterAccess finite & in [0,1]', (() => { const a = currentWaterAccess(); return allFinite(a) && (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(a)); })());
+  check('lithology manifest covers every key', (() => { const m = lithIndexManifest(); return LITH_KEYS.every((k, i) => m.indices[String(i)] && m.indices[String(i)].key === k); })());
+
+  /* multiSunShade: in [0,1], floor ≥ 0.10 (no black voids), deterministic */
+  {
+    const sv = state.viz.multiSun; let mn = 2, mx = -1, fin = true;
+    for (let y = 1; y < GH - 1; y++) for (let x = 1; x < GW - 1; x++){ const s = multiSunShade(x, y); if (!Number.isFinite(s)) fin = false; if (s < mn) mn = s; if (s > mx) mx = s; }
+    check('multiSunShade finite & in [0,1]', fin && mn >= 0 && mx <= 1);
+    check('multiSunShade ambient floor ≥ 0.10 (no black voids)', mn >= 0.10 - 1e-9);
+    state.viz.multiSun = sv;
+  }
+
+  /* default-neutrality: new debug views OFF + multiSun OFF ⇒ render bit-identical */
+  {
+    const sv = state.viz.multiSun;
+    state.mode = 'biome'; state.debug = 'off'; state.viz.multiSun = false;
+    renderNow(); const base = Uint8ClampedArray.from(img.data);
+    state.viz.multiSun = true; renderNow();
+    let diff = 0; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]) diff++;
+    check('multi-sun on changes the render', diff > 100);
+    state.viz.multiSun = false; renderNow();
+    let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
+    check('multi-sun off ⇒ render bit-identical (default neutrality)', same);
+    state.viz.multiSun = sv; renderNow();
+  }
+}
+
+/* ---------- v0.105 Resource potentials / Carrying capacity / Settlement suitability ---------- */
+{
+  const W = 24, H = 20, n = W * H, sea = 0.42;
+  const fld = new Float32Array(n), lith = new Uint8Array(n), age = new Float32Array(n),
+        bt = new Uint8Array(n), shear = new Float32Array(n), flow = new Float32Array(n),
+        rain = new Float32Array(n), temp = new Float32Array(n), slopeN = new Float32Array(n),
+        biome = new Uint8Array(n), water = new Float32Array(n), soil = new Float32Array(n);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    const i = y * W + x;
+    fld[i] = 0.55;                          // land (above sea=0.42)
+    lith[i] = 0;                            // granite default
+    age[i] = 0.7;                           // old (> ageOld=0.6)
+    rain[i] = 0.4; temp[i] = 18;
+    biome[i] = 5;                           // tempForest (closed canopy)
+    water[i] = 0.7; soil[i] = 0.6;
+  }
+  /* copper test: put a subduction boundary at x=4 row */
+  for (let y = 0; y < H; y++) bt[y * W + 4] = 2;  // subductionOC
+  /* transform fault at x=20 */
+  for (let y = 0; y < H; y++){ bt[y * W + 20] = 5; shear[y * W + 20] = 0.8; }
+  /* salt basin: arid lowland in limestone at column x=12 */
+  for (let y = 0; y < H; y++){ const i = y * W + 12; lith[i] = 3; rain[i] = 0.10; fld[i] = 0.50; }
+
+  const rp = buildResourcePotentials(lith, bt, shear, flow, biome, fld, rain, age, W, H, sea);
+  const keys = ['copper','tin','iron','gold','salt','timber'];
+  for (const k of keys){
+    const [mn, mx] = minMax(rp[k]);
+    check('resource ' + k + ' in [0,1]', mn >= 0 && mx <= 1.0 + 1e-6);
+    check('resource ' + k + ' finite', allFinite(rp[k]));
+  }
+  /* copper: cell on subduction boundary should be higher than an interior cell */
+  check('copper: subduction boundary > interior', rp.copper[10 * W + 4] > rp.copper[10 * W + 15]);
+  /* timber: canopy cell (biome=5) > 0; land cell with biome=9 (desert) = 0 */
+  const bioMix = new Uint8Array(n); bioMix.set(biome);
+  for (let y = 0; y < H; y++) bioMix[y * W + 18] = 9;  // desert column
+  const rp2 = buildResourcePotentials(lith, bt, shear, flow, bioMix, fld, rain, age, W, H, sea);
+  check('timber: closed-canopy biome > 0', rp2.timber[10 * W + 6] > 0);
+  check('timber: desert biome = 0', rp2.timber[10 * W + 18] === 0);
+  /* salt: arid lowland column (x=12 limestone) > wet interior */
+  check('salt: arid limestone lowland > wet interior', rp.salt[10 * W + 12] > rp.salt[10 * W + 6]);
+  /* gold: transform fault cell > non-fault cell */
+  check('gold: transform fault > non-fault', rp.gold[10 * W + 20] > rp.gold[10 * W + 6]);
+  /* determinism */
+  const rp3 = buildResourcePotentials(lith, bt, shear, flow, biome, fld, rain, age, W, H, sea);
+  check('resource potentials deterministic', keys.every(k => rp[k].every((v, i) => v === rp3[k][i])));
+
+  /* buildCarryingCapacity */
+  const noFld = new Float32Array(n).fill(0.30);   // ocean cells
+  const carryLand = buildCarryingCapacity(soil, water, biome, temp, fld, W, H, sea);
+  const carrySea  = buildCarryingCapacity(soil, water, biome, temp, noFld, W, H, sea);
+  check('carryingCapacity finite & in [0,1]', allFinite(carryLand) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(carryLand)));
+  check('carryingCapacity: ocean (fld<sea) = 0', carrySea.every(v => v === 0));
+  /* higher soil → higher carry cap (same water/temp row) */
+  const soilHi = new Float32Array(n).fill(0.9), soilLo = new Float32Array(n).fill(0.1);
+  const cHi = buildCarryingCapacity(soilHi, water, biome, temp, fld, W, H, sea);
+  const cLo = buildCarryingCapacity(soilLo, water, biome, temp, fld, W, H, sea);
+  check('carryingCapacity rises with soil fertility', cHi[10 * W + 6] > cLo[10 * W + 6]);
+  const carry2 = buildCarryingCapacity(soil, water, biome, temp, fld, W, H, sea);
+  check('carryingCapacity deterministic', carryLand.every((v, i) => v === carry2[i]));
+
+  /* buildSettlementSuitability */
+  const slopeFlat = new Float32Array(n).fill(0.5), slopeCliff = new Float32Array(n).fill(6.0);
+  const carry = buildCarryingCapacity(soil, water, null, temp, fld, W, H, sea);
+  const suit = buildSettlementSuitability(soil, water, carry, fld, slopeFlat, W, H, sea);
+  const suitSea = buildSettlementSuitability(soil, water, carry, noFld, slopeFlat, W, H, sea);
+  check('settleSuitability finite & in [0,1]', allFinite(suit) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(suit)));
+  check('settleSuitability: ocean = 0', suitSea.every(v => v === 0));
+  /* logistic: max < 1 (never saturates), min ≥ 0 on land */
+  const [sMin, sMax] = minMax(suit);
+  check('settleSuitability logistic shape (0 ≤ min, max < 1)', sMin >= 0 && sMax < 1.0);
+  /* flat > cliff for same inputs */
+  const suitCliff = buildSettlementSuitability(soil, water, carry, fld, slopeCliff, W, H, sea);
+  check('settleSuitability: flat terrain > cliff terrain', suit[10 * W + 6] > suitCliff[10 * W + 6]);
+  const suit2 = buildSettlementSuitability(soil, water, carry, fld, slopeFlat, W, H, sea);
+  check('settleSuitability deterministic', suit.every((v, i) => v === suit2[i]));
+
+  /* findSettlementSeeds */
+  /* create a synthetic suitability field with two clear peaks */
+  const synthSuit = new Float32Array(W * H);
+  synthSuit[8 * W + 6] = 0.85;  synthSuit[8 * W + 5] = 0.70;  synthSuit[8 * W + 7] = 0.70;  // peak A
+  synthSuit[8 * W + 18] = 0.80; synthSuit[8 * W + 17] = 0.65; synthSuit[8 * W + 19] = 0.65; // peak B
+  const seeds = findSettlementSeeds(synthSuit, W, H, {thresh: 0.75, suppR: 4});
+  check('findSettlementSeeds returns array with {x,y,score}', Array.isArray(seeds) && seeds.length > 0 && 'x' in seeds[0] && 'score' in seeds[0]);
+  check('findSettlementSeeds: all scores ≥ threshold', seeds.every(s => s.score >= 0.75));
+  check('findSettlementSeeds: sorted by score desc', seeds.every((s, i) => i === 0 || s.score <= seeds[i - 1].score));
+  check('findSettlementSeeds: suppression radius respected', (() => {
+    for (let i = 0; i < seeds.length; i++) for (let j = i + 1; j < seeds.length; j++){
+      const dx = seeds[i].x - seeds[j].x, dy = seeds[i].y - seeds[j].y;
+      if (dx * dx + dy * dy < 16) return false;  // suppR=4, suppR²=16
+    }
+    return true;
+  })());
+
+  /* live builders on the generated world */
+  check('currentResourcePotentials has correct keys', (() => { const rp = currentResourcePotentials(); return RESOURCE_KEYS.every(k => k in rp && allFinite(rp[k])); })());
+  check('currentCarryingCapacity finite & in [0,1]', (() => { const a = currentCarryingCapacity(); return allFinite(a) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(a)); })());
+  check('currentSettlementSuitability finite & in [0,1]', (() => { const a = currentSettlementSuitability(); return allFinite(a) && (([mn,mx])=>mn>=0&&mx<=1)(minMax(a)); })());
+
+  /* default-neutrality: rsrc/carry/settle debug views off ⇒ render bit-identical to base */
+  {
+    state.mode = 'biome'; state.debug = 'off'; renderNow();
+    const base = Uint8ClampedArray.from(img.data);
+    for (const d of ['rsrc','carry','settle']){
+      state.debug = d; renderNow();
+      state.debug = 'off'; renderNow();
+      let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
+      check('debug view ' + d + ' off ⇒ render bit-identical', same);
+    }
+  }
+}
+
+/* ---------- v0.106 tectonic inversion (Phase B): reconstruct proxy plates + tectonic fields
+   from an imported heightmap's morphology, re-enabling the affordance stack for DEMs ---------- */
+{
+  const W = 40, H = 30, n = W * H;
+
+  // buildReliefField: flat field with one elevated ridge column → high relief there, low elsewhere
+  const f1 = new Float32Array(n).fill(0.5);
+  for (let y = 0; y < H; y++) f1[y * W + (W >> 1)] = 0.95;
+  const rel1 = buildReliefField(f1, W, H, {});
+  check('buildReliefField finite & in [0,1]', allFinite(rel1) && (([mn, mx]) => mn >= 0 && mx <= 1 + 1e-6)(minMax(rel1)));
+  check('buildReliefField high on ridge vs flat corner', rel1[(H >> 1) * W + (W >> 1)] > rel1[0] + 0.1);
+  check('buildReliefField deterministic', (() => { const r = buildReliefField(f1, W, H, {}); for (let i = 0; i < n; i++) if (r[i] !== rel1[i]) return false; return true; })());
+
+  // pickPlateSeeds: seeds land in low-relief interiors (avoid the high band)
+  const seeds = pickPlateSeeds(rel1, W, H, { count: 12 });
+  check('pickPlateSeeds returns ≥2 seeds', seeds.length >= 2);
+  check('pickPlateSeeds prefer low-relief cells', (() => { let mean = 0; for (let i = 0; i < n; i++) mean += rel1[i]; mean /= n; let s = 0; for (const sd of seeds) s += rel1[sd.y * W + sd.x]; return s / seeds.length < mean; })());
+  check('pickPlateSeeds deterministic', (() => { const s2 = pickPlateSeeds(rel1, W, H, { count: 12 }); return s2.length === seeds.length && s2.every((p, i) => p.x === seeds[i].x && p.y === seeds[i].y); })());
+
+  // classifyPlateCrust: low-elevation plate → oceanic (base<0), high → continental (base>0)
+  {
+    const pid = new Int16Array(n), fC = new Float32Array(n);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; if (x < W / 2) { pid[i] = 0; fC[i] = 0.2; } else { pid[i] = 1; fC[i] = 0.7; } }
+    const base = classifyPlateCrust(fC, pid, 2, W, H, 0.42);
+    check('classifyPlateCrust: low plate oceanic (base<0)', base[0] < 0);
+    check('classifyPlateCrust: high plate continental (base>0)', base[1] > 0);
+  }
+
+  // reconstructBoundaryStress: an elevated belt on the plate boundary ⇒ convergent (stress>0)
+  {
+    const f = new Float32Array(n).fill(0.5), pid = new Int16Array(n), mid = W >> 1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; pid[i] = x < mid ? 0 : 1; if (Math.abs(x - mid) <= 1) f[i] = 0.95; }
+    const rel = buildReliefField(f, W, H, {});
+    const r = reconstructBoundaryStress(f, pid, [0.8, 0.8], rel, W, H, 0.42, {});
+    check('reconstructBoundaryStress: boundaryMask only at plate edge', (() => { for (let y = 2; y < H - 2; y++) for (let x = 0; x < W; x++) { if (r.boundaryMask[y * W + x] === 1 && Math.abs(x - mid) > 1) return false; } return true; })());
+    check('reconstructBoundaryStress: elevated belt ⇒ convergent (stress>0)', r.stressField[(H >> 1) * W + mid] > 0.05);
+    check('reconstructBoundaryStress: boundaryType ∈ valid BTYPE set', (() => { for (let i = 0; i < n; i++) if (r.boundaryType[i] > 5) return false; return true; })());
+    check('reconstructBoundaryStress: stress & shear finite', allFinite(r.stressField) && allFinite(r.shearField));
+    check('reconstructBoundaryStress deterministic', (() => { const r2 = reconstructBoundaryStress(f, pid, [0.8, 0.8], rel, W, H, 0.42, {}); for (let i = 0; i < n; i++) if (r2.stressField[i] !== r.stressField[i]) return false; return true; })());
+  }
+
+  // reconstructBoundaryStress: a depressed trough on the boundary ⇒ divergent (stress<0)
+  {
+    const f = new Float32Array(n).fill(0.5), pid = new Int16Array(n), mid = W >> 1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; pid[i] = x < mid ? 0 : 1; if (Math.abs(x - mid) <= 1) f[i] = 0.15; }
+    const rel = buildReliefField(f, W, H, {});
+    const r = reconstructBoundaryStress(f, pid, [0.8, 0.8], rel, W, H, 0.42, {});
+    check('reconstructBoundaryStress: depressed trough ⇒ divergent (stress<0)', r.stressField[(H >> 1) * W + mid] < -0.05);
+  }
+
+  // stampVolcanicArcs: decay from subduction/arc cells; empty input ⇒ all zero
+  {
+    const bt = new Uint8Array(n); bt[(H >> 1) * W + (W >> 1)] = BTYPE.subductionOC;
+    const v = stampVolcanicArcs(bt, W, H, {});
+    check('stampVolcanicArcs: nonzero at arc, ~0 far, finite', v[(H >> 1) * W + (W >> 1)] > 0.5 && v[0] < 0.1 && allFinite(v));
+    check('stampVolcanicArcs: empty input ⇒ all zero', stampVolcanicArcs(new Uint8Array(n), W, H, {}).every(x => x === 0));
+  }
+
+  // payoff: run inferTectonics on the live generated world's field (leaves `field` untouched) →
+  // re-populates plates/boundaries/stress/age and re-enables the affordance stack
+  {
+    inferTectonics();
+    check('inferTectonics: plateId multi-valued', new Set(plateId).size >= 3);
+    check('inferTectonics: boundaryMask has boundary cells', boundaryMask.some(v => v === 1));
+    check('inferTectonics: tectonic fields finite', allFinite(stressField) && allFinite(shearField) && allFinite(ageField) && allFinite(resistanceField) && allFinite(volcanicField) && allFinite(baseField));
+    check('inferTectonics: ageField in [0,1]', (([mn, mx]) => mn >= 0 && mx <= 1)(minMax(ageField)));
+    check('inferTectonics: lithology ≥3 rock types after inversion', new Set(currentLithology()).size >= 3);
+    check('inferTectonics: resource potentials finite', (() => { const rp = currentResourcePotentials(); return RESOURCE_KEYS.every(k => allFinite(rp[k])); })());
+    check('inferTectonics: deterministic plateId', (() => { const p1 = Int16Array.from(plateId); inferTectonics(); for (let i = 0; i < plateId.length; i++) if (plateId[i] !== p1[i]) return false; return true; })());
+  }
+}
+
+/* ---------- v0.107 Phase C: multi-channel RGBA channel-atlas export ---------- */
+{
+  const n = 32;
+  // packRGB8 / unpackRGB8 round-trip — unit ≤1/255, index exact, alpha forced 255
+  const u0 = new Float32Array(n), u1 = new Float32Array(n), idx = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { u0[i] = i / (n - 1); u1[i] = 1 - i / (n - 1); idx[i] = i % 14; }
+  const rgba = packRGB8([{ src: u0, kind: 'unit' }, { src: u1, kind: 'unit' }, { src: idx, kind: 'index' }], n);
+  check('packRGB8: alpha forced to 255', (() => { for (let i = 0; i < n; i++) if (rgba[i * 4 + 3] !== 255) return false; return true; })());
+  const dec = unpackRGB8(rgba, n, ['unit', 'unit', 'index']);
+  check('packRGB8/unpackRGB8: unit round-trip ≤ 1/255', (() => { let mx = 0; for (let i = 0; i < n; i++) mx = Math.max(mx, Math.abs(dec.r[i] - u0[i]), Math.abs(dec.g[i] - u1[i])); return mx <= 1 / 255 + 1e-6; })());
+  check('packRGB8/unpackRGB8: index round-trip exact', (() => { for (let i = 0; i < n; i++) if (dec.b[i] !== idx[i]) return false; return true; })());
+  check('packRGB8: null channel ⇒ 0', (() => { const r = packRGB8([null, { src: u1, kind: 'unit' }, null], n); for (let i = 0; i < n; i++) if (r[i * 4] !== 0 || r[i * 4 + 2] !== 0) return false; return true; })());
+  check('_chanEnc clamps out-of-range', _chanEnc(2, 'unit') === 255 && _chanEnc(-1, 'unit') === 0 && _chanEnc(300, 'index') === 255 && _chanEnc(-5, 'index') === 0);
+
+  // channelAtlasGroups + manifest structure (on the live world)
+  const groups = channelAtlasGroups();
+  check('channelAtlasGroups: 5 groups', groups.length === 5);
+  check('channelAtlasGroups: every non-null channel src is length GW*GH', (() => {
+    for (const g of groups) for (const c of g.channels) if (c.src && c.src.length !== GW * GH) return false; return true;
+  })());
+  check('channelAtlasGroups: resource channels cover all 6 RESOURCE_KEYS', (() => {
+    const keys = new Set(); for (const g of groups) for (const c of g.channels) keys.add(c.key);
+    return RESOURCE_KEYS.every(k => keys.has(k));
+  })());
+  const man = channelAtlasManifest(groups);
+  check('channelAtlasManifest: kind + encoding + dims', man.kind === 'cartalith-channel-atlas' && man.encoding === 'rgb8' && man.width === GW && man.height === GH);
+  check('channelAtlasManifest: one entry per group with channel map', man.files.length === groups.length && man.files.every(f => f.channels && (f.channels.r || f.channels.g || f.channels.b)));
+  check('channelAtlasManifest: unit channels report [0,1] range, index report categorical', (() => {
+    for (const f of man.files) for (const ch of ['r', 'g', 'b']) { const c = f.channels[ch]; if (!c) continue; if (c.kind === 'unit' && !(Array.isArray(c.range) && c.range[0] === 0 && c.range[1] === 1)) return false; if (c.kind === 'index' && c.range !== 'categorical') return false; } return true;
+  })());
+  check('channelAtlasGroups deterministic (manifest JSON stable)', JSON.stringify(channelAtlasManifest(channelAtlasGroups())) === JSON.stringify(man));
+}
+
+/* ---------- v0.108 Phase D: "The Painter" NPR (contour veins / ink / hachure / watercolor) ----------
+   All four live inside landColorCore, gated on per-style state.viz sliders; off ⇒ bit-identical.
+   landColorCore signature: (T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py,ao,ecoK,gx,gy) */
+if (typeof landColorCore === 'function') {
+  const callLC = (over, px, py, gx, gy) => {
+    // a representative land pixel: temperate, mid-moisture, moderate slope, mid elevation
+    return landColorCore(15, 0.5, 0.05, 0.5, 0.5, 0.5, 0.5, 0.7, 0.7, 5, 0, 0.01, state.bioBlend, 1,
+      px === undefined ? 100 : px, py === undefined ? 100 : py, 1, 1, gx || 0, gy || 0);
+  };
+  const savedViz = JSON.parse(JSON.stringify(state.viz));
+  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0, cel: 0, crosshatch: 0, stipple: 0, blueprint: 0, sepia: 0, risograph: 0, pointillism: 0 };
+  Object.assign(state.viz, off);
+  const base = callLC();
+  check('NPR: all-off baseline finite RGB', base.every(Number.isFinite));
+
+  // each style off ⇒ identical to baseline; on ⇒ changes the pixel; output stays finite & in [0,255]
+  const sameAsBase = c => c.every((v, i) => v === base[i]);
+  const finiteRGB = c => c.length === 3 && c.every(v => Number.isFinite(v) && v >= 0 && v <= 255 + 1e-6);
+
+  // contours: pick an elevation right on a contour level (r multiple of 0.05) so the line fires
+  { Object.assign(state.viz, off); state.viz.contours = 0;
+    const onLine = landColorCore(15, 0.5, 0.02, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    state.viz.contours = 0.8;
+    const lit = landColorCore(15, 0.5, 0.02, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    check('NPR contours: darkens a pixel on a contour level', lit[0] < onLine[0] && finiteRGB(lit));
+    Object.assign(state.viz, off);
+    check('NPR contours: off ⇒ bit-identical', sameAsBase(callLC()));
+  }
+  // ink: high curvature edge ⇒ darkens
+  { Object.assign(state.viz, off);
+    const eBase = landColorCore(15, 0.5, 0.05, 0.5, .5, .5, .5, .7, .7, 5, 0, 0.02, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    state.viz.ink = 0.9;
+    const eLit = landColorCore(15, 0.5, 0.05, 0.5, .5, .5, .5, .7, .7, 5, 0, 0.02, state.bioBlend, 1, 100, 100, 1, 1, 0, 0);
+    check('NPR ink: darkens a high-curvature edge', eLit[0] < eBase[0] && finiteRGB(eLit));
+    Object.assign(state.viz, off);
+    check('NPR ink: off ⇒ bit-identical', sameAsBase(callLC()));
+  }
+  // hachure: needs gradient; with gx,gy=0 it's a no-op even when on
+  { Object.assign(state.viz, off); state.viz.hachure = 0.9;
+    check('NPR hachure: no-op without gradient (gx=gy=0)', sameAsBase(callLC(undefined, 100, 100, 0, 0)));
+    // with a gradient + steep slope, some sample along the stripe must darken
+    let changed = false;
+    for (let p = 0; p < 40 && !changed; p++) { const c = landColorCore(15, 0.5, 0.12, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, p * 3, p * 2, 1, 1, 1, 0.3); const b = landColorCore(15, 0.5, 0.12, 0.5, .5, .5, .5, .7, .7, 5, 0, .01, state.bioBlend, 1, p * 3, p * 2, 1, 1, 0, 0); if (c[0] < b[0]) changed = true; }
+    check('NPR hachure: hatches steep slopes along the gradient', changed);
+    Object.assign(state.viz, off);
+    check('NPR hachure: off ⇒ bit-identical', sameAsBase(callLC(undefined, 100, 100, 1, 0.3)));
+  }
+  // watercolor: pigment wash modulates the pixel; finite
+  { Object.assign(state.viz, off); state.viz.watercolor = 0.9;
+    const wLit = callLC(undefined, 37, 91, 0, 0);
+    const wBase = (Object.assign(state.viz, off), callLC(undefined, 37, 91, 0, 0));
+    state.viz.watercolor = 0.9;
+    check('NPR watercolor: modulates the pixel & stays finite', finiteRGB(callLC(undefined, 37, 91, 0, 0)));
+    Object.assign(state.viz, off);
+    check('NPR watercolor: off ⇒ bit-identical', sameAsBase(callLC()));
+  }
+  // v0.129 new styles: cel/toon (posterize) + crosshatch (engraving) visibly modify; stipple stays finite; each off ⇒ bit-identical
+  const lcDark = (px, py) => landColorCore(15, 0.5, 0.05, 0.5, .5, .5, .5, .25, .25, 5, 0, .01, state.bioBlend, 1, px, py, 1, 1, 0, 0);
+  { Object.assign(state.viz, off); const d0 = lcDark(100, 100);
+    state.viz.cel = 0.9; const celOn = lcDark(100, 100);
+    check('NPR cel/toon: posterizes the pixel & finite', celOn.some((v, i) => v !== d0[i]) && finiteRGB(celOn));
+    Object.assign(state.viz, off); check('NPR cel: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); let changed = false;
+    for (let p = 96; p < 116 && !changed; p++){ const b = lcDark(p, 100); state.viz.crosshatch = 0.9; const on = lcDark(p, 100); state.viz.crosshatch = 0; if (on.some((v, i) => v !== b[i])) changed = true; }
+    check('NPR engraving (crosshatch): hatches dark cells', changed);
+    Object.assign(state.viz, off); check('NPR crosshatch: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); state.viz.stipple = 0.9;
+    check('NPR stipple: stays finite when on', [98, 100, 102, 104].every(p => finiteRGB(lcDark(p, 100))));
+    Object.assign(state.viz, off); check('NPR stipple: off ⇒ bit-identical', sameAsBase(callLC())); }
+  // v0.131 new styles: blueprint, sepia, risograph, pointillism
+  { Object.assign(state.viz, off); const b0 = callLC(undefined, 60, 80, 0, 0);
+    state.viz.blueprint = 0.9; const bOn = callLC(undefined, 60, 80, 0, 0);
+    check('NPR blueprint: shifts colour toward navy-blue (blue channel rises or colour changes)', bOn.some((v, i) => v !== b0[i]) && finiteRGB(bOn));
+    check('NPR blueprint: blue channel ≥ its proportion in base (duotone leans blue)', bOn[2] >= b0[2] * 0.7);
+    Object.assign(state.viz, off); check('NPR blueprint: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); const s0 = callLC(undefined, 70, 90, 0, 0);
+    state.viz.sepia = 0.9; const sOn = callLC(undefined, 70, 90, 0, 0);
+    check('NPR sepia: shifts colour toward warm brown & stays finite', sOn.some((v, i) => v !== s0[i]) && finiteRGB(sOn));
+    check('NPR sepia: blue channel reduced vs red (warm toning: R≥B)', sOn[0] >= sOn[2] - 1e-6);
+    Object.assign(state.viz, off); check('NPR sepia: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); const r0 = callLC(undefined, 80, 70, 0, 0);
+    state.viz.risograph = 0.9; const rOn = callLC(undefined, 80, 70, 0, 0);
+    check('NPR risograph: shifts colour to duotone & stays finite', rOn.some((v, i) => v !== r0[i]) && finiteRGB(rOn));
+    Object.assign(state.viz, off); check('NPR risograph: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); state.viz.pointillism = 0.9;
+    check('NPR pointillism: spatially varies (different px gives different result)', (() => {
+      const a = callLC(undefined, 50, 50); const b = callLC(undefined, 55, 53);
+      return a.some((v, i) => v !== b[i]); })());
+    check('NPR pointillism: stays finite', finiteRGB(callLC(undefined, 77, 83)));
+    Object.assign(state.viz, off); check('NPR pointillism: off ⇒ bit-identical', sameAsBase(callLC())); }
+  // water/below-sea (r<=0) is never touched by any NPR style
+  { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1, blueprint: 1, sepia: 1, risograph: 1, pointillism: 1 });
+    const wOff = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
+    state.viz.contours = state.viz.ink = state.viz.hachure = state.viz.watercolor = state.viz.blueprint = state.viz.sepia = state.viz.risograph = state.viz.pointillism = 0;
+    const wOn = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
+    check('NPR: r<=0 (at/below sea) untouched by all styles', wOff.every((v, i) => v === wOn[i]));
+  }
+  Object.assign(state.viz, savedViz);   // restore so later tests/cmp stay on the default path
+}
+
+/* ---------- v0.109 Phase A LOD follow-up: affordance debug tiles + multi-sun in tiles ---------- */
+if (typeof renderAffordanceTileRGBA === 'function') {
+  // multiSunFromNormal: in [0,1], sun-facing brighter than away-facing, flat ground above ambient floor
+  check('multiSunFromNormal in [0,1]', (() => { const a = multiSunFromNormal(0, 0, 1); return a >= 0 && a <= 1; })());
+  check('multiSunFromNormal flat ground ≥ ambient floor', multiSunFromNormal(0, 0, 1) >= 0.10);
+  // refactor wiring: multiSunShade == multiSunFromNormal(normal computed the same way)
+  check('multiSunShade matches multiSunFromNormal', (() => {
+    for (const [x, y] of [[40, 30], [120, 80], [200, 120]]) {
+      const L = field[y * GW + (x - 1)], R = field[y * GW + (x + 1)], U = field[(y - 1) * GW + x], D = field[(y + 1) * GW + x];
+      const ex = state.exag; let nx = -(R - L) * ex, ny = -(D - U) * ex, nz = 1; const il = 1 / Math.hypot(nx, ny, nz); nx *= il; ny *= il; nz *= il;
+      if (Math.abs(multiSunShade(x, y) - multiSunFromNormal(nx, ny, nz)) > 1e-9) return false;
+    } return true;
+  })());
+
+  // multi-sun in biome tiles: on vs off differs, output finite + opaque
+  {
+    const W = 8, H = 8, bounds = { x: 20, y: 20, w: 8, h: 8 }, tile = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) tile[i] = 0.55 + 0.1 * Math.sin(i);   // some relief so the normal varies
+    const sm = state.mode, sv = !!state.viz.multiSun; state.mode = 'biome';
+    state.viz.multiSun = false; const a = renderBiomeTileRGBA(tile, W, H, bounds);
+    state.viz.multiSun = true; const b = renderBiomeTileRGBA(tile, W, H, bounds);
+    check('renderBiomeTileRGBA tiles finite + opaque', (() => { for (let i = 0; i < a.length; i++){ if (!Number.isFinite(a[i])) return false; if (i % 4 === 3 && a[i] !== 255) return false; } return true; })());
+    check('multi-sun changes the tile hillshade', (() => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return true; return false; })());
+    state.mode = sm; state.viz.multiSun = sv;
+  }
+
+  // affordance tiles: lith/soil/water colormaps mirror the main-map debug path
+  {
+    const W = 8, H = 8, bounds = { x: 20, y: 20, w: 8, h: 8 }, tile = new Float32Array(W * H).fill(0.6);
+    tile[0] = state.seaLevel - 0.2;   // one water cell
+    for (const which of ['lith', 'soil', 'water']) {
+      const out = renderAffordanceTileRGBA(tile, W, H, bounds, which);
+      check('renderAffordanceTileRGBA ' + which + ': finite + opaque', (() => { for (let i = 0; i < out.length; i++){ if (!Number.isFinite(out[i])) return false; if (i % 4 === 3 && out[i] !== 255) return false; } return true; })());
+    }
+    const wl = renderAffordanceTileRGBA(tile, W, H, bounds, 'lith');
+    check('affordance lith: water cell gets debug water colour', wl[0] === 20 && wl[1] === 26 && wl[2] === 40);
+    const ws = renderAffordanceTileRGBA(tile, W, H, bounds, 'soil');
+    check('affordance soil: water cell gets debug water colour', ws[0] === 18 && ws[1] === 34 && ws[2] === 64);
+    const ww = renderAffordanceTileRGBA(tile, W, H, bounds, 'water');
+    check('affordance water: water cell gets debug water colour', ww[0] === 30 && ww[1] === 90 && ww[2] === 150);
+    // a land lith cell equals LITH_COLS[ sampled coarse index ] (nearest)
+    check('affordance lith: land cell matches LITH_COLS at sampled coarse cell', (() => {
+      const lith = currentLithology(), cx = bounds.w / (W - 1), cy = bounds.h / (H - 1);
+      const x = 4, y = 4, ix = Math.min(GW - 1, Math.max(0, Math.round(bounds.x + x * cx))), iy = Math.min(GH - 1, Math.max(0, Math.round(bounds.y + y * cy)));
+      const c = LITH_COLS[lith[iy * GW + ix]], p = (y * W + x) * 4;
+      return wl[p] === c[0] && wl[p + 1] === c[1] && wl[p + 2] === c[2];
+    })());
+    check('affordance tiles deterministic', (() => { const a = renderAffordanceTileRGBA(tile, W, H, bounds, 'soil'); for (let i = 0; i < a.length; i++) if (a[i] !== ws[i]) return false; return true; })());
+  }
+}
+
+/* ---------- v0.110: debug-layer opacity + clickable settlement seed "why" ---------- */
+if (typeof settlementSeedInfo === 'function') {
+  // settlementSeedInfo: structured breakdown at a settlement seed
+  const seeds = findSettlementSeeds(currentSettlementSuitability(), GW, GH);
+  check('findSettlementSeeds returns advisory seeds', Array.isArray(seeds) && seeds.length > 0);
+  const info = settlementSeedInfo(seeds[0].x, seeds[0].y);
+  check('settlementSeedInfo: core fields present & finite', info && Number.isFinite(info.score) && Number.isFinite(info.soil) && Number.isFinite(info.waterAccess) && Number.isFinite(info.carryingCapacity));
+  check('settlementSeedInfo: score in [0,1]', info.score >= 0 && info.score <= 1);
+  check('settlementSeedInfo: resources is a sorted array of {key,name,value≥0.35}', (() => {
+    if (!Array.isArray(info.resources)) return false;
+    for (let i = 0; i < info.resources.length; i++) { const o = info.resources[i]; if (!o.key || typeof o.value !== 'number' || o.value < 0.35) return false; if (i > 0 && info.resources[i - 1].value < o.value) return false; }
+    return true;
+  })());
+  check('settlementSeedInfo: resource keys are valid', info.resources.every(o => RESOURCE_KEYS.indexOf(o.key) >= 0));
+  check('settlementSeedInfo: biome + lithology labelled, summary non-empty', typeof info.biome === 'string' && typeof info.lithology === 'string' && typeof info.summary === 'string' && info.summary.length > 0);
+  check('settlementSeedInfo: deterministic', JSON.stringify(settlementSeedInfo(seeds[0].x, seeds[0].y)) === JSON.stringify(info));
+
+  // debugBaseColor: returns a finite RGB triple for the base map under an overlay
+  if (typeof debugBaseColor === 'function') {
+    const sm = state.mode; state.mode = 'biome';
+    const c = debugBaseColor(40, 30, 30 * GW + 40, field[30 * GW + 40]);
+    check('debugBaseColor: finite RGB triple', Array.isArray(c) && c.length === 3 && c.every(Number.isFinite));
+    state.mode = sm;
+  }
+
+  // settlement_seeds export payload shape (what exportZip emits)
+  {
+    const payloadSeeds = seeds.map(s => settlementSeedInfo(s.x, s.y));
+    check('settlement_seeds export: every seed carries x/y/score/resources/summary', payloadSeeds.every(o => Number.isFinite(o.x) && Number.isFinite(o.y) && Number.isFinite(o.score) && Array.isArray(o.resources) && typeof o.summary === 'string'));
+  }
+}
+
+/* ---------- v0.111 Pillar 1: Strahler stream order + Rosgen river network ---------- */
+if (typeof strahlerFromReceivers === 'function') {
+  // Y-confluence: two order-1 headwaters join → order 2; the single downstream link stays order 2
+  {
+    const chan = new Uint8Array([1, 1, 1, 1]);          // 0,1 = heads; 2 = confluence; 3 = mouth
+    const recv = new Int32Array([2, 2, 3, -1]);
+    const flow = new Float32Array([1, 1, 2, 3]);
+    const o = strahlerFromReceivers(recv, flow, chan, 4);
+    check('Strahler: two order-1 streams join → order 2', o[0] === 1 && o[1] === 1 && o[2] === 2 && o[3] === 2);
+  }
+  // three equal-order sources into one node → +1 (max shared by ≥2)
+  {
+    const o = strahlerFromReceivers(new Int32Array([3, 3, 3, -1]), new Float32Array([1, 1, 1, 3]), new Uint8Array([1, 1, 1, 1]), 4);
+    check('Strahler: ≥2 equal-max donors increments order', o[3] === 2);
+  }
+  // unequal join: order-2 trunk + an order-1 tributary → stays order 2
+  {
+    // 0,1 → 2 (becomes order2); 2 → 4; 3 (order-1 head) → 4
+    const o = strahlerFromReceivers(new Int32Array([2, 2, 4, 4, -1]), new Float32Array([1, 1, 2, 1, 4]), new Uint8Array([1, 1, 1, 1, 1]), 5);
+    check('Strahler: order-2 + order-1 tributary stays order 2', o[2] === 2 && o[4] === 2);
+  }
+
+  // buildRiverNetwork on a south-sloping field with a painted channel
+  {
+    const W = 24, H = 24, fld = new Float32Array(W * H), flow = new Float32Array(W * H), thr = W * H * 0.0004;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.9 - y * 0.015;   // descends south, all > sea 0.42
+    for (let y = 2; y < 22; y++) { flow[y * W + 12] = thr * (5 + y * 25); }                      // a channel gaining discharge downstream
+    const net = buildRiverNetwork(fld, flow, W, H, 0.42, {});
+    check('buildRiverNetwork: order/intensity/depth present & finite', net.order && allFinite(net.intensity) && allFinite(net.depth));
+    check('buildRiverNetwork: intensity & depth in [0,1]', (([a, b]) => a >= 0 && b <= 1)(minMax(net.intensity)) && (([a, b]) => a >= 0 && b <= 1)(minMax(net.depth)));
+    check('buildRiverNetwork: channel cells get order ≥ 1, others 0', net.order[10 * W + 12] >= 1 && net.order[0] === 0);
+    // ocean ⇒ no network
+    const fldSea = new Float32Array(W * H).fill(0.1);
+    const netSea = buildRiverNetwork(fldSea, flow, W, H, 0.42, {});
+    check('buildRiverNetwork: ocean cells carry no river', netSea.intensity.every(v => v === 0) && netSea.order.every(o => o === 0));
+    // determinism
+    const net2 = buildRiverNetwork(fld, flow, W, H, 0.42, {});
+    check('buildRiverNetwork deterministic', net.order.every((o, i) => o === net2.order[i]) && net.intensity.every((v, i) => v === net2.intensity[i]));
+  }
+
+  // Rosgen: at equal discharge & order, a steeper channel is narrower than a gentle one
+  {
+    const W = 16, H = 24, thr = W * H * 0.0004;
+    const mk = (dropPerRow) => { const fld = new Float32Array(W * H), flow = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fld[y * W + x] = 0.95 - y * dropPerRow;
+      for (let y = 2; y < 20; y++) flow[y * W + 8] = thr * 60;                                   // same discharge both cases
+      return buildRiverNetwork(fld, flow, W, H, 0.42, {}); };
+    const gentle = mk(0.004), steep = mk(0.02);
+    const widthAt = (net, row) => { let w = 0; for (let x = 0; x < W; x++) if (net.intensity[row * W + x] > 0.01) w++; return w; };
+    check('Rosgen: steeper channel narrower than gentle at equal discharge (' + widthAt(steep, 10) + ' ≤ ' + widthAt(gentle, 10) + ')', widthAt(steep, 10) <= widthAt(gentle, 10));
+  }
+}
+
+/* ---------- v0.112 Pillar 2: velocity-field hydraulic erosion ---------- */
+if (typeof velocityErodeKernel === 'function') {
+  // centrifugalShear: straight flow ⇒ ~0; sharper turn ⇒ larger; opposite turns ⇒ opposite outer direction
+  {
+    const straight = centrifugalShear(1, 0, 1, 0);
+    check('centrifugalShear: straight flow ⇒ ~0 turn', straight.mag < 1e-6);
+    const left = centrifugalShear(1, 0, 1, 0.6), right = centrifugalShear(1, 0, 1, -0.6);
+    check('centrifugalShear: a turn produces a nonzero outward vector', left.mag > 0 && (left.ox !== 0 || left.oy !== 0));
+    check('centrifugalShear: opposite turns ⇒ opposite outer banks', Math.sign(left.oy) === -Math.sign(right.oy) && left.oy !== 0);
+    const gentle = centrifugalShear(1, 0, 1, 0.2), sharp = centrifugalShear(1, 0, 1, 0.9);
+    check('centrifugalShear: sharper turn ⇒ larger magnitude', sharp.mag > gentle.mag);
+  }
+
+  // kernel on a tilted plane with a central trough: stays finite, carries velocity, incises, pools, deterministic
+  {
+    const W = 32, H = 40, n = W * H, sea = 0.30;
+    const mk = () => { const f = new Float32Array(n);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+        let h = 0.85 - y * 0.012;                                 // gentle slope to the south (all above sea)
+        h -= 0.06 * Math.exp(-((x - W / 2) * (x - W / 2)) / 18);  // a shallow central valley → concentrates flow
+        f[y * W + x] = h;
+      }
+      // a closed pit (below its surroundings, above sea) to test pooling
+      for (let y = 30; y < 34; y++) for (let x = 6; x < 10; x++) f[y * W + x] = 0.42;
+      return f; };
+    const rain = new Float32Array(n).fill(0.5);
+    const P = { iters: 50, dt: 0.02, gravity: 9.8, rainRate: 0.012, evap: 0.05, capacity: 1.2, erodeK: 0.4, depositK: 0.25, minSlope: 0.001, centrifugalK: 1.2, sea, world: false };
+    const f = mk(), pre = f.slice();
+    const out = velocityErodeKernel(f, rain, W, H, P);
+    check('velocityErode: field stays finite (Invariant 2)', allFinite(f));
+    check('velocityErode: returns finite velocity + water fields', allFinite(out.vx) && allFinite(out.vy) && allFinite(out.water));
+    check('velocityErode: water actually flows (|v| > 0 somewhere)', (() => { for (let i = 0; i < n; i++) if (Math.hypot(out.vx[i], out.vy[i]) > 1e-3) return true; return false; })());
+    // net incision along the valley centre (some valley cells lowered)
+    check('velocityErode: incises the drainage valley', (() => { let lowered = 0; for (let y = 4; y < 28; y++){ const i = y * W + (W / 2 | 0); if (f[i] < pre[i] - 1e-5) lowered++; } return lowered > 4; })());
+    // adaptive pooling: the closed pit holds standing water
+    check('velocityErode: closed basin pools water (adaptive lake)', out.water[32 * W + 8] > 1e-4);
+    // determinism
+    const f2 = mk(); velocityErodeKernel(f2, rain, W, H, P);
+    check('velocityErode deterministic', f.every((h, i) => h === f2[i]));
+    // meander bias is active: centrifugalK>0 diverges from centrifugalK=0
+    const fa = mk(), fb = mk();
+    velocityErodeKernel(fa, rain, W, H, Object.assign({}, P, { centrifugalK: 0 }));
+    velocityErodeKernel(fb, rain, W, H, Object.assign({}, P, { centrifugalK: 2.0 }));
+    check('velocityErode: meander (centrifugal) bias changes the result', (() => { for (let i = 0; i < n; i++) if (Math.abs(fa[i] - fb[i]) > 1e-6) return true; return false; })());
+  }
+}
+
+/* ---------- v0.113 Pillar 3: Beer–Lambert water shading + flow-map ---------- */
+if (typeof waterShade === 'function') {
+  const bed = [120, 100, 80];
+  // shallow (depth 0) ⇒ transmission 1 ⇒ bed revealed exactly
+  check('waterShade: depth 0 reveals the bed exactly', (() => { const c = waterShade(bed, 0, 0.3, 5); return Math.abs(c[0] - bed[0]) < 1e-6 && Math.abs(c[1] - bed[1]) < 1e-6 && Math.abs(c[2] - bed[2]) < 1e-6; })());
+  // deep ⇒ approaches the scatter colour (not the bed), finite, in range
+  { const c = waterShade(bed, 1, 0.3, 5); check('waterShade: deep water absorbs toward the scatter colour', c[0] < bed[0] && c.every(v => v >= 0 && v <= 255) && c.every(Number.isFinite)); }
+  // Beer–Lambert monotonicity: deeper ⇒ less bed transmitted (here bed is brighter than deep blue, so deeper = darker red channel)
+  check('waterShade: monotone in depth (Beer–Lambert)', waterShade(bed, 1.0, 0.3, 5)[0] < waterShade(bed, 0.3, 0.3, 5)[0]);
+  // sediment shifts the deep colour blue → green/brown (more green/red, less blue)
+  { const clear = waterShade(bed, 1, 0.0, 6), turbid = waterShade(bed, 1, 1.0, 6); check('waterShade: sediment shifts hue blue→green/brown', turbid[1] > clear[1] && turbid[2] < clear[2]); }
+}
+if (typeof flowMapPhases === 'function') {
+  const p = flowMapPhases(0.7, 2.4);
+  check('flowMapPhases: weights ≥0 and sum to 1', p.weight0 >= 0 && p.weight1 >= 0 && Math.abs(p.weight0 + p.weight1 - 1) < 1e-9);
+  check('flowMapPhases: phases in [0,1)', p.phase0 >= 0 && p.phase0 < 1 && p.phase1 >= 0 && p.phase1 < 1);
+  check('flowMapPhases: seamless (t and t+period identical)', (() => { const a = flowMapPhases(0.7, 2.4), b = flowMapPhases(0.7 + 2.4, 2.4); return Math.abs(a.phase0 - b.phase0) < 1e-9 && Math.abs(a.weight0 - b.weight0) < 1e-9; })());
+  check('flowMapPhases: triangle crossfade hands off between streams', (() => { const mid = flowMapPhases(1.2, 2.4), edge = flowMapPhases(0, 2.4); return mid.weight0 > 0.9 && edge.weight1 > 0.9; })());
+}
+
+/* ---------- v0.119: center landmasses (X-seam fix) ---------- */
+if (typeof shiftGridX === 'function' && typeof bestEmptyColumn === 'function') {
+  const W = 12, H = 6, sea = 0.42;
+  // a field with a clear all-ocean column and land straddling the x=0/x=W seam
+  const mk = () => { const f = new Float32Array(W * H).fill(0.2);   // ocean everywhere
+    for (let y = 0; y < H; y++){ for (const x of [0, 1, 10, 11]) f[y * W + x] = 0.8; }   // land split across the seam
+    return f; };
+  const f = mk();
+  const off = bestEmptyColumn(f, null, W, H, sea);
+  check('bestEmptyColumn finds an empty meridian (col ' + off + ' has no land)', (() => { for (let y = 0; y < H; y++) if (f[y * W + off] > sea) return false; return true; })());
+  const g0 = mk(); shiftGridX(g0, W, H, 0); check('shiftGridX off=0 is identity', g0.every((v, i) => v === f[i]));
+  const g = mk(); shiftGridX(g, W, H, off); shiftGridX(g, W, H, W - off);
+  check('shiftGridX round-trips (off then W-off)', g.every((v, i) => v === f[i]));
+  const g2 = mk(); shiftGridX(g2, W, H, off);
+  check('shiftGridX preserves each row sum (X-rotation; Y untouched)', (() => {
+    for (let y = 0; y < H; y++){ let s1 = 0, s2 = 0; for (let x = 0; x < W; x++){ s1 += f[y * W + x]; s2 += g2[y * W + x]; } if (Math.abs(s1 - s2) > 1e-6) return false; } return true; })());
+  const g3 = mk(); shiftGridX(g3, W, H, off);
+  check('shiftGridX moves the emptiest meridian to column 0', (() => { for (let y = 0; y < H; y++) if (g3[y * W + 0] !== f[y * W + off]) return false; return true; })());
+  const ai = new Int16Array(W * H); for (let i = 0; i < ai.length; i++) ai[i] = i % W; shiftGridX(ai, W, H, 3);
+  check('shiftGridX works on Int16Array', ai[0] === 3 && ai[W - 1] === (W + 2) % W);
+}
+
+/* ---------- v0.120: fjords — constrained glacial-coastal incision ---------- */
+if (typeof buildFjordMask === 'function' && typeof carveFjords === 'function') {
+  const W = 24, H = 16, sea = 0.42;
+  // ocean (x<6), then a steep granite coastal mountain wall, with a near-sea valley notch cutting through it (a fjord candidate)
+  const mkField = () => { const f = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+      let h = x < 6 ? 0.30 : 0.42 + (x - 6) * 0.20;     // ocean then a very steep rising coast
+      if (y === 8 && x >= 6 && x < 14) h = 0.43;         // a near-sea valley floor between the steep walls
+      f[y * W + x] = Math.min(0.95, h);
+    }
+    return f; };
+  const coastDist = (f) => { const sm = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) sm[i] = f[i] < sea ? 1 : 0; return chamferDist(sm, W, H); };
+  const lithGran = new Uint8Array(W * H).fill(0);   // granite everywhere (competent)
+  const lithSed  = new Uint8Array(W * H).fill(4);   // sandstone everywhere (weak)
+  const cold = new Float32Array(W * H).fill(-3);    // paleo-adjusted lands in the glacial band
+  const warm = new Float32Array(W * H).fill(26);    // tropical
+
+  const f = mkField(), cd = coastDist(f);
+  const maskCold = buildFjordMask(f, cold, lithGran, cd, W, H, sea, {});
+  check('fjord mask: finite & in [0,1]', allFinite(maskCold) && (([a, b]) => a >= 0 && b <= 1)(minMax(maskCold)));
+  check('fjord mask: fires on the cold steep granite coast', maskCold.some(v => v > 0.05));
+  // tropical coast ⇒ no fjords
+  const maskWarm = buildFjordMask(f, warm, lithGran, cd, W, H, sea, {});
+  check('fjord mask: zero on a tropical coast', maskWarm.every(v => v === 0));
+  // weak sedimentary rock ⇒ strongly suppressed vs crystalline
+  const maskSed = buildFjordMask(f, cold, lithSed, cd, W, H, sea, {});
+  const sum = a => a.reduce((s, v) => s + v, 0);
+  check('fjord mask: weak sedimentary rock suppresses vs crystalline', sum(maskSed) < sum(maskCold) * 0.5);
+  // interior (far from coast) stays zero
+  check('fjord mask: interior (far from coast) is zero', (() => { for (let y = 0; y < H; y++){ const i = y * W + (W - 1); if (maskCold[i] !== 0) return false; } return true; })());
+  // carving overdeepens the valley below sea, leaves ridges, only deepens
+  const carved = carveFjords(f, maskCold, W, H, sea, {});
+  check('carveFjords: finite & never raises terrain', allFinite(carved) && carved.every((v, i) => v <= f[i] + 1e-9));
+  check('carveFjords: drowns a masked coastal valley below sea level', (() => { for (let x = 6; x < 12; x++){ const i = 8 * W + x; if (maskCold[i] > 0.05 && carved[i] < sea) return true; } return false; })());
+  // low-mask cells untouched
+  check('carveFjords: leaves low-mask cells untouched', (() => { for (let i = 0; i < W * H; i++) if (maskCold[i] <= 0.02 && carved[i] !== f[i]) return false; return true; })());
+  // determinism
+  const carved2 = carveFjords(f, maskCold, W, H, sea, {});
+  check('carveFjords deterministic', carved.every((v, i) => v === carved2[i]));
+}
+
+/* ---------- v0.126: progressive zoom detail (addZoomDetail) + seam feather ---------- */
+if (typeof addZoomDetail === 'function') {
+  const W = 40, H = 30, cW = 20, cH = 15, coarse = new Float32Array(cW * cH);
+  for (let y = 0; y < cH; y++) for (let x = 0; x < cW; x++) coarse[y * cW + x] = 0.5 + 0.15 * Math.sin(x * 0.6) + 0.1 * Math.cos(y * 0.5);
+  const b = { x: 2, y: 2, w: 4, h: 3 };
+  const mkData = () => { const d = new Float32Array(W * H); for (let oy = 0; oy < H; oy++) for (let ox = 0; ox < W; ox++){ const cx = b.x + ox / (W - 1) * b.w, cy = b.y + oy / (H - 1) * b.h; d[oy * W + ox] = 0.6 + 0.08 * Math.sin(cx) + 0.06 * Math.cos(cy); } return d; };
+  const varOf = a => { let s = 0, s2 = 0; for (const v of a){ s += v; s2 += v * v; } const n = a.length; return s2 / n - (s / n) * (s / n); };
+  const base = mkData();
+  const d2 = mkData(); addZoomDetail(d2, W, H, coarse, cW, cH, b, 2, { seed: 7 });
+  check('addZoomDetail: z≤zBase is a no-op', d2.every((v, i) => v === base[i]));
+  const dev = d => { let s = 0; for (let i = 0; i < d.length; i++) s += Math.abs(d[i] - base[i]); return s; };
+  const d5 = mkData(); addZoomDetail(d5, W, H, coarse, cW, cH, b, 5, { seed: 7 });
+  const d8 = mkData(); addZoomDetail(d8, W, H, coarse, cW, cH, b, 8, { seed: 7 });
+  check('addZoomDetail: deeper zoom adds MORE detail (' + dev(d5).toFixed(2) + ' → ' + dev(d8).toFixed(2) + ')', dev(d8) > dev(d5) && dev(d5) > 0 && d8.every(Number.isFinite));
+  const d8b = mkData(); addZoomDetail(d8b, W, H, coarse, cW, cH, b, 8, { seed: 7 });
+  check('addZoomDetail deterministic', d8.every((v, i) => v === d8b[i]));
+  // seam safety at high z: adjacent same-level pyramid tiles still match exactly (detail in shared coarse coords)
+  const cW2 = 33, cH2 = 17, co2 = new Float32Array(cW2 * cH2);
+  for (let y = 0; y < cH2; y++) for (let x = 0; x < cW2; x++) co2[y * cW2 + x] = 0.5 + 0.3 * Math.sin(x * 0.4) * Math.cos(y * 0.5);
+  const ts = 32, opts = { seed: 7, detailAmp: 0.14 };
+  const ta = pyramidTile(co2, cW2, cH2, 6, 10, 8, ts, opts), tb = pyramidTile(co2, cW2, cH2, 6, 11, 8, ts, opts);
+  let sm = 0; for (let y = 0; y < ta.h; y++) sm = Math.max(sm, Math.abs(ta.data[y * ta.w + (ta.w - 1)] - tb.data[y * tb.w]));
+  check('addZoomDetail: high-z (z=6) adjacent tiles stay seam-Δ=0 (' + sm.toExponential(1) + ')', sm < 1e-6);
+  // v0.133: zoom-detail amount (zoomDetailK) — 1 (or omitted) is bit-identical; >1 adds more relief; seam-Δ stays 0
+  const d8k1 = mkData(); addZoomDetail(d8k1, W, H, coarse, cW, cH, b, 8, { seed: 7, zoomDetailK: 1 });
+  check('addZoomDetail zoomDetailK=1 bit-identical to omitted', d8k1.every((v, i) => v === d8[i]));
+  const d8k2 = mkData(); addZoomDetail(d8k2, W, H, coarse, cW, cH, b, 8, { seed: 7, zoomDetailK: 2 });
+  check('addZoomDetail zoomDetailK>1 adds more on-zoom relief', dev(d8k2) > dev(d8) && d8k2.every(Number.isFinite));
+  const tak = pyramidTile(co2, cW2, cH2, 6, 10, 8, ts, { seed: 7, detailAmp: 0.14, zoomDetailK: 2.5 }), tbk = pyramidTile(co2, cW2, cH2, 6, 11, 8, ts, { seed: 7, detailAmp: 0.14, zoomDetailK: 2.5 });
+  let smk = 0; for (let y = 0; y < tak.h; y++) smk = Math.max(smk, Math.abs(tak.data[y * tak.w + (tak.w - 1)] - tbk.data[y * tbk.w]));
+  check('addZoomDetail: zoomDetailK keeps seam-Δ=0 (' + smk.toExponential(1) + ')', smk < 1e-6);
+}
+/* ---------- v0.134: mip-consistent edit composition (composeEditInto) — the level-locking fix ---------- */
+if (typeof composeEditInto === 'function') {
+  // an edit-delta tile: 8×8 px over coarse world rect eb, base flat 0.5, a +0.4 bump in a 2×2 block
+  const ew = 8, eh = 8, eb = { x: 16, y: 16, w: 8, h: 8 };
+  const ebase = new Float32Array(ew * eh).fill(0.5), edata = Float32Array.from(ebase);
+  for (let y = 3; y <= 4; y++) for (let x = 3; x <= 4; x++) edata[y * ew + x] = 0.9;   // delta +0.4 over 4 px
+  const e = { w: ew, h: eh, eb, base: ebase, data: edata };
+  const deltaSum = 4 * 0.4;   // total delta mass
+
+  // 1) SAME-resolution target (tw=ew, tb=eb): the delta is reproduced exactly (nearest, no blur)
+  { const out = new Float32Array(ew * eh); composeEditInto(out, ew, eh, eb, e);
+    let ok = true, mass = 0; for (let i = 0; i < out.length; i++){ mass += out[i]; if ((edata[i] - ebase[i]) > 1e-9 && out[i] <= 1e-9) ok = false; }
+    check('composeEditInto same-res: delta reproduced where painted', ok && out[3 * ew + 3] > 0.39 && out[3 * ew + 3] < 0.41);
+    check('composeEditInto same-res: untouched cells stay 0', out[0] === 0 && out[ew * eh - 1] === 0); }
+
+  // 2) COARSER target (4×4 over the same eb): the bump survives as a faithful AREA-AVERAGED notch (smaller magnitude, mass-ish preserved, never absent, never an alias spike)
+  { const tw = 4, th = 4, out = new Float32Array(tw * th); composeEditInto(out, tw, th, eb, e);
+    let peak = 0, mass = 0, fin = true; for (let i = 0; i < out.length; i++){ peak = Math.max(peak, out[i]); mass += out[i]; if (!Number.isFinite(out[i])) fin = false; }
+    check('composeEditInto coarse view: notch present but averaged-down (' + peak.toFixed(3) + ' < 0.4)', peak > 0.01 && peak < 0.4 && fin);
+    check('composeEditInto coarse view: contribution non-zero (detail does not vanish on zoom-out)', mass > 0.02); }
+
+  // 3) FINER target (16×16 over the same eb): the delta up-samples (nonzero, finite, peak ≈ painted magnitude)
+  { const tw = 16, th = 16, out = new Float32Array(tw * th); composeEditInto(out, tw, th, eb, e);
+    let peak = 0, fin = true; for (let i = 0; i < out.length; i++){ peak = Math.max(peak, out[i]); if (!Number.isFinite(out[i])) fin = false; }
+    check('composeEditInto fine view: delta resolves at higher res (peak ' + peak.toFixed(3) + ' ≈ 0.4)', peak > 0.35 && peak <= 0.4 + 1e-6 && fin); }
+
+  // 4) non-overlapping target bounds ⇒ no change
+  { const out = new Float32Array(ew * eh).fill(0.3), before = Float32Array.from(out); composeEditInto(out, ew, eh, { x: 100, y: 100, w: 8, h: 8 }, e);
+    check('composeEditInto: non-overlapping bounds leave the target untouched', out.every((v, i) => v === before[i])); }
+
+  // 5) additive onto an existing surface + clamp to [0,1]
+  { const out = new Float32Array(ew * eh).fill(0.8), b0 = out[3 * ew + 3]; composeEditInto(out, ew, eh, eb, e);
+    let inRange = true; for (const v of out) if (v < 0 || v > 1) inRange = false;
+    check('composeEditInto: adds onto base & clamps to [0,1]', inRange && out[3 * ew + 3] > b0); }
+}
+/* ---------- v0.134 Stage 3: feature brushes → detail layer at zoom (applyFeatureToLOD) ---------- */
+if (typeof applyFeatureToLOD === 'function') {
+  const sOn = _lodOn, sZ = _lodZoom, sCx = _lodCx, sCy = _lodCy, sTile = _lodTile;
+  _lodEdits.clear(); lodCacheClear();
+  _lodOn = true; _lodTile = 256; _lodZoom = 4; _lodCx = GW / 2; _lodCy = GH / 2;
+  const v = lodViewRect();
+  const curve = []; for (let t = 0; t <= 10; t++) curve.push({ x: v.x0 + (v.x1 - v.x0) * (0.2 + 0.6 * t / 10), y: (v.y0 + v.y1) / 2 });
+  const touched = applyFeatureToLOD(curve, 'mountainRange', 2, 0.8, 123);
+  check('applyFeatureToLOD: stamps into ≥1 detail tile', touched > 0 && _lodEdits.size > 0);
+  let anyDelta = false, finite = true; for (const e of _lodEdits.values()){ for (let i = 0; i < e.data.length; i++){ if (!Number.isFinite(e.data[i])) finite = false; if (Math.abs(e.data[i] - e.base[i]) > 1e-6) anyDelta = true; } }
+  check('applyFeatureToLOD: produces a nonzero detail delta (stored as base+data)', anyDelta);
+  check('applyFeatureToLOD: detail edits stay finite', finite);
+  check('applyFeatureToLOD: edits carry world bounds eb (mip-consistent via Stage 2)', [..._lodEdits.values()].every(e => e.eb && e.base));
+  _lodEdits.clear(); lodCacheClear();
+  const touched2 = applyFeatureToLOD(curve, 'mountainRange', 2, 0.8, 123);
+  check('applyFeatureToLOD: deterministic (same tile count)', touched2 === touched);
+  _lodEdits.clear(); lodCacheClear(); _lodOn = sOn; _lodZoom = sZ; _lodCx = sCx; _lodCy = sCy; _lodTile = sTile;
+}
+/* ---------- v0.135: multicore generate() noise fills — Invariant 11 (worker-stringify) + row-slice offset ---------- */
+if (typeof fillWarpRows === 'function') {
+  const noiseSrc = [hash, vnoise, fbm, ridged, pvnoise, pfbm, pridged].map(f => f.toString()).join('\n');
+  const shadows = ['GW', 'GH', 'state', 'field', 'warpX', 'warpY', 'ageField', 'baseField', 'stressField', 'flexureField', 'heterogeneityField', 'orogenyField', 'plates', 'plateId'];
+  const rebuild = fn => { try { return new Function(...shadows, noiseSrc + '\nreturn (' + fn.toString() + ');').apply(null, shadows.map(() => undefined)); } catch (e){ return null; } };
+  const rW = rebuild(fillWarpRows), rHet = rebuild(fillHeteroRows), rHt = rebuild(fillHeightRows);
+  check('fill kernels rebuild from source (worker stringification, module globals shadowed)', !!rW && !!rHet && !!rHt);
+  const W = 40, H = 24, n = W * H;
+  if (rW) {
+    const P = { s: 123, wf: 2.5 / W, pX: 3, amp: 5, world: false };
+    const ax = new Float32Array(n), ay = new Float32Array(n), bx = new Float32Array(n), by = new Float32Array(n);
+    fillWarpRows(ax, ay, W, 0, H, 0, P); rW(bx, by, W, 0, H, 0, P);
+    let id = true, fin = true; for (let i = 0; i < n; i++){ if (ax[i] !== bx[i] || ay[i] !== by[i]) id = false; if (!Number.isFinite(ax[i]) || !Number.isFinite(ay[i])) fin = false; }
+    check('fillWarpRows: rebuilt (worker) bit-identical + finite', id && fin);
+    const y0 = 6, y1 = 14, sx = new Float32Array((y1 - y0) * W), sy = new Float32Array((y1 - y0) * W);
+    fillWarpRows(sx, sy, W, y0, y1, y0, P);
+    let sl = true; for (let i = 0; i < (y1 - y0) * W; i++) if (sx[i] !== ax[y0 * W + i] || sy[i] !== ay[y0 * W + i]) sl = false;
+    check('fillWarpRows: row-slice (rb=y0) == full-array rows (worker stitch correctness)', sl);
+  }
+  if (rHet) {
+    const P = { seed: 77, hf: 1.5, world: false };
+    const age = new Float32Array(n), wx = new Float32Array(n), wy = new Float32Array(n);
+    for (let i = 0; i < n; i++){ age[i] = (i % 13) / 13; wx[i] = Math.sin(i * 0.1); wy[i] = Math.cos(i * 0.07); }
+    const a = new Float32Array(n), b = new Float32Array(n);
+    fillHeteroRows(a, age, wx, wy, W, 0, H, 0, P); rHet(b, age, wx, wy, W, 0, H, 0, P);
+    let id = true; for (let i = 0; i < n; i++) if (a[i] !== b[i]) id = false;
+    check('fillHeteroRows: rebuilt (worker) bit-identical', id && a.every(Number.isFinite));
+    const y0 = 4, y1 = 12, sa = new Float32Array((y1 - y0) * W);
+    fillHeteroRows(sa, age.slice(y0 * W, y1 * W), wx.slice(y0 * W, y1 * W), wy.slice(y0 * W, y1 * W), W, y0, y1, y0, P);
+    let sl = true; for (let i = 0; i < (y1 - y0) * W; i++) if (sa[i] !== a[y0 * W + i]) sl = false;
+    check('fillHeteroRows: row-slice (sliced inputs + rb) == full', sl);
+    const c = new Float32Array(n); fillHeteroRows(c, age, null, null, W, 0, H, 0, P);
+    check('fillHeteroRows: null-warp path finite', c.every(Number.isFinite));
+  }
+  if (rHt) {
+    const P = { nf: 5, seed: 321, A: 0.6, B: 0.4, ageInf: 0.3, Fwt: 0.2, Hwt: 0.1, world: false, ridged: false };
+    const bf = new Float32Array(n), st = new Float32Array(n), fl = new Float32Array(n), he = new Float32Array(n), age = new Float32Array(n), wx = new Float32Array(n), wy = new Float32Array(n);
+    for (let i = 0; i < n; i++){ bf[i] = 0.1 * Math.sin(i * 0.05); st[i] = 0.2 * Math.cos(i * 0.03); fl[i] = 0.05; he[i] = 0.02; age[i] = (i % 9) / 9; wx[i] = Math.sin(i * 0.02); wy[i] = Math.cos(i * 0.02); }
+    const a = new Float32Array(n), b = new Float32Array(n);
+    fillHeightRows(a, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P); rHt(b, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P);
+    let id = true; for (let i = 0; i < n; i++) if (a[i] !== b[i]) id = false;
+    check('fillHeightRows: rebuilt (worker) bit-identical + finite', id && a.every(Number.isFinite));
+    const P2 = Object.assign({}, P, { world: true, ridged: true });
+    const c = new Float32Array(n), d = new Float32Array(n);
+    fillHeightRows(c, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P2); rHt(d, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P2);
+    let id2 = true; for (let i = 0; i < n; i++) if (c[i] !== d[i]) id2 = false;
+    check('fillHeightRows: rebuilt bit-identical (world+ridged path)', id2 && c.every(Number.isFinite));
+    const oro = new Float32Array(n); for (let i = 0; i < n; i++) oro[i] = 0.03 * Math.sin(i * 0.04);
+    const full = new Float32Array(n); fillHeightRows(full, bf, st, fl, he, age, wx, wy, oro, W, 0, H, 0, P);
+    const y0 = 8, y1 = 18, sa = new Float32Array((y1 - y0) * W);
+    fillHeightRows(sa, bf.slice(y0 * W, y1 * W), st.slice(y0 * W, y1 * W), fl.slice(y0 * W, y1 * W), he.slice(y0 * W, y1 * W), age.slice(y0 * W, y1 * W), wx.slice(y0 * W, y1 * W), wy.slice(y0 * W, y1 * W), oro.slice(y0 * W, y1 * W), W, y0, y1, y0, P);
+    let sl = true; for (let i = 0; i < (y1 - y0) * W; i++) if (sa[i] !== full[y0 * W + i]) sl = false;
+    check('fillHeightRows: row-slice (sliced inputs + oro + rb) == full', sl);
+  }
+  check('GENPOOL present & inert headless (no Worker ⇒ usableFor=false ⇒ sync generate)', typeof GENPOOL === 'object' && GENPOOL.usableFor(1e7) === false);
+}
+if (typeof featherSeamX === 'function') {
+  const W = 12, H = 4, a = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a[y * W + x] = x < 6 ? 0.2 : 0.8;   // step discontinuity between col 5 and 6
+  const before = Math.abs(a[6] - a[5]); featherSeamX(a, W, H, 6, 2); const after = Math.abs(a[6] - a[5]);
+  check('featherSeamX smooths a seam step (' + before.toFixed(2) + '→' + after.toFixed(2) + ')', after < before && a.every(Number.isFinite));
+}
+
+/* ---------- v0.127: roads — terrain-aware least-cost paths between designated places ---------- */
+if (typeof buildRoadNetwork === 'function') {
+  const W = 30, H = 20, sea = 0.42;
+  // a low gentle corridor across the middle, with a steep ridge to the north and a sea channel splitting the east
+  const fld = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    let h = 0.55 + (y < 8 ? (8 - y) * 0.05 : 0);        // steep rise to the north (expensive)
+    if (y >= 9 && y <= 11) h = 0.45;                      // a gentle valley corridor (cheap)
+    fld[y * W + x] = h;
+  }
+  const cost = buildTravelCost(fld, W, H, sea, {});
+  check('buildTravelCost: water ≫ land cost', (() => { const sf = new Float32Array(W * H).fill(0.2); const c = buildTravelCost(sf, W, H, sea, {}); return c[0] > 1e5 && cost[10 * W + 5] < 1e5; })());
+  check('buildTravelCost: steeper ground costs more', cost[2 * W + 5] > cost[10 * W + 5]);
+  // path through the corridor prefers the gentle valley (stays near rows 9-11)
+  const r = roadDijkstra(cost, W, H, 2, 10, false);
+  check('roadDijkstra: reaches a far cell with finite cost', r.dist[10 * W + (W - 2)] < 1e6 && Number.isFinite(r.dist[10 * W + (W - 2)]));
+  // network between 3 places in the corridor → connected (2 edges for 3 reachable nodes)
+  const places = [{ x: 2, y: 10 }, { x: 15, y: 10 }, { x: 27, y: 11 }];
+  const net = buildRoadNetwork(places, cost, W, H, {});
+  check('buildRoadNetwork: MST connects N reachable places with N−1 edges', net.edges.length === 2);
+  check('buildRoadNetwork: each edge has a contiguous path of cells', net.edges.every(e => e.path.length >= 2 && e.path.every(i => i >= 0 && i < W * H)));
+  // a place stranded across the sea gets no road
+  const fld2 = fld.slice(); for (let y = 0; y < H; y++) fld2[y * W + 20] = 0.2;   // a full-height sea wall at x=20
+  const cost2 = buildTravelCost(fld2, W, H, sea, {});
+  const net2 = buildRoadNetwork([{ x: 2, y: 10 }, { x: 10, y: 10 }, { x: 27, y: 11 }], cost2, W, H, {});
+  check('buildRoadNetwork: places on separate landmasses get no road (sea barrier)', net2.edges.length < 2);
+  // determinism
+  const netB = buildRoadNetwork(places, cost, W, H, {});
+  check('buildRoadNetwork deterministic', net.edges.length === netB.edges.length && net.edges.every((e, i) => e.path.length === netB.edges[i].path.length));
+}
+
+/* ---------- v0.137: natural rivers — R1 slope-area threshold, R2/R3a polyline tracing, R4 sinuosity ---------- */
+if (typeof channelThreshold === 'function') {
+  const base = 100;
+  // R1 identity at density===1 (the bit-identical default), for any slope
+  check('channelThreshold: identity at density=1 (flat)', channelThreshold(base, 0, 1) === base);
+  check('channelThreshold: identity at density=1 (steep)', channelThreshold(base, 5, 1) === base);
+  check('channelThreshold: identity when density omitted/0', channelThreshold(base, 3, 0) === base && channelThreshold(base, 3, undefined) === base);
+  // higher density ⇒ lower threshold ⇒ more channels; lower density ⇒ higher
+  check('channelThreshold: density>1 lowers threshold (more channels)', channelThreshold(base, 1, 2) < base);
+  check('channelThreshold: density<1 raises threshold on flat ground (fewer channels)', channelThreshold(base, 0, 0.5) > base);
+  // slope-area placement: when density≠1, steeper ground channelizes easier (lower threshold)
+  check('channelThreshold: steep < flat when density≠1', channelThreshold(base, 5, 1.5) < channelThreshold(base, 0, 1.5));
+  check('channelThreshold: no slope effect at density=1', channelThreshold(base, 5, 1) === channelThreshold(base, 0, 1));
+  check('channelThreshold: finite', Number.isFinite(channelThreshold(base, 2, 1.7)) && Number.isFinite(channelThreshold(base, 0, 0.4)));
+}
+
+if (typeof buildRiverNetwork === 'function') {
+  const W = 24, H = 24, fld = new Float32Array(W * H), flow = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; fld[i] = 0.9 - y * 0.02; }
+  for (let y = 0; y < H; y++) { const i = y * W + 12; flow[i] = 50 + y * 25; }
+  // R1: density=1 reproduces the legacy flat-threshold network bit-for-bit
+  const netDef = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false });
+  const netD1 = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false, riverDensity: 1 });
+  check('buildRiverNetwork: riverDensity=1 ⇒ bit-identical to default', netDef.order.every((o, i) => o === netD1.order[i]) && netDef.intensity.every((v, i) => v === netD1.intensity[i]));
+  // higher density ⇒ at least as many channel cells
+  const countCh = net => { let c = 0; for (const o of net.order) if (o > 0) c++; return c; };
+  const netHi = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false, riverDensity: 2.5 });
+  const netLo = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false, riverDensity: 0.5 });
+  check('buildRiverNetwork: higher density ⇒ ≥ channels', countCh(netHi) >= countCh(netDef));
+  check('buildRiverNetwork: lower density ⇒ ≤ channels', countCh(netLo) <= countCh(netDef));
+  // recv + slope now returned
+  check('buildRiverNetwork: returns recv + slope arrays', netDef.recv && netDef.recv.length === W * H && netDef.slope && netDef.slope.length === W * H);
+
+  // R3a: traceRiverPolylines walks the receiver chain into ordered polylines
+  if (typeof traceRiverPolylines === 'function') {
+    const polys = traceRiverPolylines(netDef.order, netDef.recv, W, H, 1);
+    check('traceRiverPolylines: produces ≥1 polyline on a channel', polys.length >= 1 && polys[0].length >= 2);
+    check('traceRiverPolylines: points are cell centres in-bounds', polys.every(pl => pl.every(p => p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H)));
+    // higher minOrder ⇒ fewer/shorter traced cells (filters headwaters)
+    const tot = ps => ps.reduce((s, pl) => s + pl.length, 0);
+    const p2 = traceRiverPolylines(netDef.order, netDef.recv, W, H, 2);
+    check('traceRiverPolylines: minOrder≥2 traces ≤ minOrder≥1', tot(p2) <= tot(polys));
+    // determinism
+    const polysB = traceRiverPolylines(netDef.order, netDef.recv, W, H, 1);
+    check('traceRiverPolylines deterministic', tot(polysB) === tot(polys) && polysB.length === polys.length);
+  }
+}
+
+if (typeof riverSinuosity === 'function' && typeof riverSinuAmp === 'function') {
+  // a straight horizontal sampled line
+  const line = []; for (let k = 0; k <= 20; k++) line.push({ x: k, y: 10 });
+  const len = pts => { let s = 0; for (let k = 1; k < pts.length; k++) s += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y); return s; };
+  const out = riverSinuosity(line, 1.5, 6, 7);
+  check('riverSinuosity: amp=0 returns input unchanged', riverSinuosity(line, 0, 6, 7) === line);
+  check('riverSinuosity: endpoints fixed', out[0].x === line[0].x && out[0].y === line[0].y && out[out.length - 1].x === line[line.length - 1].x && out[out.length - 1].y === line[line.length - 1].y);
+  check('riverSinuosity: meandered path is longer than straight', len(out) > len(line));
+  check('riverSinuosity: all points finite', out.every(p => Number.isFinite(p.x) && Number.isFinite(p.y)));
+  // determinism
+  const outB = riverSinuosity(line, 1.5, 6, 7);
+  check('riverSinuosity deterministic', out.every((p, i) => p.x === outB[i].x && p.y === outB[i].y));
+  // R4 amplitude scaling: rises with order, falls with slope
+  check('riverSinuAmp: rises with Strahler order', riverSinuAmp(5, 0.1) > riverSinuAmp(1, 0.1));
+  check('riverSinuAmp: falls with slope', riverSinuAmp(4, 2) < riverSinuAmp(4, 0));
+  check('riverSinuAmp: positive & finite', riverSinuAmp(3, 0.5) > 0 && Number.isFinite(riverSinuAmp(1, 0)));
 }
 
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */

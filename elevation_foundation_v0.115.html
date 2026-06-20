@@ -28,6 +28,18 @@
   .busy-wit{font-size:13px;color:var(--accent);text-align:center;padding:0 24px;max-width:360px;line-height:1.5}
   .busy-label{font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
   #resOverlay{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:10px;color:rgba(200,169,110,.6);background:rgba(10,12,17,.55);border:1px solid rgba(200,169,110,.18);border-radius:5px;padding:6px 8px;line-height:1.8;pointer-events:none;display:none}
+  /* v0.110: clickable settlement-seed "why" popup */
+  .settle-info{position:fixed;z-index:60;width:220px;max-width:78vw;font-size:11px;line-height:1.5;color:#e8dcc4;background:rgba(14,17,23,.96);border:1px solid rgba(200,169,110,.4);border-radius:7px;padding:9px 11px 10px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+  .settle-info .si-close{position:absolute;top:4px;right:6px;background:none;border:none;color:#b08d54;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px}
+  .settle-info .si-h{font-weight:600;color:#d8b97a;margin-right:14px}
+  .settle-info .si-score{font-family:var(--mono);font-size:10px;color:#e0c98a;margin:1px 0 4px}
+  .settle-info .si-sum{margin-bottom:6px}
+  .settle-info .si-grid{display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr;gap:2px 6px;font-size:10px;font-family:var(--mono);margin-bottom:4px;opacity:.85}
+  .settle-info .si-grid b{color:#fff;font-weight:600}
+  .settle-info .si-meta{font-size:10px;opacity:.7;margin-bottom:6px}
+  .settle-info .si-h2{font-weight:600;color:#d8b97a;border-top:1px solid rgba(200,169,110,.2);padding-top:5px;margin-bottom:3px}
+  .settle-info .si-res{display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono)}
+  .settle-info .si-res b{color:#fff;font-weight:600}
   #resOverlay.visible{display:block}
   aside{width:324px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
   .sec{padding:14px 16px;border-bottom:1px solid var(--line)}
@@ -129,12 +141,13 @@ details.acc[open]>summary{color:var(--accent)}
 <header>
   <button id="panelToggle" class="panel-toggle" aria-label="Toggle controls">☰</button>
   <h1>Elevation Foundation</h1>
-  <span class="ver" id="verTag">v0.103</span>
+  <span class="ver" id="verTag">v0.104</span>
   <span class="tag">tectonics · warp · volcanism · erosion · climate · biomes — Cartalith prototype</span>
   <div class="dropdown-wrap" id="importWrap" style="margin-left:auto">
     <button class="menubtn" id="importMenuBtn">Import ▾</button>
     <div class="dropdown" id="importMenu">
       <button id="loadBtn">Load heightmap…</button>
+      <button id="inferTectBtn">Infer tectonics from heightmap</button>
       <button id="loadZipBtn">Load project .zip…</button>
       <div class="dsep"></div>
       <button id="packBtn">Import asset pack…</button>
@@ -164,6 +177,7 @@ details.acc[open]>summary{color:var(--accent)}
     <div class="legend" id="legend"></div>
     <div class="busy" id="busy"><span class="busy-wit" id="busyWit"></span><span class="busy-label" id="busyLabel"></span></div>
     <div id="resOverlay"></div>
+    <div id="settleInfo" class="settle-info" style="display:none"></div>
   </div>
 
   <aside>
@@ -372,6 +386,14 @@ details.acc[open]>summary{color:var(--accent)}
         <div class="hint">Carves dendritic river valleys by fluvial incision (implicit stream-power, Braun &amp; Willett 2013) with multiple-flow-direction drainage. <b>Uplift</b> is <b>off by default</b> — raise it only to grow mountains that compete with incision; at 0 it purely carves existing relief. <b>Channeling</b> sets incision aggressiveness; <b>Deposition</b> refills valleys/builds deltas but never raises a channel above the land; <b>Rain → erosion</b> makes wet regions carve faster. See the <b>Flow</b> view.</div>
       </details>
       <details class="acc">
+        <summary>Velocity (momentum)</summary>
+        <div class="btnrow" style="margin-top:8px"><button class="accent" id="veloBtn">Velocity erode</button></div>
+        <div class="row"><label>Iterations</label><input type="range" id="vIt" min="10" max="160" step="1" value="60"><span class="val" id="vItV">60</span></div>
+        <div class="row"><label>Strength</label><input type="range" id="vStr" min="0" max="100" step="1" value="50"><span class="val" id="vStrV">0.50</span></div>
+        <div class="row"><label>Meander</label><input type="range" id="vMnd" min="0" max="100" step="1" value="60"><span class="val" id="vMndV">0.60</span></div>
+        <div class="hint">Pillar 2 — full <b>velocity-field</b> hydraulic erosion (virtual-pipe shallow water, Mei et al. 2007 / LanLou123): water carries <b>momentum</b> (semi-Lagrangian advection), so it overshoots bends and presses the <b>outer bank</b> (erosion) while dropping sediment on the inner bank — meanders &amp; oxbows. Closed basins <b>pool</b> into lakes until they spill the lowest sill. Gravity (Planet → g) scales the flux. See the <b>Velocity</b> debug view. A new op — it doesn't touch the droplet/stream/glacial passes.</div>
+      </details>
+      <details class="acc">
         <summary>Evolve &amp; sediment</summary>
         <div class="row" style="margin-top:8px"><label>Evolve cycles</label><input type="range" id="evoCyc" min="2" max="12" step="1" value="5"><span class="val" id="evoCycV">5</span></div>
         <div class="btnrow"><button id="evolveBtn">Evolve climate ↔ terrain</button><button id="sedimentBtn">Sediment fill</button></div>
@@ -427,13 +449,21 @@ details.acc[open]>summary{color:var(--accent)}
         <button data-d="stress">Stress</button>
         <button data-d="age">Age</button>
         <button data-d="flow">Flow</button>
+        <button data-d="strahler">Strahler</button>
+        <button data-d="velo">Velocity</button>
         <button data-d="geoid">Geoid</button>
         <button data-d="tides">Tides</button>
         <button data-d="cbiome">CBiome</button>
         <button data-d="cterrain">Terrain</button>
+        <button data-d="lith">Lithology</button>
+        <button data-d="soil">Soil</button>
+        <button data-d="water">Water</button>
+        <button data-d="rsrc">Resources</button><button data-d="carry">Carry Cap</button><button data-d="settle">Settlement</button>
         <button data-d="windthrow">Wind-throw</button>
         <button data-d="flood">Flood</button>
       </div>
+      <div class="row" style="margin-top:8px"><label>Layer opacity</label><input type="range" id="dbgOpacity" min="0" max="100" step="1" value="100"><span class="val" id="dbgOpacityV">100%</span></div>
+      <div class="hint" style="margin-top:4px">Blends the active debug layer over the base map — drop it to see terrain underneath. In the <b>Settlement</b> view, click a gold dot for a "why here" summary (resource availability + soil/water/carry).</div>
       </details>
       <div class="hint">Map-styling controls (parchment, stylized icons, coastal waves, asset packs) live in the <b>Style</b> tab.</div>
     </div>
@@ -448,6 +478,7 @@ details.acc[open]>summary{color:var(--accent)}
         </select>
       </div>
       <label class="chk"><input type="checkbox" id="bakeTiles"> Export as tiles — no size limit (huge maps / iOS)</label>
+      <label class="chk"><input type="checkbox" id="chanAtlasChk"> Channel atlas — pack affordance/resource/class fields into RGB PNGs (<code>atlas/</code> + index.json)</label>
       <div class="hint" id="bakeNote">PNG keeps full detail — pick a size, then export.</div>
       <div class="btnrow" style="margin-top:8px"><button class="accent" id="exportBtn">Export .zip</button></div>
       <div class="row" id="bakeProgRow" style="display:none"><label>Baking</label><progress id="bakeProg" max="100" value="0"></progress><span class="val" id="bakeProgV">0%</span></div>
@@ -522,14 +553,21 @@ details.acc[open]>summary{color:var(--accent)}
         <div class="row"><label>SDF river bands</label><input type="range" id="sdfRiversR" min="0" max="100" step="1" value="0"><span class="val" id="sdfRiversV">off</span></div>
         <div class="row"><label>SDF biome blend</label><input type="range" id="sdfBiomesR" min="0" max="100" step="1" value="0"><span class="val" id="sdfBiomesV">off</span></div>
         <div class="hint">The <b>SDF</b> (signed-distance) layers treat coast, rivers and biome edges as continuous geometry: <b>coastlines</b> add resolution-independent beach &rarr; coastal-plain bands; <b>river bands</b> draw bank/wetland/floodplain margins from the drainage SDF; <b>biome blend</b> widens ecotones near biome boundaries. Render-only (screen overlays, like the river/minor-channel layers); all default off.</div>
+        <div class="sublabel-grp">Painter (NPR)</div>
+        <div class="row"><label>Contour veins</label><input type="range" id="contoursR" min="0" max="100" step="1" value="0"><span class="val" id="contoursV">off</span></div>
+        <div class="row"><label>Ink linework</label><input type="range" id="inkR" min="0" max="100" step="1" value="0"><span class="val" id="inkV">off</span></div>
+        <div class="row"><label>Hachure</label><input type="range" id="hachureR" min="0" max="100" step="1" value="0"><span class="val" id="hachureV">off</span></div>
+        <div class="row"><label>Watercolor</label><input type="range" id="watercolorR" min="0" max="100" step="1" value="0"><span class="val" id="watercolorV">off</span></div>
+        <div class="hint">Hand-drawn "Painter" styles, each its own intensity: <b>contour veins</b> = constant-width elevation isolines (every 5th an index line); <b>ink</b> = pen outlines on landform edges; <b>hachure</b> = downslope hatching denser on steep ground; <b>watercolor</b> = pigment pooling + paper granulation + edge blooms. Land-only, seamless across tiles/bakes; all default off.</div>
         <div class="sublabel-grp">Overlays</div>
         <label class="chk"><input type="checkbox" id="iconsChk"> Stylized icons (mountains &middot; hills &middot; forest)</label>
         <label class="chk"><input type="checkbox" id="wavesChk"> Coastal wave lines</label>
+        <label class="chk"><input type="checkbox" id="waterAnimChk"> Animate water (flow map) — runs at ≤~1K working res</label>
         <label class="chk"><input type="checkbox" id="scaleBarChk" checked> Scale bar</label>
         <label class="chk"><input type="checkbox" id="showRivers" checked> Show rivers in biome view</label>
-        <label class="chk"><input type="checkbox" id="smoothRivers" checked> Smooth widening rivers (discharge-scaled)</label>
         <label class="chk"><input type="checkbox" id="sharpBiomes" checked> Sharper biome detail (finer ecotones)</label>
         <label class="chk"><input type="checkbox" id="showLakes" checked> Show lakes as water (inland seas + deposited water)</label>
+        <label class="chk"><input type="checkbox" id="multiSun"> Multi-sun lighting (softer, painterly relief)</label>
         <div class="hint">Parchment multiplies a paper-fibre grain and warm tint into the map colours. The icon layer finds ridgelines and forest cover and draws mountain, hill and tree glyphs over the relief &mdash; largest peaks claim the range spine first. Wave lines add concentric foam contours hugging the shore. Rivers overlay the drainage network as blue channels on the biome view. All are render-only (PNG bakes/layer exports are unchanged) and work with zero assets.</div>
       </div>
       <div class="sec">
@@ -550,7 +588,21 @@ details.acc[open]>summary{color:var(--accent)}
 
 <script>
 "use strict";
-const VERSION='0.103';
+/* =====================================================================================================
+ * ATTRIBUTION — River / Erosion / Water overhaul (Pillar 4: Provenance). Each solver also carries an inline
+ * @architecture/@physics/@credits block; this is the single consolidated index. ALGORITHMS STUDIED, NO CODE
+ * COPIED (original implementations; consistent with the engine's existing "studied, not copied" stance).
+ * Full table + per-pillar notes: docs/research/river-overhaul.md.
+ *   Pillar 1 — drainage networks / geomorphology: Strahler (1957) stream ordering; downstream hydraulic
+ *     geometry, Leopold & Maddock (1953); Pasternack-Lab/RiverBuilder (UC Davis); Genevaux et al. (2013);
+ *     Galin et al. (2019).
+ *   Pillar 2 — velocity-field hydraulic erosion: virtual-pipes shallow water, Mei et al. (2007) &
+ *     LanLou123/Webgl-Erosion; sediment-capacity loop, SebLague/Hydraulic-Erosion & Beyer (2015); adaptive
+ *     lake pooling, weigert/SimpleHydrology.
+ *   Pillar 3 — optical water shading: Beer–Lambert depth transport + flow-map UV, after Premože & Ashikhmin
+ *     (Stanford, "Rendering Natural Waters").
+ * ===================================================================================================== */
+const VERSION='0.115';
 const view = document.getElementById('view');
 const vctx = view.getContext('2d');
 
@@ -591,7 +643,7 @@ let warpX = null, warpY = null;
 const state = {
   resW:2048, world:false,
   seaLevel:0.42, peakM:4000, mapWidthKm:800,
-  mode:'biome', debug:'off', exag:3.4, sunAz:315, shadeHypso:true, bioBlend:0.90,
+  mode:'biome', debug:'off', debugOpacity:1, exag:3.4, sunAz:315, shadeHypso:true, bioBlend:0.90,
   brush:'raise', radius:22, strength:0.35,
   world_structure:{ enabled:false, archetype:'earth', continentality:0.30, fragmentation:0.50, tectonicEnergy:0.60, oceanDepth:0.60, hotspotDensity:0.20 },
   tect:{ plates:14, seed:(Math.random()*99999)|0, vel:1.0, warp:0.45, blurR:18, alpha:0.85, beta:0.22, age:0.6, ridged:true, lloyd:2,
@@ -600,13 +652,14 @@ const state = {
   crater:{ count:100, age:0.50 },
   erosion:{ droplets:60000, inertia:0.05, capacity:4.0, minSlope:0.01, deposit:0.30, erode:0.35, evaporate:0.02, gravity:4.0, maxLifetime:30, initSpeed:1.0, initWater:1.0, radius:3, talus:0.012, thermalPasses:8, diffuseD:0.15, diffusePasses:6 },
   stream:{ uplift:0.0, k:0.012, iters:15, deposit:0.3, climateK:0.5, cycles:5 },   /* uplift off by default: carve rivers, not ridges. cycles = loop-1 climate↔erosion evolution */
+  velo:{ iters:60, strength:0.5, meander:0.6 },   /* v0.112 Pillar 2: velocity-field (momentum) hydraulic erosion — new op, never auto-runs */
   glacial:{ kg:0.15, mg:0.4, snowline:0.65, uFactor:0.6, passes:8 },
   coastal:{ waveStr:0.5, estuaryDepth:0.08, marshBand:0.03, passes:4 },
   planet:{ g:1.0, rotationHours:24, axialTiltDeg:23.4, radiusRel:1.0,
            geoid:{ enabled:false, amp:0.015 },
            tides:{ enabled:false, k2:1.0, moons:[{massRel:1.0, distRel:1.0, phase:0}] } },   /* planetary parameters (gravity-influence.md, G1 + G2 geoid + G3 tides; both off ⇒ bit-identical) */
   showRivers: true,
-  viz:{ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, showLakes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0 },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome control fields (all default 0 = off) */
+  viz:{ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, sharpBiomes:true, showLakes:true, multiSun:false, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0, contours:0, ink:0, hachure:0, watercolor:0, waterAnim:false },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome + v0.108 Painter NPR contours/ink/hachure/watercolor (all default 0 = off) */
   climate:{ latN:55, latS:5, equatorTemp:30, poleTemp:-25, lapseRate:6.5, rainK:1.0, rainDep:0.35, oceanHum:1.0, windDir:0, windMode:'auto', pressK:0.6, zonalK:0.5, bulkEvap:true, seasons:false, maxRainMm:3000, currents:false, currentK:1.0, albedo:0, evap:0.12, ocean:1.0, wIters:70 }   /* L6: ice-albedo cooling feedback (0 = off → bit-identical) */
 };
 
@@ -1104,7 +1157,10 @@ function generate(){
   _boundaryGraph=null; _oroPrev=null; _lodGen++; lodCacheClear(); _lodEdits.clear(); _lodUndo.length=0;   // T1/T2 caches + Stage-2 tiles + Stage-3 edits invalidate on regenerate
   { const nk=worldKey(); if(nk!==_worldKey){ _worldKey=nk; _atlasBaked.clear(); _atlasImg.clear(); _atlasMeta=null; } atlasSyncWorld(); }   // Phase 2a: changed world ⇒ fresh atlas; 2b: rediscover this world's baked chunks from IDB (cross-session)
   if(riverMask){ riverMask.fill(0); _riverAny=false; }                       // v0.077: new world ⇒ no locked rivers
+  _veloVx=_veloVy=_veloWater=null;                                            // v0.112: velocity-erosion field is stale once terrain is rebuilt
   _cartBiome=null; _cartTerrain=null; _waterBody=null; lakeMask=null;        // v0.078/0.102/0.103: invalidate auto-filled biome/terrain-paint PoCs + water bodies; deposited lakes don't survive a regenerate (terrain rebuilt)
+  _lithField=null; _soilField=null; _waterField=null;                        // v0.104: affordance fields stale on regenerate
+  _resourcePots=null; _carryCapField=null; _settleSuitField=null;             // v0.105: resource/carry/settle stale too
   refreshGeoid();                                                            // G2: rebuild (or clear) the sea-level offset for current res/seed/planet
   generateContinentalityField();
   computeWarp(); buildPlates(); assignPlates(); computeStress();
@@ -1583,6 +1639,138 @@ function erode(){
   erodeFinish(pre,p);
 }
 
+/**
+ * @section HYDROLOGY PIPELINE MODULE — Pillar 2: Micro-Physics (velocity-field hydraulic erosion)
+ * @architecture Grid (virtual-pipes) shallow-water hydraulic erosion with a continuous 2D velocity field
+ *   and semi-Lagrangian momentum advection (v_new = v_old(x − v_old·Δt) + a_gravity). Velocity/flux model
+ *   after LanLou123/Webgl-Erosion and Mei et al. (2007), "Fast Hydraulic Erosion Simulation and
+ *   Visualization on GPU".
+ * @physics Sediment-capacity erode/deposit loop after SebLague/Hydraulic-Erosion & Hans Theobald Beyer (2015).
+ *   Centrifugal bank-shear (outer-bank erosion / inner-bank deposition → meanders & oxbows). Adaptive lake
+ *   pooling at closed basins (water rises to the lowest sill then spills over) — sink handling after
+ *   weigert/SimpleHydrology (Nick Weigert). Gravity scales the flux acceleration (consistent with the engine's
+ *   gravity workstream, G1).
+ * @credits Original implementation for the Cartalith engine — algorithms studied, no code copied.
+ */
+let _veloVx=null, _veloVy=null, _veloWater=null;   // Pillar 2: last velocity-erosion velocity/water field (for the Velocity debug view + Pillar 3 flow-map)
+/* clamped bilinear sampler (shared by the semi-Lagrangian backtrace) */
+function _bilin(a,fx,fy,W,H){ if(fx<0)fx=0; else if(fx>W-1)fx=W-1; if(fy<0)fy=0; else if(fy>H-1)fy=H-1;
+  const x0=fx|0,y0=fy|0,x1=x0<W-1?x0+1:x0,y1=y0<H-1?y0+1:y0,tx=fx-x0,ty=fy-y0;
+  return a[y0*W+x0]*(1-tx)*(1-ty)+a[y0*W+x1]*tx*(1-ty)+a[y1*W+x0]*(1-tx)*ty+a[y1*W+x1]*tx*ty; }
+/* Outer-bank (centrifugal) direction + turn strength when flow (vx,vy) bends toward (nvx,nvy) a little
+   downstream. Inertia throws the stream against the OUTER bank (extra shear) and leaves slack water on the
+   inner bank (deposition) — the meander/oxbow mechanism. Returns {ox,oy,mag}: a unit vector toward the outer
+   bank × normalised turn magnitude. Pure → headless-testable. */
+function centrifugalShear(vx,vy,nvx,nvy){
+  const sp=Math.hypot(vx,vy); if(sp<1e-6) return {ox:0,oy:0,mag:0};
+  const ux=vx/sp, uy=vy/sp, cross=ux*nvy-uy*nvx, s=cross>=0?1:-1;
+  return {ox:s*uy, oy:-s*ux, mag:Math.min(1,Math.abs(cross))};
+}
+/* Velocity-field hydraulic erosion kernel — fully self-contained (worker-ready, Invariant 11): the pure
+   _bilin/centrifugalShear helpers are inlined below so toString() carries everything (module-level copies stay
+   for the sync path + tests, like the stream/glacial routing duplication). Mutates fld in place; returns
+   {water,vx,vy}. Sea cells (fld<sea) are open sinks (drain to the ocean); the map border is reflective so
+   inland basins pool. Every write is clamped — Invariant 2 (all-finite) holds. */
+function velocityErodeKernel(fld, rain, W, H, P, onProgress){
+  function _bilin(a,fx,fy,W,H){ if(fx<0)fx=0; else if(fx>W-1)fx=W-1; if(fy<0)fy=0; else if(fy>H-1)fy=H-1;
+    const x0=fx|0,y0=fy|0,x1=x0<W-1?x0+1:x0,y1=y0<H-1?y0+1:y0,tx=fx-x0,ty=fy-y0;
+    return a[y0*W+x0]*(1-tx)*(1-ty)+a[y0*W+x1]*tx*(1-ty)+a[y1*W+x0]*(1-tx)*ty+a[y1*W+x1]*tx*ty; }
+  function centrifugalShear(vx,vy,nvx,nvy){ const sp=Math.hypot(vx,vy); if(sp<1e-6) return {ox:0,oy:0,mag:0};
+    const ux=vx/sp, uy=vy/sp, cross=ux*nvy-uy*nvx, s=cross>=0?1:-1; return {ox:s*uy, oy:-s*ux, mag:Math.min(1,Math.abs(cross))}; }
+  const n=W*H, sea=P.sea, dt=P.dt, g=P.gravity, evap=P.evap, Kc=P.capacity, Ke=P.erodeK, Kd=P.depositK,
+        minS=P.minSlope, cfK=P.centrifugalK, rainRate=P.rainRate, iters=P.iters|0, pipeDamp=0.92, VMAX=4;
+  const water=new Float32Array(n), sed=new Float32Array(n), vx=new Float32Array(n), vy=new Float32Array(n),
+        fL=new Float32Array(n), fR=new Float32Array(n), fT=new Float32Array(n), fB=new Float32Array(n),
+        nvx=new Float32Array(n), nvy=new Float32Array(n), nsed=new Float32Array(n);
+  for(let it=0; it<iters; it++){
+    /* 1) rain input (sea cells are sinks → water reset) */
+    for(let i=0;i<n;i++){ if(fld[i]<sea){ water[i]=0; } else { water[i]+= rainRate*(rain?Math.max(0.05,rain[i]):1); } }
+    /* 2) virtual-pipe flux (Mei et al. 2007); scaled so outflow ≤ available water → emergent pooling */
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x; if(fld[i]<sea){ fL[i]=fR[i]=fT[i]=fB[i]=0; continue; }
+      const Hi=fld[i]+water[i];
+      const hL=x>0?fld[i-1]+water[i-1]:Hi, hR=x<W-1?fld[i+1]+water[i+1]:Hi, hT=y>0?fld[i-W]+water[i-W]:Hi, hB=y<H-1?fld[i+W]+water[i+W]:Hi;
+      let l=Math.max(0,fL[i]*pipeDamp+dt*g*(Hi-hL)), r=Math.max(0,fR[i]*pipeDamp+dt*g*(Hi-hR)),
+          t=Math.max(0,fT[i]*pipeDamp+dt*g*(Hi-hT)), b=Math.max(0,fB[i]*pipeDamp+dt*g*(Hi-hB));
+      const out=l+r+t+b; if(out>0){ const K=Math.min(1, water[i]/(out*dt)); if(K<1){ l*=K; r*=K; t*=K; b*=K; } }
+      fL[i]=l; fR[i]=r; fT[i]=t; fB[i]=b;
+    }
+    /* 3) water update + flux→velocity (momentum proxy) */
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x; if(fld[i]<sea){ vx[i]=vy[i]=0; continue; }
+      const inL=x>0?fR[i-1]:0, inR=x<W-1?fL[i+1]:0, inT=y>0?fB[i-W]:0, inB=y<H-1?fT[i+W]:0;
+      const wBefore=water[i]; water[i]=Math.max(0, water[i]+dt*((inL+inR+inT+inB)-(fL[i]+fR[i]+fT[i]+fB[i])));
+      const wAvg=Math.max(1e-3,0.5*(wBefore+water[i]));
+      let u=0.5*((inL-fL[i])+(fR[i]-inR))/wAvg, v=0.5*((inT-fT[i])+(fB[i]-inB))/wAvg;
+      const sp=Math.hypot(u,v); if(sp>VMAX){ u*=VMAX/sp; v*=VMAX/sp; } vx[i]=u; vy[i]=v;
+    }
+    /* 4) semi-Lagrangian momentum advection + gravity accel; advect suspended sediment too */
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x;
+      const bx=x-vx[i]*dt, by=y-vy[i]*dt;
+      let au=_bilin(vx,bx,by,W,H), av=_bilin(vy,bx,by,W,H);
+      const hL=x>0?fld[i-1]:fld[i], hR=x<W-1?fld[i+1]:fld[i], hT=y>0?fld[i-W]:fld[i], hB=y<H-1?fld[i+W]:fld[i];
+      au+=g*dt*((hL-hR)*0.5); av+=g*dt*((hT-hB)*0.5);
+      const sp=Math.hypot(au,av); if(sp>VMAX){ au*=VMAX/sp; av*=VMAX/sp; }
+      nvx[i]=au; nvy[i]=av; nsed[i]=_bilin(sed,bx,by,W,H);
+    }
+    vx.set(nvx); vy.set(nvy); sed.set(nsed);
+    /* 5) capacity erode/deposit + centrifugal outer-bank bias (meanders) */
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x; if(fld[i]<sea) continue;
+      const hL=x>0?fld[i-1]:fld[i], hR=x<W-1?fld[i+1]:fld[i], hT=y>0?fld[i-W]:fld[i], hB=y<H-1?fld[i+W]:fld[i];
+      const slope=Math.min(1,Math.hypot((hR-hL)*0.5,(hB-hT)*0.5)*W*0.05), sp=Math.hypot(vx[i],vy[i]);
+      const C=Kc*Math.max(minS,slope)*sp*Math.min(1,water[i]);
+      if(C>sed[i]){ let e=Ke*(C-sed[i]); if(e>0.05)e=0.05; else if(e<0)e=0;
+        if(cfK>0 && sp>1e-4){ const ux=vx[i]/sp, uy=vy[i]/sp, cs=centrifugalShear(vx[i],vy[i],_bilin(vx,x+ux*2,y+uy*2,W,H),_bilin(vy,x+ux*2,y+uy*2,W,H));
+          if(cs.mag>0){ const ox=Math.round(x+cs.ox), oy=Math.round(y+cs.oy); if(ox>=0&&oy>=0&&ox<W&&oy<H){ const j=oy*W+ox; if(fld[j]>=sea){ let eb=cfK*cs.mag*e; if(eb>0.03)eb=0.03; fld[j]-=eb; sed[i]+=eb; } } } }
+        fld[i]-=e; sed[i]+=e;
+      } else { let d=Kd*(sed[i]-C); if(d>sed[i])d=sed[i]; else if(d<0)d=0; fld[i]+=d; sed[i]-=d; }
+    }
+    /* 6) evaporation */
+    for(let i=0;i<n;i++){ if(fld[i]>=sea){ water[i]*=(1-evap*dt); if(water[i]<0)water[i]=0; } }
+    if(onProgress && (it&7)===0) onProgress(it/iters);
+  }
+  for(let i=0;i<n;i++){ if(fld[i]>=sea) fld[i]+=sed[i]; if(!(fld[i]<=1e9 && fld[i]>=-1e9)) fld[i]=sea; }   // settle suspended load + finite guard (Invariant 2)
+  return {water, vx, vy};
+}
+function veloParams(){ const v=state.velo; return { iters:Math.max(10,Math.min(160,v.iters|0)), dt:0.02, gravity:9.8*(state.planet&&state.planet.g||1),
+  rainRate:0.012, evap:0.05, capacity:0.5+1.5*v.strength, erodeK:0.05+0.5*v.strength, depositK:0.25, minSlope:0.001, centrifugalK:1.4*v.meander, sea:state.seaLevel, world:!!state.world }; }
+/* main-thread tail shared by the sync + worker paths (no isostatic rebound — it's a full hydraulic sim) */
+function veloFinish(){ enforceRiverChannels(); computeFlow(true); refreshClimate(); renderNow(); }
+/* sync op: full velocity-field hydraulic erosion pass on the live field (the worker path mirrors it; the
+   proven droplet/stream/glacial kernels + Invariant 11 are untouched — this kernel is its own self-contained one). */
+function velocityErode(){ const out=velocityErodeKernel(field, rainField, GW, GH, veloParams());
+  _veloVx=out.vx; _veloVy=out.vy; _veloWater=out.water; veloFinish(); }
+/* worker path: copies field+rain in, runs the self-contained kernel off-thread, transfers field+vx+vy+water
+   back (so the Velocity view + Pillar-3 flow-map get the velocity field). Sync fallback when Workers are
+   missing/error, mirroring runErosionWorker's contract (the velocity op needs extra return buffers, so it has
+   its own runner rather than the generic one). */
+function velocityEroseAsync(){
+  if(_eroBusy) return;
+  let w=null;
+  try{
+    if(typeof Worker==='undefined') throw new Error('no Worker');
+    if(!_eroWorkers.velo){
+      const body='var f=new Float32Array(d.field), rn=d.rain?new Float32Array(d.rain):null; var o=velocityErodeKernel(f, rn, d.W, d.H, d.P, function(p){ self.postMessage({prog:p}); }); self.postMessage({done:true, field:f.buffer, vx:o.vx.buffer, vy:o.vy.buffer, water:o.water.buffer}, [f.buffer, o.vx.buffer, o.vy.buffer, o.water.buffer]);';
+      const src=velocityErodeKernel.toString()+'\nself.onmessage=function(e){ var d=e.data; '+body+' };';
+      _eroWorkers.velo=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+    }
+    w=_eroWorkers.velo;
+  }catch(_){ withBusy('velocity erosion…',velocityErode); return; }
+  _eroBusy=true; showBusy('velocity erosion…');
+  const f=field.slice(), rn=rainField.slice();
+  w.onerror=()=>{ _eroBusy=false; _eroWorkers.velo=null; withBusy('velocity erosion…',velocityErode); };
+  w.onmessage=e=>{
+    if(e.data.prog!=null){ busyLabel.textContent='velocity erosion… '+Math.round(e.data.prog*100)+'%'; return; }
+    if(e.data.done){
+      _eroBusy=false;
+      const r=new Float32Array(e.data.field);
+      if(r.length!==field.length){ hideBusy(); return; }   // resolution changed mid-run: discard
+      field.set(r); _veloVx=new Float32Array(e.data.vx); _veloVy=new Float32Array(e.data.vy); _veloWater=new Float32Array(e.data.water);
+      busyLabel.textContent='finishing…';
+      setTimeout(()=>{ veloFinish(); hideBusy(); },10);
+    }
+  };
+  w.postMessage({field:f.buffer, rain:rn.buffer, W:GW, H:GH, P:veloParams()}, [f.buffer, rn.buffer]);
+}
+
 /* ==== W0: droplet erosion in a Web Worker (blob URL — works under file://) ====
    Field/rain are COPIED in (main-thread field stays live for renders), result
    transferred back. Falls back to the synchronous path when Workers are missing
@@ -1935,21 +2123,75 @@ function isostaticRebound(pre){
 /* v0.076: discharge-widened river field — replaces the blocky 1-cell flow-threshold overlay with smooth,
    widening rivers. Each river cell (flow>thresh, on land) stamps a soft disc of half-width ∝ discharge,
    max-combined; the renderer blends blue ∝ intensity. Pure + headless-testable. */
-function buildRiverField(flow, fld, W, H, sea){
-  const n=W*H, rf=new Float32Array(n), thresh=W*H*0.0004, lmax=Math.log(W*H*0.05);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x; if(fld[i]<sea) continue;
-    const f=flow[i]; if(f<=thresh) continue;
-    const mag=Math.min(1,Math.log(f/thresh)/lmax);             // 0..1 discharge magnitude
-    const w=0.7+mag*mag*3.2, amp=Math.min(1,0.45+mag*0.7);     // half-width (cells) ∝ discharge; trunk wide, tributary thin
-    const r=Math.ceil(w), x0=Math.max(0,x-r),x1=Math.min(W-1,x+r),y0=Math.max(0,y-r),y1=Math.min(H-1,y+r);
-    for(let yy=y0;yy<=y1;yy++)for(let xx=x0;xx<=x1;xx++){ const dx=xx-x,dy=yy-y,d=Math.sqrt(dx*dx+dy*dy); if(d>w) continue;
-      const v=amp*(1-d/w), j=yy*W+xx; if(v>rf[j]) rf[j]=v; }
+/**
+ * @section HYDROLOGY PIPELINE MODULE — Pillar 1: Macro-Topology (Drainage Networks & River Geomorphology)
+ * @architecture Strahler stream-order hierarchy → Rosgen-inspired dynamic channel geometry (width / depth /
+ *   sinuosity scaled by order and local slope) → confluence blend-flow interpolation. Geomorphic math and
+ *   sinuosity-scaling constraints inspired by the UC Davis Pasternack Lab (Pasternack-Lab/RiverBuilder
+ *   framework) and the procedural-river methods of Genevaux et al. (2013) and Galin et al. (2019); stream
+ *   ordering after Strahler (1957); downstream hydraulic geometry after Leopold & Maddock (1953).
+ * @credits Original implementation compiled for the Cartalith engine — algorithms studied, no code copied.
+ */
+
+/* Pure Strahler stream-order solver. recv[i] = steepest-descent receiver (downstream cell, -1 if none),
+   chan[i] = 1 for channel cells, flow[i] = accumulated discharge. Processing channel cells upstream→downstream
+   (ascending flow ⇒ every donor resolves before its receiver) we apply the Strahler rule: a cell with no
+   channel donors is order 1; otherwise it takes the maximum donor order, +1 only when that maximum is shared
+   by ≥2 donors (two equal-order streams joining). Returns an Int16 order field (0 = non-channel). */
+function strahlerFromReceivers(recv, flow, chan, n){
+  const order=new Int16Array(n), maxIn=new Int16Array(n), maxCnt=new Int16Array(n);
+  const cells=[]; for(let i=0;i<n;i++) if(chan[i]) cells.push(i);
+  cells.sort((a,b)=>flow[a]-flow[b]);
+  for(let k=0;k<cells.length;k++){ const i=cells[k];
+    const o = (maxIn[i]===0) ? 1 : (maxCnt[i]>=2 ? maxIn[i]+1 : maxIn[i]);
+    order[i]=o;
+    const r=recv[i];
+    if(r>=0 && chan[r]){ if(o>maxIn[r]){ maxIn[r]=o; maxCnt[r]=1; } else if(o===maxIn[r]){ maxCnt[r]++; } }
   }
-  return rf;
+  return order;
 }
-let _riverField=null;   // cached widened-river intensity (built lazily for the biome render; cleared when flow changes)
+
+/* Build the river network: Strahler order + Rosgen-scaled cross-sections, stamped (confluence-blended via
+   max-combine) into render-ready fields. Returns {order, intensity, depth}:
+     order     Int16  Strahler order per channel cell (0 elsewhere)
+     intensity Float32 [0,1] render alpha (drives the river overlay) — discharge × order driven width
+     depth     Float32 [0,1] relative channel depth (deeper trunks / lowlands) — consumed by Pillar 3 (Beer–Lambert)
+   Rosgen-inspired scaling: width grows with Strahler order and discharge, narrows on steep ground (low-order
+   mountain streams steep+narrow+straight; high-order lowland trunks wide+deep); confluences blend smoothly
+   because order steps by at most 1 and discs are max-combined (no width spikes). Pure → headless-testable. */
+function buildRiverNetwork(fld, flow, W, H, sea, opts){
+  opts=opts||{}; const wrap=!!opts.world, n=W*H, thresh=W*H*0.0004, lmax=Math.log(W*H*0.05);
+  const recv=new Int32Array(n), chan=new Uint8Array(n); recv.fill(-1);
+  /* steepest-descent receivers + channel mask */
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x; if(fld[i]<sea||flow[i]<=thresh) continue; chan[i]=1;
+    const h=fld[i]; let best=-1,bestDrop=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ if(!dx&&!dy)continue;
+      let nx=x+dx,ny=y+dy; if(wrap){ nx=((nx%W)+W)%W; } else if(nx<0||nx>=W)continue; if(ny<0||ny>=H)continue;
+      const j=ny*W+nx, drop=(h-fld[j])/Math.hypot(dx,dy); if(drop>bestDrop){ bestDrop=drop; best=j; } }
+    recv[i]=best;
+  }
+  const order=strahlerFromReceivers(recv, flow, chan, n);
+  const intensity=new Float32Array(n), depth=new Float32Array(n);
+  const cells=[]; for(let i=0;i<n;i++) if(chan[i]) cells.push(i);
+  for(let k=0;k<cells.length;k++){ const i=cells[k], x=i%W, y=(i/W)|0, f=flow[i], o=order[i];
+    const mag=Math.min(1,Math.log(f/thresh)/lmax);                                   // 0..1 discharge magnitude
+    const xl=wrap?((x-1+W)%W):(x>0?x-1:x), xr=wrap?((x+1)%W):(x<W-1?x+1:x);
+    const gx=(fld[y*W+xr]-fld[y*W+xl])*0.5, gy=((y<H-1?fld[(y+1)*W+x]:fld[i])-(y>0?fld[(y-1)*W+x]:fld[i]))*0.5;
+    const slopeFac=1/(1+5*Math.hypot(gx,gy)*W);                                       // steep ⇒ narrow (resolution-independent slope)
+    let halfW=(0.6+3.0*mag*mag+0.45*(o-1))*slopeFac; if(halfW<0.5)halfW=0.5; else if(halfW>9)halfW=9;
+    const amp=Math.min(1,0.45+mag*0.7), d01=Math.min(1,(0.22+0.16*(o-1)+0.45*mag)*(0.6+0.4*slopeFac));
+    const r=Math.ceil(halfW), x0=Math.max(0,x-r),x1=Math.min(W-1,x+r),y0=Math.max(0,y-r),y1=Math.min(H-1,y+r);
+    for(let yy=y0;yy<=y1;yy++)for(let xx=x0;xx<=x1;xx++){ const dx=xx-x,dy=yy-y,d=Math.sqrt(dx*dx+dy*dy); if(d>halfW)continue;
+      const t=1-d/halfW, v=amp*t, j=yy*W+xx; if(v>intensity[j]){ intensity[j]=v; depth[j]=d01*t; } }
+  }
+  return {order, intensity, depth};
+}
+let _riverNet=null;     // v0.111 Pillar 1: cached {order,intensity,depth} Strahler/Rosgen river network (cleared when flow changes; intensity drives the overlay)
+let _settleSeeds=null;  // v0.110: current Settlement-view advisory seeds (set in renderNow when dbg==='settle'); enables clickable "why" lookup
 function computeFlow(useRain){
-  _riverField=null; _waterBody=null; _cartBiome=null; _cartTerrain=null;   // flow/field changed → river overlay + water-body + cart PoCs stale
+  _riverNet=null; _waterBody=null; _cartBiome=null; _cartTerrain=null;   // flow/field changed → Strahler river network + water-body + cart PoCs stale
+  _lithField=null; _soilField=null; _waterField=null;                      // v0.104: lithology(rain)/soil/water-access stale when flow/climate changes
+  _resourcePots=null; _carryCapField=null; _settleSuitField=null;           // v0.105
   const n=GW*GH, order=new Array(n); for(let i=0;i<n;i++) order[i]=i;
   order.sort((a,b)=>field[b]-field[a]);
   const acc=new Float32Array(n);
@@ -1980,7 +2222,7 @@ function loadImage(file){
     const d=off.getContext('2d').getImageData(0,0,GW,GH).data;
     allocate(); warpX=null; warpY=null;
     for(let i=0;i<GW*GH;i++) field[i]=(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2])/255;
-    URL.revokeObjectURL(url); normalize(); refreshClimate(); renderNow();
+    URL.revokeObjectURL(url); normalize(); refreshClimate(); _canInvert=true; renderNow();
   };
   im.src=url;
 }
@@ -2565,6 +2807,327 @@ let _waterBody=null, lakeMask=null;   // _waterBody: cached classification (clea
 function currentWaterBodies(){ if(!_waterBody){ const fl=(lakeMask&&lakeMask.length===GW*GH)?lakeMask:null;
   _waterBody=buildWaterBodies(field,GW,GH,state.seaLevel,{wrap:!!state.world,geo:geoidField,rain:rainField,forceLake:fl}); } return _waterBody; }
 
+/* ===================== Affordance Field Foundation (v0.104, docs/AFFORDANCE_FIELD_PLAN.md) =====================
+   The AGFK "state layer": civilization-relevant raster fields derived (map-algebra) from the terrain the
+   engine already builds. All pure primitives (amplifyRegion mold — every input an argument), headless-testable,
+   debug-view + export only ⇒ generate()/default render bit-identical to v0.103. Refs: Civilisation_placement.md,
+   Cartalith_Raster_Civilization_Layer.md, Unified_Engine_Specification §III. Resources + carrying-capacity +
+   settlement suitability are the v0.105–0.106 follow-ups; this lands lithology → soil → water access. */
+const LITH_KEYS=['granite','basalt','andesite','limestone','sandstone','shale','metamorphic'];   // frozen append-only (written into save files)
+const LITH_WEATHER=[0.35,0.85,0.70,0.80,0.55,0.65,0.30];   // weatherability [0,1] (Jenny): granite/metamorphic slow, basalt/limestone fast → soil fertility
+const LITH_COLS=[[208,150,150],[78,80,94],[150,112,90],[212,206,170],[206,180,128],[122,130,120],[150,120,162]];   // debug-view swatches
+/* L(x,y): categorical rock type from the engine's tectonic proxies (no distinct lithology was tracked before —
+   resistanceField=age·crust, ageField, volcanicField, plateCrust() stand in). Pure. */
+function buildLithology(fld, age, hetero, volc, crust, resist, rain, W, H, sea, opts){
+  const o=opts||{}, n=W*H, out=new Uint8Array(n), denom=Math.max(1e-6,1-sea);
+  const volcTh=o.volcTh!=null?o.volcTh:0.35, ageOld=o.ageOld!=null?o.ageOld:0.6, resHard=o.resHard!=null?o.resHard:0.55;
+  for(let i=0;i<n;i++){
+    if(crust[i]<0){ out[i]=1; continue; }                          // oceanic crust → basalt
+    if(volc[i]>volcTh){ out[i]=2; continue; }                      // volcanic arc / hotspot → andesite
+    if(resist[i]>resHard){ out[i]= age[i]>ageOld ? 0 : 6; continue; }   // hard basement: old shield → granite, young orogen → metamorphic
+    const r=(fld[i]-sea)/denom, m=rain?rain[i]:0.5;
+    if(r<0.30){ out[i]= m>0.55 ? 3 : (m<0.25 ? 4 : 5); continue; }  // sedimentary lowlands: limestone (wet) / sandstone (arid) / shale (mid)
+    out[i]= age[i]>ageOld ? 0 : 5;                                  // upland default: old → granite, else shale
+  }
+  return out;
+}
+const LITH_NAMES=['Granite / shield','Basalt (oceanic)','Andesite (arc)','Limestone','Sandstone','Shale','Metamorphic'];
+function lithIndexManifest(){ const indices={}; LITH_KEYS.forEach((k,i)=>indices[String(i)]={key:k,name:LITH_NAMES[i],col:LITH_COLS[i],weatherability:LITH_WEATHER[i]}); return { version:VERSION, indices }; }
+/* S(x,y) ∈ [0,1]: soil fertility via pedological interaction (Jenny 1941) — S = climateBell·moisture·lithWeather·
+   slopeShed·time. slopeN is slopeAt×W (resolution-independent, as buildCartTerrain). Pure. */
+function buildSoilFertility(lith, temp, rain, slopeN, age, W, H, opts){
+  const o=opts||{}, n=W*H, out=new Float32Array(n), slopeK=o.slopeK!=null?o.slopeK:1.5, tOpt=o.tOpt!=null?o.tOpt:18, tVar=o.tVar!=null?o.tVar:600;
+  for(let i=0;i<n;i++){
+    const w=LITH_WEATHER[lith[i]]!=null?LITH_WEATHER[lith[i]]:0.5;
+    const T=temp[i], tF=Math.exp(-((T-tOpt)*(T-tOpt))/tVar);        // temperature suitability bell (~18 °C)
+    const mF=Math.max(0,Math.min(1,rain[i]));                       // moisture
+    const slF=Math.exp(-Math.max(0,slopeN[i])/slopeK);             // slope shedding (steep → thin soil)
+    const tiF=0.4+0.6*Math.max(0,Math.min(1,age[i]));              // time: older surfaces more developed
+    out[i]=Math.max(0,Math.min(1, tF*mF*w*slF*tiF));
+  }
+  return out;
+}
+/* W(x,y) ∈ [0,1]: hydrological access — exponential decay from rivers + coast (Σ e^(−d/λ), pre-industrial
+   gathering radius). Reuses chamferDist; water cells = 1. Pure. */
+function buildWaterAccess(flowField, fld, W, H, sea, opts){
+  const o=opts||{}, n=W*H, out=new Float32Array(n);
+  const lam=o.lambda!=null?o.lambda:Math.max(3,W/64), thr=o.thresh!=null?o.thresh:W*H*0.0004;
+  const src=new Uint8Array(n);
+  for(let i=0;i<n;i++){ if(fld[i]<sea) src[i]=1; else if(flowField&&flowField[i]>thr) src[i]=1; }
+  const d=chamferDist(src,W,H);
+  for(let i=0;i<n;i++) out[i]= fld[i]<sea ? 1 : Math.max(0,Math.min(1,Math.exp(-d[i]/lam)));
+  return out;
+}
+let _lithField=null, _soilField=null, _waterField=null;   // cached; cleared each generate()/computeFlow(); built lazily for debug views + export
+function currentLithology(){ if(!_lithField) _lithField=buildLithology(field,ageField,heterogeneityField,volcanicField,plateCrust(),resistanceField,rainField,GW,GH,state.seaLevel); return _lithField; }
+function currentSoil(){ if(!_soilField){ const sl=new Float32Array(GW*GH); for(let y=0;y<GH;y++)for(let x=0;x<GW;x++) sl[y*GW+x]=slopeAt(x,y)*GW; _soilField=buildSoilFertility(currentLithology(),tempField,rainField,sl,ageField,GW,GH); } return _soilField; }
+function currentWaterAccess(){ if(!_waterField) _waterField=buildWaterAccess(flowField,field,GW,GH,state.seaLevel); return _waterField; }
+
+/* v0.105 resource potential fields — 6 resources derived from lith + tectonic setting. */
+const RESOURCE_KEYS=['copper','tin','iron','gold','salt','timber'];
+const RESOURCE_NAMES=['Copper (Cu)','Tin (Sn)','Iron (Fe)','Gold (Au)','Salt','Timber'];
+const RESOURCE_COLS=[[184,108,40],[148,148,160],[108,88,72],[212,180,40],[220,210,160],[48,100,56]];
+function resourceIndexManifest(){ const indices={}; RESOURCE_KEYS.forEach((k,i)=>indices[k]={name:RESOURCE_NAMES[i],col:RESOURCE_COLS[i]}); return {version:VERSION,indices}; }
+
+/* buildResourcePotentials — 6 [0,1] scalar fields from lith + boundary type + shear + biome.
+   boundaryType uses BTYPE constants: subductionOC=2, arcOO=3, transform=5.
+   biome is a Uint8 array in BIOME_KEYS 1-based order (0=ocean, 3=boreal, 4=conifer, 5=tempForest, 6=tempRain, 12=tropWet).
+   Returns {copper, tin, iron, gold, salt, timber} — all Float32Array [0,1]. Pure. */
+function buildResourcePotentials(lith, boundaryType, shearField, flowField, biome, fld, rain, age, W, H, sea, opts){
+  const o=opts||{}, n=W*H, denom=Math.max(1e-6,1-sea);
+  const ageOld=o.ageOld!=null?o.ageOld:0.60, cuLam=o.cuLam!=null?o.cuLam:Math.max(3,W/24);
+  /* copper: Gaussian decay from subduction/arc boundary cells */
+  const cuSrc=new Uint8Array(n);
+  for(let i=0;i<n;i++) if(boundaryType&&(boundaryType[i]===2||boundaryType[i]===3)) cuSrc[i]=1;
+  const cuDist=chamferDist(cuSrc,W,H);
+  const copper=new Float32Array(n), tin=new Float32Array(n), iron=new Float32Array(n),
+        gold=new Float32Array(n), salt=new Float32Array(n), timber=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    if(fld[i]<sea) continue;   // all resources = 0 in open water
+    const li=lith[i], ai=age[i], ri=rain[i];
+    const sh=shearField?Math.abs(shearField[i]):0;
+    const bt=boundaryType?boundaryType[i]:0;
+    const r=(fld[i]-sea)/denom;
+    /* copper — porphyry Cu: highest near subduction/arc, amplified in andesite/basalt */
+    copper[i]=Math.min(1,Math.exp(-cuDist[i]/cuLam)*(li===2?1.0:li===1?0.8:0.55));
+    /* tin — pegmatite Sn in old granites, skarn in metamorphic */
+    tin[i]= li===0&&ai>ageOld?0.70 : li===6?0.45 : li===0?0.30 : 0;
+    /* iron — BIF in old shields, bog iron in wet shale lowlands */
+    iron[i]= (li===0&&ai>ageOld&&bt===0)?0.65 : (li===5&&ri>0.55&&r<0.25)?0.55 : (li===3)?0.20 : 0;
+    /* gold — orogenic Au from transform faults + quartz veins in sheared granites */
+    gold[i]= bt===5?Math.min(1,0.65+0.35*sh) : (sh>0.25&&li===0)?Math.min(0.55,0.20+sh) : (li===0&&ai>ageOld)?0.12 : 0;
+    /* salt — evaporite basins: arid lowlands in limestone/sandstone settings */
+    if(r<0.25&&ri<0.22) salt[i]= (li===3||li===4)?Math.min(0.90,0.50+0.40*(0.22-ri)/0.22) : (r<0.12&&ri<0.12)?0.40 : 0;
+    /* timber — closed-canopy biomes (biome 3=boreal,4=conifer,5=tempForest,6=tempRain,12=tropWet) */
+    if(biome){ const bv=biome[i]; if(bv===3||bv===4||bv===5||bv===6||bv===12) timber[i]=Math.min(1,0.40+0.60*Math.min(1,ri*1.5)); }
+  }
+  return {copper,tin,iron,gold,salt,timber};
+}
+
+/* buildCarryingCapacity — food productivity K(x,y)∈[0,1]: soil × climate × water modifier.
+   biome is optional; ocean (fld<sea) → 0. Pure. */
+function buildCarryingCapacity(soil, water, biome, temp, fld, W, H, sea, opts){
+  const o=opts||{}, n=W*H, out=new Float32Array(n), tOpt=o.tOpt!=null?o.tOpt:18, tVar=o.tVar!=null?o.tVar:800;
+  for(let i=0;i<n;i++){
+    if(fld[i]<sea) continue;   // ocean = 0
+    if(biome&&biome[i]===0) continue;
+    const T=temp[i], tF=Math.exp(-((T-tOpt)*(T-tOpt))/tVar);    // temperature bell (~18 °C peak)
+    const wMod=0.25+0.75*water[i];                                // water multiplier [0.25, 1.0]
+    out[i]=Math.max(0,Math.min(1, soil[i]*tF*wMod));
+  }
+  return out;
+}
+
+/* buildSettlementSuitability — P_settle = σ(Z) where Z = weighted sum of food/water/access/defend/trade.
+   slopeN is slopeAt×W (resolution-independent). ocean (fld<sea) → 0. Pure. */
+function buildSettlementSuitability(soil, water, carryingCap, fld, slopeN, W, H, sea, opts){
+  const o=opts||{}, n=W*H, out=new Float32Array(n);
+  const wK=o.wK!=null?o.wK:0.35, wW=o.wW!=null?o.wW:0.25, wA=o.wA!=null?o.wA:0.15;
+  const wD=o.wD!=null?o.wD:0.10, wC=o.wC!=null?o.wC:0.15, slopeMax=o.slopeMax!=null?o.slopeMax:4.0;
+  const denom=Math.max(1e-6,1-sea);
+  for(let i=0;i<n;i++){
+    if(fld[i]<sea) continue;   // ocean = 0
+    const K=carryingCap[i], Wa=water[i];
+    const A=Math.max(0,1-slopeN[i]/slopeMax);                      // accessibility: gentle = 1, cliff = 0
+    const r=(fld[i]-sea)/denom;
+    const D=Math.max(0,1-4*Math.abs(r-0.35));                       // defensibility: mild upland r≈0.35 scores highest
+    const C=Math.min(1,Wa*1.2);                                      // coast/trade: proximity to water = trade access
+    const Z=wK*K+wW*Wa+wA*A+wD*D+wC*C;
+    out[i]=Math.max(0,Math.min(1,1/(1+Math.exp(-6*(Z-0.5)))));       // logistic sigmoid
+  }
+  return out;
+}
+
+/* findSettlementSeeds — advisory local maxima of P_settle above threshold, with suppression radius.
+   Returns [{x,y,score}] sorted by score descending. Never auto-places settlements. Pure. */
+function findSettlementSeeds(suit, W, H, opts){
+  const o=opts||{}, thresh=o.thresh!=null?o.thresh:0.65, suppR=o.suppR!=null?o.suppR:Math.max(4,W/20);
+  const cands=[];
+  for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){
+    const i=y*W+x, v=suit[i]; if(v<thresh) continue;
+    let isMax=true;
+    lp: for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+      if(dy===0&&dx===0) continue; if(suit[(y+dy)*W+(x+dx)]>v){ isMax=false; break lp; }
+    }
+    if(isMax) cands.push({x,y,score:v});
+  }
+  cands.sort((a,b)=>b.score-a.score);
+  const seeds=[], suppR2=suppR*suppR;
+  for(const c of cands){
+    let ok=true;
+    for(const s of seeds){ const dx=c.x-s.x,dy=c.y-s.y; if(dx*dx+dy*dy<suppR2){ok=false;break;} }
+    if(ok) seeds.push(c);
+  }
+  return seeds;
+}
+
+/* caches — cleared each generate() + computeFlow() (same sites as _lithField/_soilField/_waterField) */
+let _resourcePots=null, _carryCapField=null, _settleSuitField=null;
+function currentResourcePotentials(){ if(!_resourcePots){ const bio=buildBiomeRaster(); _resourcePots=buildResourcePotentials(currentLithology(),boundaryType,shearField,flowField,bio,field,rainField,ageField,GW,GH,state.seaLevel); } return _resourcePots; }
+function currentCarryingCapacity(){ if(!_carryCapField){ const bio=buildBiomeRaster(); _carryCapField=buildCarryingCapacity(currentSoil(),currentWaterAccess(),bio,tempField,field,GW,GH,state.seaLevel); } return _carryCapField; }
+function currentSettlementSuitability(){ if(!_settleSuitField){ const slopeN=new Float32Array(GW*GH); for(let y=0;y<GH;y++)for(let x=0;x<GW;x++) slopeN[y*GW+x]=slopeAt(x,y)*GW; _settleSuitField=buildSettlementSuitability(currentSoil(),currentWaterAccess(),currentCarryingCapacity(),field,slopeN,GW,GH,state.seaLevel); } return _settleSuitField; }
+
+/* ============================================================================
+   v0.106 — TECTONIC INVERSION for imported heightmaps (Phase B, docs/AFFORDANCE_FIELD_PLAN.md)
+   ----------------------------------------------------------------------------
+   An imported DEM (loadImage/loadZip) arrives with field[] but every tectonic
+   proxy field zeroed and plates=[], so the whole affordance stack (lithology /
+   resources / settlement) and the Tect/Lith debug views + exports read zeros.
+   inferTectonics() reconstructs a PLAUSIBLE proxy plates[] + tectonic field set
+   from the heightmap's morphology, reusing the forward machinery for everything
+   downstream of stress. Mountains/rifts mark plate BOUNDARIES; cratonic plains
+   and ocean basins mark plate INTERIORS — so we seed plates in low-relief
+   interiors, partition by Voronoi (boundaries fall on the relief belts), classify
+   crust from elevation, and synthesise stress DIRECTLY from relief (velocity
+   inversion is ill-posed). Deterministic from the heightmap alone (no RNG/seed).
+   The pure primitives follow the amplifyRegion mold (no globals; headless-tested).
+   Never called from generate() ⇒ default field/render bit-identical to v0.105.   */
+let _tectInverted=false, _canInvert=false;
+
+/* boundary-probability proxy: blurred gradient magnitude — high on orogenic belts
+   & trench scarps, low on plains & abyssal basins. Pure (amplifyRegion mold). */
+function buildReliefField(fld, W, H, opts){
+  const o=opts||{}, n=W*H, g=new Float32Array(n), wrap=!!o.wrap;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x;
+    const xl=x>0?i-1:(wrap?i+W-1:i), xr=x<W-1?i+1:(wrap?i-W+1:i), yt=y>0?i-W:i, yb=y<H-1?i+W:i;
+    const gx=fld[xr]-fld[xl], gy=fld[yb]-fld[yt];
+    g[i]=Math.hypot(gx,gy);
+  }
+  const r=o.blurR!=null?o.blurR:Math.max(1,W/128);
+  const sm=gaussBlur(g, r, W, H, wrap);
+  let mx=1e-9; for(let i=0;i<n;i++) if(sm[i]>mx)mx=sm[i];
+  const out=new Float32Array(n); for(let i=0;i<n;i++) out[i]=sm[i]/mx;
+  return out;
+}
+
+/* plate seeds: one per cell of an aspect-preserving regular grid (count≈opts.count),
+   placed at the LOWEST-relief cell within each grid cell so seeds land in stable
+   interiors/basins and Voronoi edges fall along the relief belts. Pure, deterministic. */
+function pickPlateSeeds(relief, W, H, opts){
+  const o=opts||{};
+  const target=o.count!=null?o.count:Math.max(6,Math.round(W*H/3000));
+  const aspect=W/Math.max(1,H);
+  const rows=Math.max(2,Math.round(Math.sqrt(target/aspect)));
+  const cols=Math.max(2,Math.round(target/rows));
+  const seeds=[];
+  for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+    const x0=Math.floor(gx*W/cols), x1=Math.max(x0+1,Math.floor((gx+1)*W/cols));
+    const y0=Math.floor(gy*H/rows), y1=Math.max(y0+1,Math.floor((gy+1)*H/rows));
+    let best=-1, bestV=Infinity;
+    for(let y=y0;y<y1 && y<H;y++)for(let x=x0;x<x1 && x<W;x++){ const v=relief[y*W+x]; if(v<bestV){bestV=v;best=y*W+x;} }
+    if(best>=0) seeds.push({x:best%W, y:(best/W)|0});
+  }
+  return seeds;
+}
+
+/* per-plate crust sign from mean elevation: below sea ⇒ oceanic (base<0), above ⇒
+   continental (base>0), |base|∈[0.55,1] matching buildPlates' magnitude range. Pure. */
+function classifyPlateCrust(fld, plateId, nPlates, W, H, sea){
+  const n=W*H, sum=new Float64Array(nPlates), cnt=new Float64Array(nPlates);
+  for(let i=0;i<n;i++){ const p=plateId[i]; if(p<0||p>=nPlates) continue; sum[p]+=fld[i]; cnt[p]++; }
+  const base=new Float32Array(nPlates);
+  for(let p=0;p<nPlates;p++){
+    const mean=cnt[p]?sum[p]/cnt[p]:sea;
+    if(mean>=sea){ const c=Math.min(1,(mean-sea)/Math.max(1e-6,1-sea)); base[p]=0.55+0.45*c; }
+    else         { const c=Math.min(1,(sea-mean)/Math.max(1e-6,sea));   base[p]=-(0.55+0.45*c); }
+  }
+  return base;
+}
+
+/* the novel core — synthesise stress/shear/boundaryType from morphology, structurally
+   parallel to computeStress and reusing classifyBoundary + gaussBlur. Normal stress C:
+   magnitude from relief, sign from "updip" (boundary elevation vs the regional trend) —
+   convergent where the margin rises above trend (orogen), divergent where it sits below
+   (rift/trough). Shear S: along-strike elevation gradient (transpression). Pure. */
+function reconstructBoundaryStress(fld, plateId, base, relief, W, H, sea, opts){
+  const o=opts||{}, n=W*H, wrap=!!o.wrap;
+  const blurR=o.blurR!=null?o.blurR:Math.max(2,W/40);
+  const broad=gaussBlur(fld, Math.max(4,W/24), W, H, wrap);          // regional elevation trend
+  const updipK=o.updipK!=null?o.updipK:6, shearK=o.shearK!=null?o.shearK:8;
+  const raw=new Float32Array(n), rawS=new Float32Array(n), domMag=new Float32Array(n);
+  const bMask=new Uint8Array(n), bType=new Uint8Array(n);
+  const gradX=(x,y)=>{ const xl=x>0?y*W+x-1:(wrap?y*W+(x+W-1)%W:y*W+x), xr=x<W-1?y*W+x+1:(wrap?y*W+(x+1)%W:y*W+x); return fld[xr]-fld[xl]; };
+  const gradY=(x,y)=>{ const yt=y>0?(y-1)*W+x:y*W+x, yb=y<H-1?(y+1)*W+x:y*W+x; return fld[yb]-fld[yt]; };
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x, a=plateId[i];
+    const ns=[]; if(x+1<W) ns.push([i+1,1]); if(y+1<H) ns.push([i+W,0]); if(wrap && x===W-1) ns.push([y*W,1]);
+    for(const pr of ns){ const j=pr[0], horiz=pr[1], b=plateId[j];
+      if(b!==a){ bMask[i]=1; bMask[j]=1;
+        const rel=0.5*(relief[i]+relief[j]);
+        const updip=0.5*(fld[i]+fld[j]) - 0.5*(broad[i]+broad[j]);
+        const C=rel*(updip>=0?1:-1)*(0.4+Math.min(1,Math.abs(updip)*updipK));
+        const along= horiz ? gradY(x,y) : gradX(x,y);                // tangential (along-strike) gradient
+        const S=rel*(along>=0?1:-1)*Math.min(1,Math.abs(along)*shearK);
+        raw[i]+=C; raw[j]+=C; rawS[i]+=S; rawS[j]+=S;
+        const mag=Math.abs(C)+Math.abs(S), bt=classifyBoundary(base[a]<0, base[b]<0, C, S);
+        if(mag>=domMag[i]){ domMag[i]=mag; bType[i]=bt; }
+        if(mag>=domMag[j]){ domMag[j]=mag; bType[j]=bt; }
+      }
+    }
+  }
+  const stress=gaussBlur(raw, blurR, W, H, wrap);
+  let mx=1e-6; for(let i=0;i<n;i++){ const v=Math.abs(stress[i]); if(v>mx)mx=v; } for(let i=0;i<n;i++) stress[i]/=mx;
+  const shear=gaussBlur(rawS, blurR, W, H, wrap);
+  let ms=1e-6; for(let i=0;i<n;i++){ const v=Math.abs(shear[i]); if(v>ms)ms=v; } for(let i=0;i<n;i++) shear[i]/=ms;
+  return {stressField:stress, shearField:shear, boundaryMask:bMask, boundaryType:bType};
+}
+
+/* volcanic-arc proxy: chamfer decay from subduction/arc boundary cells so
+   buildLithology's volcanic→andesite branch lights up for imported DEMs. Pure. */
+function stampVolcanicArcs(boundaryType, W, H, opts){
+  const o=opts||{}, n=W*H, src=new Uint8Array(n);
+  for(let i=0;i<n;i++){ const t=boundaryType[i]; if(t===BTYPE.subductionOC||t===BTYPE.arcOO) src[i]=1; }
+  let any=false; for(let i=0;i<n;i++) if(src[i]){ any=true; break; }
+  const out=new Float32Array(n); if(!any) return out;
+  const d=chamferDist(src, W, H), decay=o.decay!=null?o.decay:Math.max(3,W/80);
+  for(let i=0;i<n;i++) out[i]=Math.exp(-d[i]/decay);
+  return out;
+}
+
+/* coarse per-plate velocity inferred from convergent margins (so the plate-motion
+   debug arrows aren't dead after inversion). Mutates the live plates[]. */
+function inferPlateVelocities(){
+  const np=plates.length, sx=new Float64Array(np), sy=new Float64Array(np), c=new Float64Array(np);
+  for(let i=0;i<boundaryMask.length;i++){ if(!boundaryMask[i]||stressField[i]<=0) continue; const p=plateId[i]; sx[p]+=i%GW; sy[p]+=(i/GW)|0; c[p]++; }
+  for(let p=0;p<np;p++){ if(!c[p]){ plates[p].vx=0; plates[p].vy=0; continue; } let dx=sx[p]/c[p]-plates[p].x, dy=sy[p]/c[p]-plates[p].y; const l=Math.hypot(dx,dy)||1; plates[p].vx=dx/l; plates[p].vy=dy/l; }
+}
+
+/* orchestrator: reconstruct plates + tectonic fields from the live `field`, then run the
+   forward downstream stages verbatim (assignPlates / distanceToBoundary→age /
+   computeHeterogeneity / computeResistance / computeFlexure). Opt-in (Import-menu button),
+   never from generate(). Leaves `field` untouched — only the tectonic/derived layers. */
+function inferTectonics(){
+  if(!field||!field.length) return;
+  const W=GW, H=GH, sea=state.seaLevel, wrap=!!state.world;
+  const relief=buildReliefField(field, W, H, {wrap});
+  const seeds=pickPlateSeeds(relief, W, H, {});
+  plates=seeds.map(s=>({x:s.x+0.5, y:s.y+0.5, vx:0, vy:0, base:0}));
+  assignPlates();                                                    // proven JFA Voronoi (wrap/warp aware)
+  const base=classifyPlateCrust(field, plateId, plates.length, W, H, sea);
+  for(let p=0;p<plates.length;p++) plates[p].base=base[p];
+  const r=reconstructBoundaryStress(field, plateId, base, relief, W, H, sea, {wrap});
+  stressField=r.stressField; shearField=r.shearField; boundaryMask=r.boundaryMask; boundaryType=r.boundaryType;
+  baseField=new Float32Array(W*H);
+  for(let i=0;i<baseField.length;i++) baseField[i]=plates[plateId[i]].base;
+  baseField=gaussBlur(baseField, Math.max(2, state.tect.blurR*0.35));
+  const dRaw=distanceToBoundary();
+  let maxd=1e-6; for(let i=0;i<dRaw.length;i++) if(dRaw[i]<1e8 && dRaw[i]>maxd) maxd=dRaw[i];
+  ageField=new Float32Array(W*H);
+  for(let i=0;i<ageField.length;i++) ageField[i]=Math.min(1,dRaw[i]/maxd);
+  computeHeterogeneity();                                            // needs ageField + warpX/Y (null after import ⇒ handled)
+  computeResistance();                                              // needs ageField + plateId + plates
+  computeFlexure();                                                 // needs boundaryMask + stressField
+  volcanicField=stampVolcanicArcs(boundaryType, W, H, {});
+  inferPlateVelocities();
+  _boundaryGraph=null; _oroPrev=null;                               // T1/T2 caches stale
+  _lithField=null; _soilField=null; _waterField=null;              // affordance caches stale
+  _resourcePots=null; _carryCapField=null; _settleSuitField=null;
+  _cartBiome=null; _cartTerrain=null;
+  _tectInverted=true;
+  refreshClimate(); renderNow();
+}
+
 /* ---- biome raster handoff to Cartalith (docs/BIOME_AND_VISUALS_PLAN.md, Part A) ----
    Stable index: 0 = ocean, then a FROZEN order (append-only; never renumber — the
    index is written into save files). One byte per cell. */
@@ -2787,7 +3350,7 @@ function buildCoastSDF(fld, W, H, sea, opts){
   return sdf;
 }
 /* signed river distance from the discharge mask: <0 inside a channel cell, >0 away from rivers (in cells).
-   thresh follows buildRiverField's coarse-discharge cutoff so the two stay consistent. */
+   thresh follows buildRiverNetwork's coarse-discharge cutoff (W·H·0.0004) so the two stay consistent. */
 function buildRiverSDF(flow, W, H, opts){
   opts=opts||{};
   const n=W*H, thresh=opts.thresh!=null?opts.thresh:W*H*0.0004, riv=new Uint8Array(n), notRiv=new Uint8Array(n);
@@ -2901,6 +3464,7 @@ const MANGROVE=[[38,56,42],[50,72,52],[64,90,65]];                              
 const ORGANIC=[[38,30,22],[52,42,30],[68,56,40]];                                                              // peat / dark humus / organic soil
 function slopeAt(x,y){ const xl=state.world?(x-1+GW)%GW:(x>0?x-1:x), xr=state.world?(x+1)%GW:(x<GW-1?x+1:x); const L=field[y*GW+xl],R=field[y*GW+xr],U=y>0?field[(y-1)*GW+x]:field[y*GW+x],D=y<GH-1?field[(y+1)*GW+x]:field[y*GW+x]; return Math.hypot((R-L)*0.5,(D-U)*0.5); }
 function vignetteAt(x,y){ const vx=x/(GW-1)-0.5, vy=y/(GH-1)-0.5; return 1 - smoothstep(0.34,0.74,Math.hypot(vx,vy))*0.42; }
+function gradAt(x,y){ const xl=state.world?(x-1+GW)%GW:(x>0?x-1:x), xr=state.world?(x+1)%GW:(x<GW-1?x+1:x); const L=field[y*GW+xl],R=field[y*GW+xr],U=y>0?field[(y-1)*GW+x]:field[y*GW+x],D=y<GH-1?field[(y+1)*GW+x]:field[y*GW+x]; return [(R-L)*0.5,(D-U)*0.5]; }   /* v0.108: ∇field for hachure downslope direction */
 /* Aspect factor (doc §12): how much does this slope face the equator?
    +1 = fully equator-facing (sunny/dry in NH, shaded/wet in SH), −1 = pole-facing.
    Used to create moisture asymmetry between sun-facing and shaded hillsides.       */
@@ -3006,7 +3570,7 @@ function bioJitter(x,y){
     ? 0.6*vnoise(x/GW*44,y/GW*44,31)+0.4*vnoise(x/GW*150,y/GW*150,33)
     : vnoise(x/GW*40,y/GW*40,31);
 }
-function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py,ao,ecoK){
+function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py,ao,ecoK,gx,gy){
   /* noise-jitter the climate driving material edges → organic ecotone boundaries.
      ecoK (v0.096, default 1 ⇒ bit-identical) widens the jitter near biome boundaries for an
      SDF-distance-proportional ecotone — the engine passes >1 only when state.viz.sdfBiomes is on. */
@@ -3102,6 +3666,32 @@ function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,p
     lit=mix(lit,[208,218,230],haze);
   }
 
+  /* ===== v0.108 Phase D — "The Painter" NPR (docs/AFFORDANCE_FIELD_PLAN.md): four opt-in hand-drawn
+     styles, each its own intensity slider. All gated (slider 0 ⇒ block skipped) and land-only (r>0),
+     evaluated in shared grid-coordinate space (px,py) so they stay seamless across tiles/bakes — every
+     slider 0 ⇒ bit-identical. Order: watercolor wash → contour veins → ink edges → hachure. */
+  if(px!==undefined && r>0){ const viz=state.viz||{};
+    const wcK=viz.watercolor>0?viz.watercolor:0;            /* D-watercolor: pigment pooling + paper granulation + edge blooms */
+    if(wcK>0){ const fx=px/(GW||1), fy=py/(GW||1);
+      const pool=fbm(fx*7,fy*7,151)-0.5, gran=vnoise(fx*180,fy*180,153)-0.5;
+      const m=1+wcK*(0.18*pool+0.10*gran); lit=[lit[0]*m,lit[1]*m,lit[2]*m];
+      const bloom=Math.min(1,Math.abs(curv)*40)*wcK*0.25;
+      if(bloom>0) lit=[lit[0]*(1-bloom*0.40),lit[1]*(1-bloom*0.35),lit[2]*(1-bloom*0.30)]; }
+    const cnK=viz.contours>0?viz.contours:0;                /* D-contours: constant-(map)-width elevation isolines, every Nth an index line */
+    if(cnK>0){ const iv=0.05, fpos=r/iv, d=Math.abs(fpos-Math.round(fpos))*iv;
+      const cw=Math.max(iv*0.04, slope*0.5); let t=1-Math.min(1,d/cw); t*=t;
+      if(t>0){ const idxLine=(((Math.round(fpos))%5)===0)?1.4:1.0, a=Math.min(0.9,cnK*0.55*t*idxLine);
+        lit=[lit[0]*(1-a),lit[1]*(1-a),lit[2]*(1-a)]; } }
+    const inkK=viz.ink>0?viz.ink:0;                         /* D-ink: pen outline on strong landform edges (curvature×slope) with hand-drawn weight wobble */
+    if(inkK>0){ const fx=px/(GW||1), fy=py/(GW||1), wob=0.7+0.6*fbm(fx*120,fy*120,161);
+      const edge=Math.min(1,Math.abs(curv)*55*wob)*Math.min(1,slope*6);
+      if(edge>0.18){ const a=Math.min(0.9,inkK*0.8*(edge-0.18)); lit=[lit[0]*(1-a),lit[1]*(1-a),lit[2]*(1-a)]; } }
+    const haK=viz.hachure>0?viz.hachure:0;                  /* D-hachure: downslope hatching, denser/darker on steeper ground (needs gradient gx,gy) */
+    if(haK>0 && (gx||gy)){ const slN=Math.min(1,slope/0.08);
+      if(slN>0.12){ const gl=Math.hypot(gx,gy)||1, u=px*(-gy/gl)+py*(gx/gl), freq=0.9*(0.6+0.8*slN);
+        const stroke=Math.max(0,Math.sin(u*freq))*slN, a=Math.min(0.85,haK*0.6*stroke);
+        lit=[lit[0]*(1-a),lit[1]*(1-a),lit[2]*(1-a)]; } }
+  }
   const k=(ao===undefined?1:ao)*vig;   // R1 ambient occlusion (ao=1 default ⇒ unchanged)
   return [lit[0]*k,lit[1]*k,lit[2]*k];
 }
@@ -3130,7 +3720,7 @@ function buildAOField(src,k){
 /* R2 ridge crest enhancement (docs/research/terrain-rendering-enhancement.md §3,§6): a crest cell is convex
    (Laplacian < 0 → sheds water, exposed) AND steep. Strength = convexity × G^1.5 slope weight (the §3 rock-
    weight exponent, realised here as the crest's slope term). Land only; world-wrap ignored (subtle decoration,
-   like _riverField). Pure → headless-testable. The renderer turns it into thin bright "sunlit rock" strokes. */
+   like _riverNet). Pure → headless-testable. The renderer turns it into thin bright "sunlit rock" strokes. */
 const CREST_SLOPE_HI=0.05;        // slope at which the G^1.5 weight saturates (coarse-cell units, ≈ materialWeights' slopeStr scale)
 /* sx,sy = coarse cells per sample step (1 on the GW×GH main map; cx,cy on an amplified tile) so the slope
    gate + curvature stay on the coarse-cell scale regardless of sampling resolution. Default 1 ⇒ main map exact. */
@@ -3196,17 +3786,16 @@ function surfaceColor(x,y,i,vw){
   const twi=Math.log(a/beta);
   /* aspect = equator-facing factor; curvature = Laplacian (doc §12) */
   const asp=aspectFactor(x,y), curv=curvatureAt(x,y);
+  let hgx=0,hgy=0; if(state.viz&&state.viz.hachure>0){ const g=gradAt(x,y); hgx=g[0]; hgy=g[1]; }   /* v0.108 hachure: downslope direction */
   const c=landColorCore(T,M,sl,r, vnoise(x*0.06,y*0.06,11),vnoise(x*0.45,y*0.45,23),bioJitter(x,y),
-    shadeFactor(x,y), shadeFactor2(x,y), twi, asp, curv, state.bioBlend, vignetteAt(x,y), x, y, _aoField?_aoField[i]:1, sdfEcoKv(_biomeBD?_biomeBD[i]:null));
+    macroShade(x,y), shadeFactor2(x,y), twi, asp, curv, state.bioBlend, vignetteAt(x,y), x, y, _aoField?_aoField[i]:1, sdfEcoKv(_biomeBD?_biomeBD[i]:null), hgx, hgy);
   if(_crestField) applyCrest(c, _crestField[i]*state.viz.crest*0.7);   /* R2: thin bright ridge-crest strokes (null when off ⇒ skipped) */
   applyCoastRiverSDFv(c, _coastSDF?_coastSDF[i]:null, _riverSDF?_riverSDF[i]:null);   /* B2 coast bands + B3 river bands (null SDFs ⇒ no-op ⇒ bit-identical) */
-  /* river overlay — smooth discharge-widened rivers when _riverField is built, else the legacy 1-cell flow threshold */
-  if(state.showRivers){
-    if(_riverField){ const s=_riverField[i]*0.72; if(s>0){ c[0]=c[0]*(1-s)+45*s; c[1]=c[1]*(1-s)+118*s; c[2]=c[2]*(1-s)+200*s; } }
-    else { const fl=flowField[i], thresh=GW*GH*0.0004;
-      if(fl>thresh){ const s=clamp01(Math.log(fl/thresh)/Math.log(GW*GH*0.05))*0.65;
-        c[0]=c[0]*(1-s)+55*s; c[1]=c[1]*(1-s)+130*s; c[2]=c[2]*(1-s)+210*s; } }
-  }
+  /* river overlay — Pillar 1 Strahler/Rosgen widths + Pillar 3 Beer–Lambert depth water (shallow reaches
+     reveal the bed, deep trunks go turbid, sediment-shifted). The legacy flat-blue per-cell overlay was
+     removed in v0.115 — the network is the only river renderer now. */
+  if(state.showRivers && _riverNet){ const s=_riverNet.intensity[i]; if(s>0){ const d=_riverNet.depth[i], sed=Math.min(1,0.18+0.5*d), ws=waterShade(c,d,sed,RIVER_KD), a=s*0.85;
+      c[0]=c[0]*(1-a)+ws[0]*a; c[1]=c[1]*(1-a)+ws[1]*a; c[2]=c[2]*(1-a)+ws[2]*a; } }
   /* R3 minor-channel flow lines (framework §4): subtle blue-grey threads for low-accumulation cells in the
      band below the trunk threshold — "reveals nearly all drainage". Gated on state.viz.minorStreams (default
      0 ⇒ skipped ⇒ bit-identical); screen overlay like the trunk rivers above. */
@@ -3215,6 +3804,64 @@ function surfaceColor(x,y,i,vw){
     if(fl>lo && fl<hi){ const s=clamp01((fl-lo)/(hi-lo))*0.30*msK;
       c[0]=c[0]*(1-s)+95*s; c[1]=c[1]*(1-s)+120*s; c[2]=c[2]*(1-s)+148*s; } }
   return c;
+}
+/* v0.110: the base biome/relief colour under a debug overlay (mirrors the renderNow mode branches),
+   used only when the debug-layer opacity slider is < 1 so the terrain reads through the overlay. */
+function debugBaseColor(x,y,i,vw){
+  const v=field[i];
+  if(state.mode==='gray'){ const c=v*255; return [c,c,c]; }
+  if(state.mode==='shade'){ const s=0.15+0.85*shadeFactor(x,y); const c=s*235; return isWater(vw)?[c*0.45,c*0.6,Math.min(255,c*0.9+40)]:[c,c,c]; }
+  if(state.mode==='biome'){ return isWater(vw)?seaColor(x,y,i,vw):surfaceColor(x,y,i,vw); }
+  let col=hypso(vw);                                            // hypso default
+  if(state.shadeHypso){ const s=0.4+0.6*shadeFactor(x,y); col=[col[0]*s,col[1]*s,col[2]*s]; }
+  if(!isWater(vw)){ const geo=geoidField, gW=j=>isWater(geo?field[j]-geo[j]:field[j]);
+    const wn=(x>0&&gW(i-1))||(x<GW-1&&gW(i+1))||(y>0&&gW(i-GW))||(y<GH-1&&gW(i+GW)); if(wn) col=[col[0]*0.55+20,col[1]*0.55+25,col[2]*0.55+10]; }
+  return col;
+}
+/* v0.110: per-settlement-seed "why here" breakdown — the score, its affordance fundamentals (soil /
+   water / carrying capacity), biome + lithology, coastal-trade flag, and the resource potentials in the
+   site's hinterland (neighbourhood max). Drives the clickable Settlement-view popup AND the
+   settlement_seeds.json export — the prep layer for the Cartalith integration. Reads live fields. */
+function settlementSeedInfo(x,y){
+  x=Math.min(GW-1,Math.max(0,Math.round(x))); y=Math.min(GH-1,Math.max(0,Math.round(y)));
+  const i=y*GW+x;
+  const suit=currentSettlementSuitability(), K=currentCarryingCapacity(), Wa=currentWaterAccess(), So=currentSoil();
+  const rp=currentResourcePotentials(), bio=buildBiomeRaster()[i], lith=currentLithology()[i];
+  const R=Math.max(2,Math.round(GW/64));                        // hinterland radius for resource access
+  const resTop=RESOURCE_KEYS.map((k,idx)=>{ let m=0;
+      for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){ const xx=x+dx,yy=y+dy; if(xx<0||yy<0||xx>=GW||yy>=GH)continue; const vv=rp[k][yy*GW+xx]; if(vv>m)m=vv; }
+      return {key:k, name:RESOURCE_NAMES[idx], value:Math.round(m*100)/100}; })
+    .filter(o=>o.value>=0.35).sort((a,b)=>b.value-a.value);
+  let coastal=false; const CR=Math.max(2,Math.round(GW/96));
+  for(let dy=-CR;dy<=CR&&!coastal;dy++)for(let dx=-CR;dx<=CR;dx++){ const xx=x+dx,yy=y+dy; if(xx<0||yy<0||xx>=GW||yy>=GH)continue; if(field[yy*GW+xx]<state.seaLevel){coastal=true;break;} }
+  const score=suit[i], parts=[];
+  if(So[i]>=0.6)parts.push('fertile soil'); else if(So[i]>=0.35)parts.push('workable soil');
+  if(Wa[i]>=0.6)parts.push('strong water access'); else if(Wa[i]>=0.35)parts.push('some water');
+  if(K[i]>=0.6)parts.push('high carrying capacity');
+  if(coastal)parts.push('coastal trade');
+  if(resTop.length)parts.push('nearby '+resTop.slice(0,3).map(o=>o.name.replace(/\s*\(.*\)/,'').toLowerCase()+' ('+o.value.toFixed(2)+')').join(', '));
+  const summary=(score>=0.7?'Strong':score>=0.5?'Viable':'Marginal')+' site ('+score.toFixed(2)+'): '+(parts.length?parts.join('; '):'balanced fundamentals')+'.';
+  return { x, y, score:Math.round(score*1000)/1000, carryingCapacity:Math.round(K[i]*1000)/1000, waterAccess:Math.round(Wa[i]*1000)/1000,
+    soil:Math.round(So[i]*1000)/1000, biome: bio===0?'ocean':BIOME_KEYS[bio-1], lithology: LITH_NAMES[lith], coastal, resources:resTop, summary };
+}
+function hideSettleInfo(){ const el=document.getElementById('settleInfo'); if(el)el.style.display='none'; }
+function showSettleInfo(x,y,clientX,clientY){
+  const el=document.getElementById('settleInfo'); if(!el)return;
+  const info=settlementSeedInfo(x,y);
+  const res=info.resources.length?info.resources.map(o=>`<div class="si-res"><span>${o.name}</span><b>${o.value.toFixed(2)}</b></div>`).join(''):'<div style="opacity:.55">none notable nearby</div>';
+  el.innerHTML=`<button class="si-close" title="close">×</button>`+
+    `<div class="si-h">Settlement site <span style="opacity:.55">(${info.x}, ${info.y})</span></div>`+
+    `<div class="si-score">score ${info.score.toFixed(2)}</div>`+
+    `<div class="si-sum">${info.summary}</div>`+
+    `<div class="si-grid"><span>soil</span><b>${info.soil.toFixed(2)}</b><span>water</span><b>${info.waterAccess.toFixed(2)}</b><span>carry</span><b>${info.carryingCapacity.toFixed(2)}</b></div>`+
+    `<div class="si-meta">${info.biome} · ${info.lithology}${info.coastal?' · coastal':''}</div>`+
+    `<div class="si-h2">Resources nearby</div>${res}`;
+  el.style.display='block';
+  const w=el.offsetWidth||220, h=el.offsetHeight||170, pad=14; let lx=clientX+pad, ty=clientY+pad;
+  if(lx+w>window.innerWidth)lx=clientX-w-pad; if(lx<6)lx=6;
+  if(ty+h>window.innerHeight)ty=Math.max(6,window.innerHeight-h-6);
+  el.style.left=lx+'px'; el.style.top=ty+'px';
+  const cb=el.querySelector('.si-close'); if(cb)cb.onclick=()=>hideSettleInfo();
 }
 function seaColor(x,y,i,vw){
   const h=_seaH?_seaH[i]:(vw!=null?vw:field[i]);                 /* v0.063: smoothed depth below local sea level (mask still uses raw field) */
@@ -3245,6 +3892,30 @@ function rainColor(m){ const stops=[[200,180,120],[180,190,120],[110,180,150],[5
 /* ===================== colour ===================== */
 function lerp(a,b,t){ return a+(b-a)*t; }
 function mix(c1,c2,t){ return [lerp(c1[0],c2[0],t),lerp(c1[1],c2[1],t),lerp(c1[2],c2[2],t)]; }
+/**
+ * @section HYDROLOGY PIPELINE MODULE — Pillar 3: Optical Realism (water shading)
+ * @physics Depth-based light transport via the Beer–Lambert law I = I₀·e^(−Kd·depth): shallow water
+ *   transmits the bed colour (minor tint), deep water absorbs to a turbid scatter colour whose hue shifts
+ *   blue→green/brown with sediment load. Dynamic flow-map UV animation blends two phase-shifted streams with
+ *   a triangle crossfade for seamless, non-stretching travel along the velocity field. After Premože &
+ *   Ashikhmin (Stanford — "Rendering Natural Waters"); flow-map UV technique is the standard real-time idiom.
+ * @credits Original implementation for the Cartalith engine — algorithms studied, no code copied.
+ */
+const RIVER_KD=5.0;                                   // Beer–Lambert extinction for river water
+/* Beer–Lambert water-column shading. bed = bed/land colour under the water; depth ∈ [0,1] relative column
+   thickness; sed ∈ [0,1] sediment/turbidity; Kd extinction. Shallow ⇒ bed revealed, deep ⇒ scatter colour. Pure. */
+function waterShade(bed, depth, sed, Kd){
+  const T=Math.exp(-(Kd==null?RIVER_KD:Kd)*Math.max(0,depth));      // transmission of the bed
+  const deep=[18+62*sed, 60+48*sed, 100-58*sed];                     // turbid scatter: blue → green/brown with sediment
+  return [ bed[0]*T+deep[0]*(1-T), bed[1]*T+deep[1]*(1-T), bed[2]*T+deep[2]*(1-T) ];
+}
+/* Flow-map crossfade phases: two streams offset half a period, blended by a triangle wave so neither is ever
+   fully stretched — seamless infinite flow. t seconds, period seconds. Returns {phase0,phase1,weight0,weight1}
+   (weights ≥0, sum 1; identical at t and t+period). Pure → headless-testable. */
+function flowMapPhases(t, period){
+  period=period||2; const f=(((t%period)+period)%period)/period, f2=(f+0.5)%1, blend=Math.abs(2*f-1);
+  return { phase0:f, phase1:f2, weight0:1-blend, weight1:blend };
+}
 const SEA=[[10,28,46],[26,86,140],[70,140,196]];
 const LAND=[[0,[47,122,68]],[0.18,[111,154,58]],[0.38,[201,178,74]],[0.58,[150,112,72]],[0.78,[140,140,140]],[1,[248,248,250]]];
 function hypso(v){
@@ -3266,6 +3937,27 @@ function shadeFactor(x,y){
   const lx=Math.cos(alt)*Math.sin(az), ly=-Math.cos(alt)*Math.cos(az), lz=Math.sin(alt);
   return Math.max(0, nx*lx+ny*ly+nz*lz);
 }
+/* v0.104 (Painter D1): multi-directional "multi-sun" hillshade — blends a primary sun (state.sunAz, 45°),
+   a fill sun (sunAz+90°, 35°), a zenith light and a constant ambient floor (Kennelly & Kimerling; "The
+   Painter" §3). Weights 0.40 / 0.30 / 0.20 / 0.10. The ambient floor removes harsh black voids. Gated on
+   state.viz.multiSun (off ⇒ single-source shadeFactor path ⇒ bit-identical). */
+/* v0.109: the multi-sun blend factored out of multiSunShade so the LOD/tile renderer can apply the
+   identical 4-light hillshade from a tile-local normal (Phase A LOD follow-up). Pure (normal in → [0,1]). */
+function multiSunFromNormal(nx,ny,nz){
+  const az=state.sunAz*Math.PI/180, a1=45*Math.PI/180, az2=az+Math.PI/2, a2=35*Math.PI/180;
+  const l1x=Math.cos(a1)*Math.sin(az),  l1y=-Math.cos(a1)*Math.cos(az),  l1z=Math.sin(a1);
+  const l2x=Math.cos(a2)*Math.sin(az2), l2y=-Math.cos(a2)*Math.cos(az2), l2z=Math.sin(a2);
+  const s1=Math.max(0, nx*l1x+ny*l1y+nz*l1z), s2=Math.max(0, nx*l2x+ny*l2y+nz*l2z), sz=Math.max(0,nz);
+  return Math.min(1, 0.40*s1+0.30*s2+0.20*sz+0.10);   // +0.10 ambient floor
+}
+function multiSunShade(x,y){
+  const L=(x>0?field[y*GW+x-1]:field[y*GW+x]), R=(x<GW-1?field[y*GW+x+1]:field[y*GW+x]);
+  const U=(y>0?field[(y-1)*GW+x]:field[y*GW+x]), D=(y<GH-1?field[(y+1)*GW+x]:field[y*GW+x]);
+  const ex=state.exag, dzdx=(R-L)*ex, dzdy=(D-U)*ex;
+  let nx=-dzdx, ny=-dzdy, nz=1; const il=1/Math.hypot(nx,ny,nz); nx*=il; ny*=il; nz*=il;
+  return multiSunFromNormal(nx,ny,nz);
+}
+function macroShade(x,y){ return (state.viz&&state.viz.multiSun)?multiSunShade(x,y):shadeFactor(x,y); }
 
 /* ===================== render ===================== */
 function isWater(v){ return v<state.seaLevel; }
@@ -3273,7 +3965,7 @@ function isWater(v){ return v<state.seaLevel; }
 function renderNow(){
   if(suspendRender) return;
   const px=img.data, dbg=state.debug;
-  if(_lodOn && dbg==='off'){ if(drawLODView()){ updateScaleBar(); return; } }   /* Stage 2: tiled LOD view (off ⇒ normal path untouched) */
+  if(_lodOn && (dbg==='off'||dbg==='lith'||dbg==='soil'||dbg==='water')){ if(drawLODView()){ updateScaleBar(); return; } }   /* Stage 2: tiled LOD view (off ⇒ normal path untouched); v0.109: affordance debug views (lith/soil/water) also tile through LOD */
   if(dbg==='koppen' && koppenField && !koppenField.some(v=>v)) computeSeasons();   /* lazy build for the debug view */
   let pcol=null, flow=null, logMax=1;
   if(dbg==='plates') pcol=plates.map((p,i)=>hsl(((i*137.508)%360)/360, p.base<0?0.40:0.5, p.base<0?0.42:0.6));
@@ -3282,14 +3974,15 @@ function renderNow(){
   let ocean=null; if(dbg==='ocean') ocean=currentOceanField();   /* shows the wind-driven SST anomaly even while currents are off */
   let _oroDbg=null; if(dbg==='oro') _oroDbg=currentOrogenyField();   /* T2 preview, cached; live field while the gate is on */
   let _geoDbg=null; if(dbg==='geoid') _geoDbg=currentGeoidPreview();   /* shows the field even while the toggle is off */
+  if(dbg==='strahler' && !_riverNet) _riverNet=buildRiverNetwork(field,flowField,GW,GH,state.seaLevel,{world:state.world});   /* v0.111 Pillar 1: Strahler stream-order view */
   /* B1 parchment grain — only the two map modes; pk=0 (default) skips the branch entirely */
   const mapView=(dbg==='off'&&(state.mode==='biome'||state.mode==='hypso'));
-  if(state.showRivers && (!state.viz||state.viz.smoothRivers!==false) && mapView && state.mode==='biome'){ if(!_riverField) _riverField=buildRiverField(flowField,field,GW,GH,state.seaLevel); }   /* v0.076: build smooth rivers once; cached until flow changes */
-  else _riverField=null;
+  if(state.showRivers && mapView && state.mode==='biome' && !_riverNet) _riverNet=buildRiverNetwork(field,flowField,GW,GH,state.seaLevel,{world:state.world});   /* v0.111 Pillar 1: build the Strahler/Rosgen river network once; cached until flow changes */
   const pk=(state.viz&&mapView)?state.viz.parchment:0;
   _splatK=(assetPack&&assetPack.texAny&&mapView&&state.mode==='biome')?(state.viz.splat||0):0;   /* B2: textures only in the biome material render */
   /* B4 coastal wave lines — precompute distance-to-coast once; off by default (skips the transform) */
   const wavesOn=!!(state.viz&&mapView&&state.viz.waves);
+  const _dbgAlpha=(state.debugOpacity==null?1:state.debugOpacity);   /* v0.110: debug-layer opacity (1 ⇒ opaque ⇒ unchanged) */
   const effFld=(geoidField&&(wavesOn||(state.viz&&state.viz.icons&&mapView)))?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field;
   _lakeWB=(mapView&&state.mode==='biome'&&state.viz&&state.viz.showLakes!==false)?currentWaterBodies():null;   /* v0.103: render lakes (water-body class 2) as water on the biome map */
   _seaH=(mapView&&state.mode==='biome')?smoothSeaH(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field):null;   /* v0.063: smoothed bathymetry for the biome map's seas (Relief mode keeps the height ramp) */
@@ -3307,6 +4000,13 @@ function renderNow(){
   let _tideDbg=null; if(dbg==='tides') _tideDbg=currentTideField();                        /* previews even while the toggle is off */
   let _cartDbg=null; if(dbg==='cbiome') _cartDbg=currentCartBiome();                        /* v0.078: auto-filled Cartalith biome-paint PoC */
   let _terrDbg=null, _terrWB=null; if(dbg==='cterrain'){ _terrDbg=currentCartTerrain(); _terrWB=currentWaterBodies(); }   /* v0.102/0.103: terrain PoC + water bodies (lakes shown lighter) */
+  let _lithDbg=null; if(dbg==='lith') _lithDbg=currentLithology();                         /* v0.104: rock-type field */
+  let _soilDbg=null; if(dbg==='soil') _soilDbg=currentSoil();                               /* v0.104: soil fertility */
+  let _waterDbg=null; if(dbg==='water') _waterDbg=currentWaterAccess();                     /* v0.104: hydrological access */
+  let _rsrcDbg=null; if(dbg==='rsrc') _rsrcDbg=currentResourcePotentials();                /* v0.105: resource potentials */
+  let _carryDbg=null; if(dbg==='carry') _carryDbg=currentCarryingCapacity();              /* v0.105: carrying capacity */
+  let _settleDbg=null;
+  if(dbg==='settle'){ _settleDbg=currentSettlementSuitability(); _settleSeeds=findSettlementSeeds(_settleDbg,GW,GH); } else _settleSeeds=null;  /* v0.105: settlement suitability + seeds; v0.110: _settleSeeds is module-global for click hit-testing */
   let _wtDbg=null; if(dbg==='windthrow') _wtDbg=currentWindThrowField();                    /* v0.098: disturbance — wind-throw hazard */
   let _flDbg=null; if(dbg==='flood') _flDbg=currentFloodField();                            /* v0.098: disturbance — flood proxy */
   const geo=geoidField;                                            /* G2: vw = height above LOCAL sea level (geo null ⇒ vw===v) */
@@ -3326,6 +4026,18 @@ function renderNow(){
       if(isWater(vw)){ const u=Math.min(1,_tideDbg.f[i]/_tideDbg.max); r=20+u*215; g=70+u*100; b=150-u*120; } else { r=32;g=35;b=40; } }
     else if(dbg==='cbiome'){ const c=CART_BIOME_COLS[(_cartDbg[i]||15)-1]; r=c[0];g=c[1];b=c[2]; }   /* v0.078: Cartalith biome-paint PoC, auto-filled */
     else if(dbg==='cterrain'){ const t=_terrDbg[i]; if(t===0){ if(_terrWB[i]===2){ r=78;g=132;b=190; } else { r=30;g=70;b=110; } } else { const c=CART_TERRAIN_COLS[t-1]; r=c[0];g=c[1];b=c[2]; } }   /* v0.102/0.103: terrain PoC; lakes (wb=2) lighter than sea */
+    else if(dbg==='lith'){ if(isWater(vw)){ r=20;g=26;b=40; } else { const c=LITH_COLS[_lithDbg[i]]; r=c[0];g=c[1];b=c[2]; } }   /* v0.104: rock type */
+    else if(dbg==='soil'){ if(isWater(vw)){ r=18;g=34;b=64; } else { const u=_soilDbg[i]; r=70+u*30; g=66+u*124; b=48+u*42; } }   /* v0.104: pale → rich green = fertile */
+    else if(dbg==='water'){ if(isWater(vw)){ r=30;g=90;b=150; } else { const u=_waterDbg[i]; r=200-u*150; g=198-u*58; b=158+u*62; } }   /* v0.104: dry tan → blue near water */
+    else if(dbg==='rsrc'&&_rsrcDbg){
+      /* show the resource with highest value at this cell, colored by RESOURCE_COLS */
+      let best=-1,bi=-1; const rkeys=['copper','tin','iron','gold','salt','timber'];
+      for(let k=0;k<rkeys.length;k++){ const rv=_rsrcDbg[rkeys[k]][i]; if(rv>best){best=rv;bi=k;} }
+      if(best>0.01){ const c=RESOURCE_COLS[bi]; r=Math.round(c[0]*best+40*(1-best)); g=Math.round(c[1]*best+40*(1-best)); b=Math.round(c[2]*best+40*(1-best)); }
+      else { r=40; g=40; b=40; }
+    }
+    else if(dbg==='carry'&&_carryDbg){ const v105=_carryDbg[i]; r=Math.round(30+30*v105); g=Math.round(80+140*v105); b=Math.round(30+30*v105); }
+    else if(dbg==='settle'&&_settleDbg){ const v105=_settleDbg[i]; r=Math.round(80+160*v105); g=Math.round(40+100*(1-v105)); b=Math.round(20+30*(1-v105)); }
     else if(dbg==='windthrow'){ if(isWater(vw)){ r=18;g=34;b=64; } else { const u=_wtDbg[i]; r=50+u*205; g=200-u*150; b=50; } }   /* v0.098: green (safe) → red (high wind-throw risk) */
     else if(dbg==='flood'){ if(isWater(vw)){ const c=hypso(v); r=c[0]*0.7;g=c[1]*0.75;b=c[2]; } else { const u=_flDbg[i]; r=40+u*30; g=95+u*35; b=150+u*100; } }   /* v0.098: pale (dry) → deep blue (flood-prone) */
     else if(dbg==='koppen'){ if(isWater(vw)){ r=18;g=34;b=64; } else { const c=koppenColor(koppenField[i]); r=c[0];g=c[1];b=c[2]; } }
@@ -3344,6 +4056,15 @@ function renderNow(){
     else if(dbg==='temp'){ const c=tempColor(tempField[i]); r=c[0];g=c[1];b=c[2]; }
     else if(dbg==='rain'){ if(isWater(vw)){ r=18;g=34;b=64; } else { const c=rainColor(rainField[i]); r=c[0];g=c[1];b=c[2]; } }
     else if(dbg==='flow'){ if(isWater(vw)){ const c=hypso(v); r=c[0]*0.7;g=c[1]*0.75;b=c[2]; } else { const a=Math.log(1+flow[i])/logMax; const land=60+v*120; const t=Math.min(1,Math.pow(a,1.6)*2.4); r=land*(1-t)+28*t; g=land*(1-t)+96*t; b=land*(1-t)+205*t; } }
+    else if(dbg==='velo'){ /* v0.112 Pillar 2: velocity-erosion flow field (hue=direction, brightness=speed); falls back to dim terrain before the op has run */
+      if(_veloVx){ const sp=Math.hypot(_veloVx[i],_veloVy[i]);
+        if(sp>0.01 && vw>=state.seaLevel){ const bearing=Math.atan2(_veloVy[i],_veloVx[i])/(2*Math.PI)+0.5, c=hsl(((bearing%1)+1)%1,0.72,0.24+0.5*Math.min(1,sp/2)); r=c[0];g=c[1];b=c[2]; }
+        else if(isWater(vw)){ r=18;g=34;b=64; } else { const s=0.30+0.30*shadeFactor(x,y),cc=v*235*s; r=cc*0.9;g=cc*0.93;b=cc; } }
+      else if(isWater(vw)){ r=18;g=34;b=64; } else { const s=0.30+0.30*shadeFactor(x,y),cc=v*235*s; r=cc*0.9;g=cc*0.93;b=cc; } }
+    else if(dbg==='strahler'){ /* v0.111 Pillar 1: Strahler stream order — order 1 headwaters → high-order trunks (hue ramp) over a dim terrain base */
+      if(isWater(vw)){ r=18;g=34;b=64; } else { const o=_riverNet?_riverNet.order[i]:0;
+        if(o>0){ const tt=Math.min(1,(o-1)/6), c=hsl((0.52-0.42*tt+1)%1, 0.72, 0.34+0.20*tt); r=c[0];g=c[1];b=c[2]; }
+        else { const s=0.30+0.30*shadeFactor(x,y), c=v*235*s; r=c*0.9;g=c*0.93;b=c; } } }
     else if(state.mode==='gray'){ const c=v*255; r=g=b=c; }
     else if(state.mode==='shade'){ const s=0.15+0.85*shadeFactor(x,y); let c=s*235; r=g=b=c; if(isWater(vw)){ r=c*0.45;g=c*0.6;b=Math.min(255,c*0.9+40); } }
     else if(state.mode==='biome'){
@@ -3359,6 +4080,8 @@ function renderNow(){
           r=cl[0]*(1-t)+cs[0]*t; g=cl[1]*(1-t)+cs[1]*t; b=cl[2]*(1-t)+cs[2]*t; } }
       else { const c = isWater(vw) ? seaColor(x,y,i,vw) : surfaceColor(x,y,i,vw); r=c[0];g=c[1];b=c[2]; } }
     else { let col=hypso(vw); if(state.shadeHypso){ const s=0.4+0.6*shadeFactor(x,y); col=[col[0]*s,col[1]*s,col[2]*s]; } if(!isWater(vw)){ const gW=j=>isWater(geo?field[j]-geo[j]:field[j]); const wn=(x>0&&gW(i-1))||(x<GW-1&&gW(i+1))||(y>0&&gW(i-GW))||(y<GH-1&&gW(i+GW)); if(wn) col=[col[0]*0.55+20,col[1]*0.55+25,col[2]*0.55+10]; } r=col[0];g=col[1];b=col[2]; }
+    if(dbg!=='off' && _dbgAlpha<1){ /* v0.110: blend the debug overlay over the base biome/relief map so terrain reads underneath (alpha=1 ⇒ skipped ⇒ unchanged) */
+      const bc=debugBaseColor(x,y,i,vw); r=bc[0]+(r-bc[0])*_dbgAlpha; g=bc[1]+(g-bc[1])*_dbgAlpha; b=bc[2]+(b-bc[2])*_dbgAlpha; }
     if(wavesOn && vw<state.seaLevel){ /* foam contours hugging the shore, fading into deep water (water cells only) */
       const cd=coastD[i];
       if(cd>0 && cd<WAVE_BAND){ const fade=1-cd/WAVE_BAND,
@@ -3424,11 +4147,44 @@ function renderNow(){
     vctx.fillStyle='rgba(255,255,255,.95)'; vctx.strokeStyle='rgba(10,12,18,.9)'; vctx.lineWidth=Math.max(0.6,GW/900);
     for(const [nx,ny] of G.nodes){ vctx.beginPath(); vctx.arc(nx+0.5,ny+0.5,nodeR,0,7); vctx.fill(); vctx.stroke(); }
   }
+  /* v0.105: settlement seed advisory dots — canvas coords = grid coords (view.width===GW) */
+  if(dbg==='settle'&&_settleSeeds&&_settleSeeds.length){
+    vctx.save(); vctx.strokeStyle='#fff'; vctx.lineWidth=1.5;
+    for(const s of _settleSeeds){
+      const pr=Math.max(3,Math.min(8,s.score*10));
+      vctx.beginPath(); vctx.arc(s.x,s.y,pr,0,Math.PI*2); vctx.fillStyle=`rgba(255,230,80,${0.5+0.5*s.score})`; vctx.fill(); vctx.stroke();
+    }
+    vctx.restore();
+  }
   /* B3 stylized icon layer — recomputed per render (only while toggled on; the pixel loop dominates) */
   if(state.viz && state.viz.icons && dbg==='off' && (state.mode==='biome'||state.mode==='hypso'))
     drawMapIcons(vctx, placeMapIcons(effFld, buildBiomeRaster(), GW, GH, {sea:state.seaLevel, seed:state.tect.seed}), GW, state.tect.seed);
   if(_showExportGrid && !_lodOn) drawExportTileGrid();   /* v0.100: export tile-border preview */
   updateReadout(); updateLegend(); updateScaleBar();
+  if(state.viz&&state.viz.waterAnim && !_waterAnimRAF) startWaterAnim();   /* v0.113 Pillar 3: (re)start the flow-map animation if enabled */
+}
+/* v0.113 Pillar 3 — flow-map water animation (opt-in, browser-only; perf-capped to ≤~400k cells). Draws a
+   travelling shimmer over river cells on the polyOverlay canvas using the velocity field (or downhill
+   gradient) and the two-stream crossfade (flowMapPhases) for seamless flow. Off by default ⇒ never runs. */
+let _waterAnimRAF=null, _waterAnimT0=0;
+function waterAnimActive(){ return !!(state.viz&&state.viz.waterAnim) && GW*GH<=400000 && _riverNet && _activeTab!=='sculpt' && !regionSelMode && !guideDrawMode; }
+function stopWaterAnim(){ if(_waterAnimRAF){ cancelAnimationFrame(_waterAnimRAF); _waterAnimRAF=null; } const oc=document.getElementById('polyOverlay'); if(oc&&oc.width===GW&&oc.height===GH) oc.getContext('2d').clearRect(0,0,GW,GH); }
+function startWaterAnim(){ if(_waterAnimRAF||!waterAnimActive()) return; _waterAnimT0=performance.now(); _waterAnimRAF=requestAnimationFrame(waterAnimFrame); }
+function waterAnimFrame(){
+  if(!waterAnimActive()){ stopWaterAnim(); return; }
+  const oc=document.getElementById('polyOverlay'); if(!oc){ _waterAnimRAF=null; return; }
+  if(oc.width!==GW||oc.height!==GH){ oc.width=GW; oc.height=GH; }
+  const cx=oc.getContext('2d'), id=cx.createImageData(GW,GH), d=id.data;
+  const t=(performance.now()-_waterAnimT0)/1000, ph=flowMapPhases(t,2.4), SCALE=6, F=0.22;
+  const inten=_riverNet.intensity;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const i=y*GW+x, s=inten[i]; if(s<=0.02) continue;
+    let dx,dy; if(_veloVx){ dx=_veloVx[i]; dy=_veloVy[i]; } else { dx=(x>0?field[i-1]:field[i])-(x<GW-1?field[i+1]:field[i]); dy=(y>0?field[i-GW]:field[i])-(y<GH-1?field[i+GW]:field[i]); }
+    const sp=Math.hypot(dx,dy)||1; dx/=sp; dy/=sp;
+    const rip=ph.weight0*vnoise((x-dx*ph.phase0*SCALE)*F,(y-dy*ph.phase0*SCALE)*F,7)+ph.weight1*vnoise((x-dx*ph.phase1*SCALE)*F,(y-dy*ph.phase1*SCALE)*F,7);
+    const a=Math.max(0,rip-0.5)*s*240, p=i*4; d[p]=235; d[p+1]=245; d[p+2]=255; d[p+3]=Math.min(150,a);
+  }
+  cx.putImageData(id,0,0);
+  _waterAnimRAF=requestAnimationFrame(waterAnimFrame);
 }
 /* Public render(): view-param changes use the RAF scheduler; heavy ops call renderNow() directly */
 function render(){ scheduleRender(); }
@@ -3803,6 +4559,16 @@ view.addEventListener('pointerup',()=>{
   endPaintStroke(); });
 view.addEventListener('pointercancel',()=>{ panDrag=null; regionDrag=null; guideCapturing=false; guideRaw=[]; painting=false; _prevGx=NaN; _prevGy=NaN; });
 view.addEventListener('auxclick',e=>{ if(e.button===1)e.preventDefault(); });    // suppress middle-click autoscroll
+/* v0.110: clickable Settlement seeds — in the Settlement debug view, click a gold dot to see WHY the
+   site scored well (resource availability + affordance fundamentals). Hit-test in transform-invariant
+   grid coords; nearest seed within a small radius wins. */
+view.addEventListener('click',e=>{
+  if(state.debug!=='settle'||_lodOn||!_settleSeeds||!_settleSeeds.length){ return; }
+  const [gx,gy]=evtToGrid(e); let best=null,bd=1e18;
+  for(const s of _settleSeeds){ const dx=s.x-gx,dy=s.y-gy,d=dx*dx+dy*dy; if(d<bd){bd=d;best=s;} }
+  const hitR=Math.max(6,GW/55);
+  if(best&&bd<=hitR*hitR) showSettleInfo(best.x,best.y,e.clientX,e.clientY); else hideSettleInfo();
+});
 
 /* ===================== readout + legend ===================== */
 function fmt(n){ return Math.round(n).toLocaleString(); }
@@ -3833,11 +4599,19 @@ function updateLegend(){
   if(state.debug==='wind'){ el.innerHTML='arrows = prevailing wind<br>hue = bearing · brightness = speed'; return; }
   if(state.debug==='ocean'){ el.innerHTML=`${sw([220,110,50])}warm poleward current<br>${sw([30,140,210])}cold equatorward current<br>arrows = surface flow`; return; }
   if(state.debug==='flow'){ el.innerHTML='blue = drainage / rivers<br>(brightness ∝ upstream area)'; return; }
+  if(state.debug==='strahler'){ const sw=h=>`<span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgb(${h[0]},${h[1]},${h[2]});margin-right:4px;vertical-align:middle"></span>`; const oc=t=>{ const tt=Math.min(1,t), c=hsl((0.52-0.42*tt+1)%1,0.72,0.34+0.20*tt); return c; }; el.innerHTML=`Strahler stream order<br>${sw(oc(0))}order 1 (headwaters)<br>${sw(oc(0.5))}mid-order<br>${sw(oc(1))}high-order trunk<br><span style="opacity:.7">width/depth scale with order × slope (Rosgen)</span>`; return; }
+  if(state.debug==='velo'){ el.innerHTML=_veloVx?`Velocity-erosion flow field<br>hue = flow direction · brightness = speed<br><span style="opacity:.7">semi-Lagrangian momentum + centrifugal meander</span>`:`Velocity-erosion flow field<br><span style="opacity:.7">run <b>Velocity erode</b> (Erosion panel) to populate</span>`; return; }
   if(state.debug==='oro'){ el.innerHTML=`${sw(divColor(0.9))}mountain belt · uplift<br>${sw(divColor(0))}no tectonic signal<br>${sw(divColor(-0.9))}trench · basin · graben<br><span style="opacity:.7">requires Structured orogeny</span>`; return; }
   if(state.debug==='geoid'){ el.innerHTML=`${sw(divColor(0.9))}geoid bulge (above mean)<br>${sw(divColor(0))}mean sea level offset<br>${sw(divColor(-0.9))}geoid depression (below mean)<br><span style="opacity:.7">rotation bulge + mantle noise</span>`; return; }
   if(state.debug==='tides'){ el.innerHTML=`${sw([235,170,30])}large tidal range · coastal shelf<br>${sw([20,70,150])}small range · open ocean<br><span style="opacity:.7">land = dark · requires Tides on</span>`; return; }
   if(state.debug==='cbiome'){ el.innerHTML=`Cartalith biome-paint grid<br>${sw(CART_BIOME_COLS[7])}mountain highland<br>${sw(CART_BIOME_COLS[1])}temperate forest<br>${sw(CART_BIOME_COLS[4])}steppe / grassland<br>${sw(CART_BIOME_COLS[9])}hot desert<br>${sw(CART_BIOME_COLS[3])}wetlands<br>${sw(CART_BIOME_COLS[13])}lake<br>${sw(CART_BIOME_COLS[14])}ocean`; return; }
   if(state.debug==='cterrain'){ el.innerHTML=`Cartalith terrain-paint grid<br>${sw(CART_TERRAIN_COLS[7])}mountain pass<br>${sw(CART_TERRAIN_COLS[6])}rocky terrain<br>${sw(CART_TERRAIN_COLS[5])}hills<br>${sw(CART_TERRAIN_COLS[3])}open plains<br>${sw(CART_TERRAIN_COLS[9])}swamp / marsh<br>${sw([78,132,190])}lake<br>${sw([30,70,110])}sea`; return; }
+  if(state.debug==='lith'){ el.innerHTML=`Lithology (rock type)<br>${sw(LITH_COLS[0])}granite / shield<br>${sw(LITH_COLS[1])}basalt (oceanic)<br>${sw(LITH_COLS[2])}andesite (arc)<br>${sw(LITH_COLS[3])}limestone<br>${sw(LITH_COLS[4])}sandstone<br>${sw(LITH_COLS[5])}shale<br>${sw(LITH_COLS[6])}metamorphic`; return; }
+  if(state.debug==='soil'){ el.innerHTML=`Soil fertility<br>${sw([100,190,90])}fertile<br>${sw([85,130,70])}moderate<br>${sw([70,70,50])}poor<br><span style="opacity:.7">climate × lithology × moisture / slope</span>`; return; }
+  if(state.debug==='water'){ el.innerHTML=`Water access<br>${sw([50,140,220])}near rivers / coast<br>${sw([200,200,160])}dry interior<br><span style="opacity:.7">exp. decay from surface water</span>`; return; }
+  if(state.debug==='rsrc'){ el.innerHTML=`Resource potentials (highest at cell)<br>${sw(RESOURCE_COLS[0])}Copper — subduction/arc zones<br>${sw(RESOURCE_COLS[1])}Tin — old granite shields<br>${sw(RESOURCE_COLS[2])}Iron — cratons / bog iron<br>${sw(RESOURCE_COLS[3])}Gold — transform faults + shear<br>${sw(RESOURCE_COLS[4])}Salt — arid evaporite basins<br>${sw(RESOURCE_COLS[5])}Timber — closed-canopy forest`; return; }
+  if(state.debug==='carry'){ el.innerHTML=`Carrying capacity K ∈ [0,1]<br>soil × climate × water<br><span style='color:#60C060'>■</span> high productivity<br><span style='color:#204020'>■</span> low / marginal`; return; }
+  if(state.debug==='settle'){ el.innerHTML=`Settlement suitability P<sub>settle</sub> ∈ [0,1]<br>logistic(food + water + access + defense + trade)<br><span style='color:#ff8040'>■</span> high suitability<br>● advisory sites (threshold ≥ 0.65, no auto-placement)`; return; }
   if(state.debug==='windthrow'){ el.innerHTML=`${sw([50,200,50])}low wind-throw risk<br>${sw([150,125,50])}moderate<br>${sw([255,50,50])}high (exposed forest)<br><span style="opacity:.7">wind × canopy × slope · land only</span>`; return; }
   if(state.debug==='flood'){ el.innerHTML=`${sw([70,130,200])}low-lying / flood-prone<br>${sw([45,100,160])}valley floors<br><span style="opacity:.7">TWI + discharge + base-level · land only</span>`; return; }
   if(state.mode==='biome'){ el.innerHTML=
@@ -4119,7 +4893,7 @@ function updateResOverlay(){
   const f32s=[field,stressField,shearField,baseField,ageField,flexureField,heterogeneityField,resistanceField,
     volcanicField,impactField,tempField,rainField,flowField,
     continentalField,warpX,warpY,geoidField,tideField,orogenyField,
-    _riverField,_aoField,_crestField,_seaH,_seaShade];
+    _aoField,_crestField,_seaH,_seaShade];
   let mb=0;
   f32s.forEach(a=>{ if(a) mb+=a.byteLength; });
   if(plateId) mb+=plateId.byteLength;
@@ -4721,10 +5495,13 @@ function drawLODView(){
     const v=lodViewRect();
     vctx.clearRect(0,0,GW,GH);
     if(!_lodScratch) _lodScratch=document.createElement('canvas');
-    /* Phase 3: tiles follow the View mode — Biome = the full landColorCore look, Relief = the height ramp. */
+    /* Phase 3: tiles follow the View mode — Biome = the full landColorCore look, Relief = the height ramp.
+       v0.109: a lith/soil/water debug view tiles through the affordance renderer instead. */
+    const aff=(state.debug==='lith'||state.debug==='soil'||state.debug==='water');
     const biome=(state.mode==='biome');
-    _splatK=(biome&&assetPack&&assetPack.texAny)?(state.viz.splat||0):0;
-    const tileRGBA=(data,w,h,bx,by,bw,bh)=> biome?renderBiomeTileRGBA(data,w,h,{x:bx,y:by,w:bw,h:bh}):renderHeightTileRGBA(data,w,h);
+    _splatK=(biome&&!aff&&assetPack&&assetPack.texAny)?(state.viz.splat||0):0;
+    const tileRGBA=(data,w,h,bx,by,bw,bh)=> aff?renderAffordanceTileRGBA(data,w,h,{x:bx,y:by,w:bw,h:bh},state.debug)
+      : biome?renderBiomeTileRGBA(data,w,h,{x:bx,y:by,w:bw,h:bh}):renderHeightTileRGBA(data,w,h);
     /* 1) instant overview: the coarse world for the visible region, upscaled with NO procedural detail */
     const base=amplifyRegion(field, GW, GH, {x:v.x0, y:v.y0, w:v.x1-v.x0, h:v.y1-v.y0}, GW, GH, {detailAmp:0, sea:state.seaLevel});
     _lodScratch.width=GW; _lodScratch.height=GH;
@@ -4864,7 +5641,7 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
       const i=y*W+x, h=tile[i], wx=bounds.x+x*cx, p=i*4;
       const L=tile[y*W+(x>0?x-1:x)], R=tile[y*W+(x<W-1?x+1:x)], U=tile[(y>0?y-1:y)*W+x], D=tile[(y<H-1?y+1:y)*W+x];
       let nx=-(R-L)*ex, ny=-(D-U)*ex, nz=1, il=1/Math.hypot(nx,ny,nz); nx*=il; ny*=il; nz*=il;
-      const sh=Math.max(0, nx*lx+ny*ly+nz*lz);
+      const sh=(state.viz&&state.viz.multiSun)?multiSunFromNormal(nx,ny,nz):Math.max(0, nx*lx+ny*ly+nz*lz);   /* v0.109: multi-sun macro hillshade in tiles (off ⇒ single-source ⇒ unchanged) */
       const T=sampleArr(tempField,wx,wy), M=sampleArr(rainField,wx,wy);
       const nLow=vnoise(wx*0.06,wy*0.06,11), nHi=vnoise(wx*0.45,wy*0.45,23), nBio=bioJitter(wx,wy), vig=vignetteAt(wx,wy);
       if(h<sl){ const hh=seaH?seaH[i]:h, shw=seaSh?seaSh[i]:sh, depth=sl<=0?0:clamp01((sl-hh)/sl);
@@ -4881,12 +5658,36 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
       const asp=aspectFactor(Math.round(wx),Math.round(wy)), curv=curvatureAt(Math.round(wx),Math.round(wy));
       const ao=aoB?aoMul(aoB[i]-h,aoK):1;
       const ecoKt=biomeBD?sdfEcoKv(biomeBD[i]*cx):1;                          // B4 in tiles: tile-px → coarse-cell units for sdfEcoKv (off ⇒ 1 ⇒ unchanged)
-      const c=landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,state.bioBlend,vig,wx,wy,ao,ecoKt);
+      let hgx=0,hgy=0; if(state.viz&&state.viz.hachure>0){ hgx=(R-L)/(2*cx); hgy=(D-U)/(2*cy); }   /* v0.108 hachure: world-space ∇ (coarse-cell units, matches main map) */
+      const c=landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,state.bioBlend,vig,wx,wy,ao,ecoKt,hgx,hgy);
       if(crestB) applyCrest(c, crestB[i]*crestK*0.7);                          // R2: ridge crests on the tile
       /* B5 coast + B3 river bands via the shared helper — tile-px SDFs scaled to coarse cells (×cx) so the
          band widths read identically to the main map (din=-coastv/(GW/256) ≡ the old -coastB·cx·256/GW). */
       applyCoastRiverSDFv(c, coastB?coastB[i]*cx:null, riverB?riverB[i]*cx:null);
       out[p]=c[0]; out[p+1]=c[1]; out[p+2]=c[2]; out[p+3]=255;
+    }
+  }
+  return out;
+}
+/* v0.109 (Phase A LOD follow-up): render a lithology / soil / water-access debug tile for the LOD
+   viewer. The affordance fields are coarse (derived from coarse tectonic/climate proxies, no
+   high-frequency detail), so we sample the live coarse field at the tile's world coords and apply the
+   SAME colormap as the main-map debug path (renderNow lith/soil/water branches); the tile's own
+   heightmap supplies only the land/water mask. Pure RGBA compute (like renderBiomeTileRGBA) →
+   headless-testable. `which` ∈ {'lith','soil','water'}. */
+function renderAffordanceTileRGBA(tile,W,H,bounds,which){
+  const out=new Uint8ClampedArray(W*H*4), sl=state.seaLevel;
+  const cx=bounds.w/Math.max(1,W-1), cy=bounds.h/Math.max(1,H-1);
+  const lith = which==='lith' ? currentLithology() : null;
+  const soil = which==='soil' ? currentSoil() : null;
+  const water= which==='water'? currentWaterAccess() : null;
+  for(let y=0;y<H;y++){ const wy=bounds.y+y*cy;
+    for(let x=0;x<W;x++){ const i=y*W+x, h=tile[i], wx=bounds.x+x*cx, p=i*4; let r,g,b;
+      if(h<sl){ if(which==='lith'){ r=20;g=26;b=40; } else if(which==='soil'){ r=18;g=34;b=64; } else { r=30;g=90;b=150; } }   // water-cell colours match the main-map debug views
+      else if(which==='lith'){ const ix=Math.min(GW-1,Math.max(0,Math.round(wx))), iy=Math.min(GH-1,Math.max(0,Math.round(wy))); const c=LITH_COLS[lith[iy*GW+ix]]; r=c[0]; g=c[1]; b=c[2]; }   // categorical → nearest
+      else if(which==='soil'){ const u=sampleArr(soil,wx,wy); r=70+u*30; g=66+u*124; b=48+u*42; }
+      else { const u=sampleArr(water,wx,wy); r=200-u*150; g=198-u*58; b=158+u*62; }
+      out[p]=r; out[p+1]=g; out[p+2]=b; out[p+3]=255;
     }
   }
   return out;
@@ -4947,7 +5748,7 @@ function buildGridFields(){ gridSlope=new Float32Array(GW*GH); gridShade=new Flo
     _coastSDF=(sdfOn&&state.viz.sdfCoast>0)?buildCoastSDF(eff,GW,GH,state.seaLevel,{euclid:true}):null;
     _riverSDF=(sdfOn&&state.viz.sdfRivers>0&&flowField)?buildRiverSDF(flowField,GW,GH,{euclid:true}):null;
     _biomeBD =(sdfOn&&state.viz.sdfBiomes>0)?buildBiomeBoundaryDist(buildBiomeRaster(),GW,GH,{euclid:true}):null; }
-  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const i=y*GW+x; gridSlope[i]=slopeAt(x,y); gridShade[i]=shadeFactor(x,y); gridShadeMeso[i]=shadeFactor2(x,y); } }
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const i=y*GW+x; gridSlope[i]=slopeAt(x,y); gridShade[i]=macroShade(x,y); gridShadeMeso[i]=shadeFactor2(x,y); } }
 function bakePixel(gx,gy){
   const h=sampleArr(field,gx,gy), T=sampleArr(tempField,gx,gy), M=sampleArr(rainField,gx,gy);
   const sl=sampleArr(gridSlope,gx,gy), shd=sampleArr(gridShade,gx,gy), shdM=sampleArr(gridShadeMeso,gx,gy);
@@ -4958,7 +5759,8 @@ function bakePixel(gx,gy){
   const r=(1-state.seaLevel)<=0?0:(h-state.seaLevel)/(1-state.seaLevel);
   const a=Math.max(1e-4,fl/(GW*GH)), beta=Math.max(0.002,sl), twi=Math.log(a/beta);
   const asp=aspectFactor(Math.round(gx),Math.round(gy)), curv=curvatureAt(Math.round(gx),Math.round(gy));
-  const c=landColorCore(T,M,sl,r,nLow,nHi,nBio,shd,shdM,twi,asp,curv,state.bioBlend,vig,gx,gy,_aoField?sampleArr(_aoField,gx,gy):1,sdfEcoKv(_biomeBD?sampleArr(_biomeBD,gx,gy):null));
+  let hgx=0,hgy=0; if(state.viz&&state.viz.hachure>0){ hgx=(sampleArr(field,gx+1,gy)-sampleArr(field,gx-1,gy))*0.5; hgy=(sampleArr(field,gx,gy+1)-sampleArr(field,gx,gy-1))*0.5; }   /* v0.108 hachure */
+  const c=landColorCore(T,M,sl,r,nLow,nHi,nBio,shd,shdM,twi,asp,curv,state.bioBlend,vig,gx,gy,_aoField?sampleArr(_aoField,gx,gy):1,sdfEcoKv(_biomeBD?sampleArr(_biomeBD,gx,gy):null),hgx,hgy);
   if(_crestField) applyCrest(c, sampleArr(_crestField,gx,gy)*state.viz.crest*0.7);   /* R2: bake ridge crests */
   applyCoastRiverSDFv(c, _coastSDF?sampleArr(_coastSDF,gx,gy):null, _riverSDF?sampleArr(_riverSDF,gx,gy):null);   /* v0.097: bake SDF coast/river bands to match the screen */
   return c;
@@ -5128,7 +5930,103 @@ function readme(W,tiled){ const {W:w,H}=bakeDims(W); return [
   'heightmap.f32   raw 32-bit float elevation, '+GW+'×'+GH+' row-major (lossless master layer)',
   'temperature.f32 raw 32-bit float, degrees C','rainfall.f32    raw 32-bit float, relative moisture 0..1',
   'layers/*.png    biome / hillshade / temperature / rainfall, each at '+GW+'×'+GH,
-  tiled?('tiles/          final map '+w+'×'+H+' as 1024px PNG tiles + index.json'):('map.png         final rendered map, '+w+'×'+H+' (lossless PNG)') ].join('\n'); }
+  (document.getElementById('chanAtlasChk')&&document.getElementById('chanAtlasChk').checked)?('atlas/          affordance/resource/class fields packed into 8-bit RGB PNGs (+ index.json channel map); .f32/_raster.bin remain the master copies'):null,
+  tiled?('tiles/          final map '+w+'×'+H+' as 1024px PNG tiles + index.json'):('map.png         final rendered map, '+w+'×'+H+' (lossless PNG)') ].filter(Boolean).join('\n'); }
+/* ============================================================================
+   v0.107 — PHASE C: multi-channel RGBA channel-atlas export (docs/AFFORDANCE_FIELD_PLAN.md)
+   ----------------------------------------------------------------------------
+   The affordance stack currently exports ~11 separate single-field blobs
+   (soil/water/carry/settle + 6 resource .f32 + biome/lith/koppen .bin). Phase C
+   packs them into a handful of 8-bit RGB PNGs (alpha forced to 255 — avoids the
+   canvas premultiplied-alpha round-trip corruption that varying alpha would
+   cause) plus a decode manifest. Smaller, viewable, and directly GPU-samplable
+   by the merged tool later; the full-precision .f32 blobs stay as the master.
+   Pure cores headless-tested (amplifyRegion mold); the PNG wrapping is the
+   browser shell (canvas, like tilePngBytes). Off by default ⇒ exportZip output
+   unchanged unless the "Channel atlas" box is ticked.
+   Channel kinds: 'unit' = [0,1] scalar → round(clamp01·255); 'index' = a
+   categorical raster (biome/lith/koppen, already 0..255) → clamped int.        */
+function _chanEnc(v, kind){ if(kind==='index'){ v=v|0; return v<0?0:v>255?255:v; } v=v<0?0:v>1?1:v; return Math.round(v*255); }
+function _chanDec(b, kind){ return kind==='index' ? b : b/255; }
+
+/* pack up to 3 fields (r,g,b) into one RGBA byte buffer, alpha=255. Each spec is
+   {src, kind} or null (null channel ⇒ 0). Pure. */
+function packRGB8(specs, n){
+  const out=new Uint8Array(n*4);
+  for(let c=0;c<3;c++){ const sp=specs[c]; if(!sp||!sp.src) continue; const src=sp.src, kind=sp.kind||'unit';
+    for(let i=0;i<n;i++) out[i*4+c]=_chanEnc(src[i], kind); }
+  for(let i=0;i<n;i++) out[i*4+3]=255;
+  return out;
+}
+/* inverse of packRGB8 — returns {r,g,b} arrays (Float32 for 'unit', Uint8 for 'index'). Pure. */
+function unpackRGB8(rgba, n, kinds){
+  kinds=kinds||['unit','unit','unit'];
+  const r=kinds[0]==='index'?new Uint8Array(n):new Float32Array(n);
+  const g=kinds[1]==='index'?new Uint8Array(n):new Float32Array(n);
+  const b=kinds[2]==='index'?new Uint8Array(n):new Float32Array(n);
+  for(let i=0;i<n;i++){ r[i]=_chanDec(rgba[i*4],kinds[0]); g[i]=_chanDec(rgba[i*4+1],kinds[1]); b[i]=_chanDec(rgba[i*4+2],kinds[2]); }
+  return {r,g,b};
+}
+
+/* the channel-atlas grouping plan — pulls the live affordance fields. Each group →
+   one PNG with up to 3 documented channels. Categorical rasters (biome/lith/koppen)
+   ride the 'classes' group. Pure (reads the current*() caches). */
+function channelAtlasGroups(){
+  const rp=currentResourcePotentials();
+  const koppen=(state.climate.seasons && typeof koppenField!=='undefined' && koppenField) ? koppenField : null;
+  return [
+    {file:'atlas/habitat.png', channels:[
+      {ch:'r', key:'soil_fertility',   name:'Soil fertility',      kind:'unit',  src:currentSoil()},
+      {ch:'g', key:'water_access',     name:'Water access',        kind:'unit',  src:currentWaterAccess()},
+      {ch:'b', key:'carrying_capacity',name:'Carrying capacity',   kind:'unit',  src:currentCarryingCapacity()} ]},
+    {file:'atlas/settlement.png', channels:[
+      {ch:'r', key:'settlement_suitability', name:'Settlement suitability', kind:'unit', src:currentSettlementSuitability()} ]},
+    {file:'atlas/resources_a.png', channels:[
+      {ch:'r', key:'copper', name:'Copper potential', kind:'unit', src:rp.copper},
+      {ch:'g', key:'tin',    name:'Tin potential',    kind:'unit', src:rp.tin},
+      {ch:'b', key:'iron',   name:'Iron potential',   kind:'unit', src:rp.iron} ]},
+    {file:'atlas/resources_b.png', channels:[
+      {ch:'r', key:'gold',   name:'Gold potential',   kind:'unit', src:rp.gold},
+      {ch:'g', key:'salt',   name:'Salt potential',   kind:'unit', src:rp.salt},
+      {ch:'b', key:'timber', name:'Timber potential', kind:'unit', src:rp.timber} ]},
+    {file:'atlas/classes.png', channels:[
+      {ch:'r', key:'biome',     name:'Biome index',     kind:'index', src:buildBiomeRaster(), manifest:'biome_index.json'},
+      {ch:'g', key:'lithology', name:'Lithology index', kind:'index', src:currentLithology(), manifest:'lithology_index.json'},
+      {ch:'b', key:'koppen',    name:'Köppen index',    kind:'index', src:koppen, manifest:'koppen_index.json'} ]}
+  ];
+}
+/* decode manifest documenting which channel of which PNG holds which field. */
+function channelAtlasManifest(groups){
+  const files=groups.map(grp=>{
+    const ch={}; for(const c of grp.channels) ch[c.ch]={key:c.key, name:c.name, kind:c.kind, range:c.kind==='unit'?[0,1]:'categorical', manifest:c.manifest||null};
+    return {file:grp.file, width:GW, height:GH, channels:ch};
+  });
+  return { schema:1, kind:'cartalith-channel-atlas', version:VERSION, encoding:'rgb8',
+           note:'8-bit per channel, alpha=255 unused; row-major GW×GH. unit channels are value·255; index channels are raw categorical indices (see per-channel manifest). The full-precision .f32 / _raster.bin blobs remain the master copies.',
+           width:GW, height:GH, files };
+}
+/* browser shell: RGBA bytes → PNG bytes via (Offscreen)Canvas. Returns null headless (no PNG codec). */
+async function rgbaToPngBytes(rgba, w, h){
+  try{
+    if(typeof OffscreenCanvas!=='undefined'){ const oc=new OffscreenCanvas(w,h), cx=oc.getContext('2d');
+      cx.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer.slice(0)),w,h),0,0);
+      const blob=await oc.convertToBlob({type:'image/png'}); return blob?new Uint8Array(await blob.arrayBuffer()):null; }
+    const oc=document.createElement('canvas'); oc.width=w; oc.height=h; const cx=oc.getContext('2d');
+    const id=cx.createImageData(w,h); id.data.set(rgba); cx.putImageData(id,0,0);
+    const blob=await new Promise(res=>oc.toBlob(res,'image/png')); return blob?new Uint8Array(await blob.arrayBuffer()):null;
+  }catch(_){ return null; }
+}
+/* assemble the channel-atlas ZIP entries (PNGs + manifest). Browser path; PNGs dropped headless. */
+async function channelAtlasEntries(){
+  const groups=channelAtlasGroups(), n=GW*GH, E=[];
+  for(const grp of groups){
+    const specs=['r','g','b'].map(ch=>{ const c=grp.channels.find(x=>x.ch===ch); return c&&c.src?{src:c.src,kind:c.kind}:null; });
+    const png=await rgbaToPngBytes(packRGB8(specs,n), GW, GH);
+    if(png) E.push({name:grp.file, data:png});
+  }
+  E.push({name:'atlas/index.json', data:new TextEncoder().encode(JSON.stringify(channelAtlasManifest(groups),null,2))});
+  return E;
+}
 async function exportZip(){
   let W=+document.getElementById('bakeRes').value||4096, tiled=document.getElementById('bakeTiles').checked; const btn=document.getElementById('exportBtn');
   if(!tiled){ const d=bakeDims(W); if(!canvasWorks(d.W,d.H)){            // chosen size won't allocate here (iOS) — degrade gracefully
@@ -5143,7 +6041,13 @@ async function exportZip(){
     if(tideField) E.push({name:'tidal_range.f32',data:f32bytes(tideField)});   /* G3: spring tidal range (height units) — intertidal/coastal-hazard layer for Cartalith */
     E.push({name:'heightmap_rg16.bin',data:packHeight16(field,GW*GH)});   /* portable 16-bit-packed height (H = R·256 + G); .f32 above stays the full-precision round-trip */
     E.push({name:'biome_raster.bin',data:buildBiomeRaster()}); E.push({name:'biome_index.json',data:new TextEncoder().encode(JSON.stringify(biomeIndexManifest(),null,2))});
+    E.push({name:'lithology_raster.bin',data:currentLithology()}); E.push({name:'lithology_index.json',data:new TextEncoder().encode(JSON.stringify(lithIndexManifest(),null,2))});   /* v0.104: affordance fields */
+    E.push({name:'soil_fertility.f32',data:f32bytes(currentSoil())}); E.push({name:'water_access.f32',data:f32bytes(currentWaterAccess())});
+    const rp=currentResourcePotentials(); E.push({name:'copper_potential.f32',data:f32bytes(rp.copper)}); E.push({name:'iron_potential.f32',data:f32bytes(rp.iron)}); E.push({name:'gold_potential.f32',data:f32bytes(rp.gold)}); E.push({name:'salt_potential.f32',data:f32bytes(rp.salt)}); E.push({name:'timber_potential.f32',data:f32bytes(rp.timber)}); E.push({name:'carrying_capacity.f32',data:f32bytes(currentCarryingCapacity())}); E.push({name:'settlement_suitability.f32',data:f32bytes(currentSettlementSuitability())});
+    { const seeds=findSettlementSeeds(currentSettlementSuitability(),GW,GH).map(s=>settlementSeedInfo(s.x,s.y)); E.push({name:'settlement_seeds.json',data:new TextEncoder().encode(JSON.stringify({version:VERSION,kind:'cartalith-settlement-seeds',width:GW,height:GH,count:seeds.length,seeds},null,2))}); }   /* v0.110: advisory settlement sites + per-site "why" breakdown (resource availability) — prep for the Cartalith integration */
+    { const net=buildRiverNetwork(field,flowField,GW,GH,state.seaLevel,{world:state.world}), so=new Uint8Array(GW*GH); for(let i=0;i<so.length;i++){ const o=net.order[i]; so[i]=o>255?255:o; } E.push({name:'strahler_order.bin',data:so}); }   /* v0.111 Pillar 1: Strahler stream-order raster (Uint8, 0 = non-channel) */
     if(state.climate.seasons){ computeSeasons(); E.push({name:'koppen_raster.bin',data:koppenField.slice()}); E.push({name:'koppen_index.json',data:new TextEncoder().encode(JSON.stringify(koppenIndexManifest(),null,2))}); }
+    { const ca=document.getElementById('chanAtlasChk'); if(ca&&ca.checked){ const ce=await channelAtlasEntries(); for(const im of ce) E.push(im); } }   /* v0.107 Phase C: multi-channel RGB PNG atlas + manifest (opt-in) */
     E.push({name:'layers/biome.png',data:await layerBytes('biome','off')}); E.push({name:'layers/hillshade.png',data:await layerBytes('shade','off')});
     E.push({name:'layers/temperature.png',data:await layerBytes('biome','temp')}); E.push({name:'layers/rainfall.png',data:await layerBytes('biome','rain')}); renderNow();
     if(tiled){ const t=await bakeTiled(W,setProg); for(const im of t.images) E.push(im); E.push({name:'tiles/index.json',data:new TextEncoder().encode(JSON.stringify(t.index,null,2))}); }
@@ -5155,12 +6059,12 @@ async function exportZip(){
 }
 async function loadZip(file){ showBusy('loading…');
   try{ const z=unzipStore(await file.arrayBuffer()); if(!z['params.json']) throw new Error('not an Elevation Foundation save');
-    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); if(typeof state.showRivers!=='boolean')state.showRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; state.viz=Object.assign({parchment:0,icons:false,waves:false,scaleBar:true,splat:0.7,smoothRivers:true,sharpBiomes:true,showLakes:true,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0},state.viz||{}); if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
+    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); state.velo=Object.assign({iters:60,strength:0.5,meander:0.6},state.velo||{}); if(typeof state.showRivers!=='boolean')state.showRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; if(state.debugOpacity==null)state.debugOpacity=1; state.viz=Object.assign({parchment:0,icons:false,waves:false,scaleBar:true,splat:0.7,sharpBiomes:true,showLakes:true,multiSun:false,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0,contours:0,ink:0,hachure:0,watercolor:0,waterAnim:false},state.viz||{}); delete state.viz.smoothRivers; if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
     if(z['heightmap.f32']){ const fa=new Float32Array(z['heightmap.f32'].buffer); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }
     else if(z['heightmap_rg16.bin']){ const fa=unpackHeight16(z['heightmap_rg16.bin'],GW*GH); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }   /* portable 16-bit fallback */
     if(z['temperature.f32']){ const fa=new Float32Array(z['temperature.f32'].buffer); tempField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else computeTemperature();
     if(z['rainfall.f32']){ const fa=new Float32Array(z['rainfall.f32'].buffer); rainField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else simulateWeather(state.climate.wIters);
-    plates=[]; syncUI(); renderNow();
+    plates=[]; _canInvert=true; syncUI(); renderNow();
   }catch(e){ alert('Load failed: '+e.message); }
   finally{ hideBusy(); }
 }
@@ -5185,11 +6089,12 @@ function syncUI(){ suspendRender=true;
   v('drops',Math.round(er.droplets/1500)); lab('dropsV',fmtK(er.droplets)); v('estr',Math.round(er.erode*100)); lab('estrV',er.erode.toFixed(2));
   v('edep',Math.round(er.deposit*100)); lab('edepV',er.deposit.toFixed(2)); v('ethr',er.thermalPasses); lab('ethrV',''+er.thermalPasses); v('etal',Math.round(er.talus*1000)); lab('etalV',er.talus.toFixed(3)); v('edD',Math.round((er.diffuseD||0.15)/0.2*100)); lab('edDV',(er.diffuseD||0.15).toFixed(3)); v('edPas',er.diffusePasses||6); lab('edPasV',''+(er.diffusePasses||6));
   v('sUp',Math.round(st.uplift/0.4*100)); lab('sUpV',st.uplift.toFixed(2)); v('sK',Math.round(st.k/0.03*100)); lab('sKV',st.k.toFixed(3)); v('sIt',st.iters); lab('sItV',''+st.iters); v('sDep',Math.round((st.deposit||0)*100)); lab('sDepV',(st.deposit||0).toFixed(2)); v('sClim',Math.round((st.climateK!=null?st.climateK:0.5)*100)); lab('sClimV',(st.climateK!=null?st.climateK:0.5).toFixed(2)); v('evoCyc',st.cycles||5); lab('evoCycV',''+(st.cycles||5));
+  { const vl=state.velo||{iters:60,strength:0.5,meander:0.6}; v('vIt',vl.iters||60); lab('vItV',''+(vl.iters||60)); v('vStr',Math.round((vl.strength!=null?vl.strength:0.5)*100)); lab('vStrV',(vl.strength!=null?vl.strength:0.5).toFixed(2)); v('vMnd',Math.round((vl.meander!=null?vl.meander:0.6)*100)); lab('vMndV',(vl.meander!=null?vl.meander:0.6).toFixed(2)); }
   const gl=state.glacial||{}; v('gSnow',Math.round((gl.snowline||0.65)*100)); lab('gSnowV',(gl.snowline||0.65).toFixed(2)); v('gKg',Math.round((gl.kg||0.15)*100)); lab('gKgV',(gl.kg||0.15).toFixed(2)); v('gUF',Math.round((gl.uFactor||0.6)*100)); lab('gUFV',(gl.uFactor||0.6).toFixed(2)); v('gPas',gl.passes||8); lab('gPasV',''+(gl.passes||8));
   { const el=document.getElementById('showRivers'); if(el) el.checked=state.showRivers!==false; }
-  { const el=document.getElementById('smoothRivers'); if(el) el.checked=!state.viz||state.viz.smoothRivers!==false; }
   { const el=document.getElementById('sharpBiomes'); if(el) el.checked=!state.viz||state.viz.sharpBiomes!==false; }
   { const el=document.getElementById('showLakes'); if(el) el.checked=!state.viz||state.viz.showLakes!==false; }
+  { const el=document.getElementById('multiSun'); if(el) el.checked=!!(state.viz&&state.viz.multiSun); }
   const co=state.coastal||{}; v('cWave',Math.round((co.waveStr||0.5)*100)); lab('cWaveV',(co.waveStr||0.5).toFixed(2)); v('cEst',Math.round((co.estuaryDepth||0.08)/0.2*100)); lab('cEstV',(co.estuaryDepth||0.08).toFixed(3)); v('cMar',Math.round((co.marshBand||0.03)/0.1*100)); lab('cMarV',(co.marshBand||0.03).toFixed(3)); v('cPas',co.passes||4); lab('cPasV',''+(co.passes||4));
   v('sea',Math.round(state.seaLevel*100)); lab('seaV',Math.round(state.seaLevel*100)+'%'); v('peak',state.peakM); v('mapw',state.mapWidthKm);
   { const p=state.planet||{}; const pg=p.g==null?1:p.g, pr=p.rotationHours==null?24:p.rotationHours, pt=p.axialTiltDeg==null?23.4:p.axialTiltDeg;
@@ -5201,7 +6106,8 @@ function syncUI(){ suspendRender=true;
   v('exag',Math.round((state.exag-0.4)/7*100)); lab('exagV','×'+state.exag.toFixed(1)); v('sun',state.sunAz); lab('sunV',state.sunAz+'°');
   v('bioBlend',Math.round(state.bioBlend*100)); lab('bioBlendV',state.bioBlend.toFixed(2)); v('brad',state.radius); lab('bradV',state.radius);
   v('bstr',Math.round(state.strength*100)); lab('bstrV',Math.round(state.strength*100)+'%'); const sh=document.getElementById('shadeOnHypso'); if(sh)sh.checked=state.shadeHypso;
-  { const vz=state.viz||{parchment:0,icons:false,waves:false,scaleBar:true}; v('parch',Math.round((vz.parchment||0)*100)); lab('parchV',vz.parchment>0?vz.parchment.toFixed(2):'off'); v('aoR',Math.round((vz.ao||0)*100)); lab('aoV',vz.ao>0?vz.ao.toFixed(2):'off'); v('crestR',Math.round((vz.crest||0)*100)); lab('crestV',vz.crest>0?vz.crest.toFixed(2):'off'); v('rockR',Math.round((vz.rockSlope||0)*100)); lab('rockV',vz.rockSlope>0?vz.rockSlope.toFixed(2):'off'); v('texR',Math.round((vz.texture||0)*100)); lab('texV',vz.texture>0?vz.texture.toFixed(2):'off'); v('minorR',Math.round((vz.minorStreams||0)*100)); lab('minorV',vz.minorStreams>0?vz.minorStreams.toFixed(2):'off'); v('ridgeR',Math.round((vz.ridgedRelief||0)*100)); lab('ridgeV',vz.ridgedRelief>0?vz.ridgedRelief.toFixed(2):'off'); const ic=document.getElementById('iconsChk'); if(ic)ic.checked=!!vz.icons; const wc=document.getElementById('wavesChk'); if(wc)wc.checked=!!vz.waves; const sb=document.getElementById('scaleBarChk'); if(sb)sb.checked=vz.scaleBar!==false; const sp=document.getElementById('splat'); if(sp){ sp.value=Math.round((vz.splat==null?0.7:vz.splat)*100); const spv=document.getElementById('splatV'); if(spv)spv.textContent=(vz.splat==null?0.7:vz.splat).toFixed(2); } } { const se=document.getElementById('seasons'); if(se)se.checked=!!state.climate.seasons; } { const cu=document.getElementById('currents'); if(cu)cu.checked=!!state.climate.currents; }
+  { const dao=state.debugOpacity==null?1:state.debugOpacity; v('dbgOpacity',Math.round(dao*100)); lab('dbgOpacityV',Math.round(dao*100)+'%'); }   /* v0.110 */
+  { const vz=state.viz||{parchment:0,icons:false,waves:false,scaleBar:true}; v('parch',Math.round((vz.parchment||0)*100)); lab('parchV',vz.parchment>0?vz.parchment.toFixed(2):'off'); v('aoR',Math.round((vz.ao||0)*100)); lab('aoV',vz.ao>0?vz.ao.toFixed(2):'off'); v('crestR',Math.round((vz.crest||0)*100)); lab('crestV',vz.crest>0?vz.crest.toFixed(2):'off'); v('rockR',Math.round((vz.rockSlope||0)*100)); lab('rockV',vz.rockSlope>0?vz.rockSlope.toFixed(2):'off'); v('texR',Math.round((vz.texture||0)*100)); lab('texV',vz.texture>0?vz.texture.toFixed(2):'off'); v('minorR',Math.round((vz.minorStreams||0)*100)); lab('minorV',vz.minorStreams>0?vz.minorStreams.toFixed(2):'off'); v('ridgeR',Math.round((vz.ridgedRelief||0)*100)); lab('ridgeV',vz.ridgedRelief>0?vz.ridgedRelief.toFixed(2):'off'); v('contoursR',Math.round((vz.contours||0)*100)); lab('contoursV',vz.contours>0?vz.contours.toFixed(2):'off'); v('inkR',Math.round((vz.ink||0)*100)); lab('inkV',vz.ink>0?vz.ink.toFixed(2):'off'); v('hachureR',Math.round((vz.hachure||0)*100)); lab('hachureV',vz.hachure>0?vz.hachure.toFixed(2):'off'); v('watercolorR',Math.round((vz.watercolor||0)*100)); lab('watercolorV',vz.watercolor>0?vz.watercolor.toFixed(2):'off'); const ic=document.getElementById('iconsChk'); if(ic)ic.checked=!!vz.icons; const wc=document.getElementById('wavesChk'); if(wc)wc.checked=!!vz.waves; const wa=document.getElementById('waterAnimChk'); if(wa)wa.checked=!!vz.waterAnim; const sb=document.getElementById('scaleBarChk'); if(sb)sb.checked=vz.scaleBar!==false; const sp=document.getElementById('splat'); if(sp){ sp.value=Math.round((vz.splat==null?0.7:vz.splat)*100); const spv=document.getElementById('splatV'); if(spv)spv.textContent=(vz.splat==null?0.7:vz.splat).toFixed(2); } } { const se=document.getElementById('seasons'); if(se)se.checked=!!state.climate.seasons; } { const cu=document.getElementById('currents'); if(cu)cu.checked=!!state.climate.currents; }
   const segOn=(sel,fn)=>document.querySelectorAll(sel+' button').forEach(b=>b.classList.toggle('on',fn(b)));
   segOn('#resSeg',b=>+b.dataset.w===state.resW); segOn('#extentSeg',b=>(b.dataset.world==='1')===state.world); segOn('#modeSeg',b=>b.dataset.mode===state.mode); segOn('#debugSeg',b=>b.dataset.d===state.debug); segOn('#brushSeg',b=>b.dataset.brush===state.brush);
   segOn('#windModeSeg',b=>b.dataset.wm===(cl.windMode||'auto'));
@@ -5255,8 +6161,13 @@ bind('ridgeR',e=>{ state.viz.ridgedRelief=+e.target.value/100; document.getEleme
 bind('sdfCoastR', e=>{ state.viz.sdfCoast =+e.target.value/100; document.getElementById('sdfCoastV').textContent =state.viz.sdfCoast >0?state.viz.sdfCoast.toFixed(2):'off';  render(); });   /* v0.096 SDF coastlines */
 bind('sdfRiversR',e=>{ state.viz.sdfRivers=+e.target.value/100; document.getElementById('sdfRiversV').textContent=state.viz.sdfRivers>0?state.viz.sdfRivers.toFixed(2):'off'; render(); });   /* v0.096 SDF river bands */
 bind('sdfBiomesR',e=>{ state.viz.sdfBiomes=+e.target.value/100; document.getElementById('sdfBiomesV').textContent=state.viz.sdfBiomes>0?state.viz.sdfBiomes.toFixed(2):'off'; render(); });   /* v0.096 SDF biome blend */
+bind('contoursR',  e=>{ state.viz.contours  =+e.target.value/100; document.getElementById('contoursV').textContent  =state.viz.contours  >0?state.viz.contours.toFixed(2):'off';   render(); });   /* v0.108 Painter: contour veins */
+bind('inkR',       e=>{ state.viz.ink       =+e.target.value/100; document.getElementById('inkV').textContent       =state.viz.ink       >0?state.viz.ink.toFixed(2):'off';        render(); });   /* v0.108 Painter: ink linework */
+bind('hachureR',   e=>{ state.viz.hachure   =+e.target.value/100; document.getElementById('hachureV').textContent   =state.viz.hachure   >0?state.viz.hachure.toFixed(2):'off';    render(); });   /* v0.108 Painter: hachure */
+bind('watercolorR',e=>{ state.viz.watercolor=+e.target.value/100; document.getElementById('watercolorV').textContent=state.viz.watercolor>0?state.viz.watercolor.toFixed(2):'off'; render(); });   /* v0.108 Painter: watercolor */
 document.getElementById('iconsChk').addEventListener('change',e=>{ state.viz.icons=e.target.checked; render(); });
 document.getElementById('wavesChk').addEventListener('change',e=>{ state.viz.waves=e.target.checked; render(); });
+{ const wa=document.getElementById('waterAnimChk'); if(wa) wa.addEventListener('change',e=>{ state.viz.waterAnim=e.target.checked; if(e.target.checked) startWaterAnim(); else stopWaterAnim(); }); }   /* v0.113 Pillar 3: flow-map animation toggle */
 { const sb=document.getElementById('scaleBarChk'); if(sb) sb.addEventListener('change',e=>{ state.viz.scaleBar=e.target.checked; updateScaleBar(); }); }
 bind('splat',e=>{ state.viz.splat=+e.target.value/100; document.getElementById('splatV').textContent=state.viz.splat.toFixed(2); render(); });
 { const pb=document.getElementById('packBtn'), pf=document.getElementById('packFile'), pc=document.getElementById('packClearBtn');
@@ -5320,9 +6231,9 @@ eparam('cEst', v=>state.coastal.estuaryDepth=v/100*0.2,v=>(v/100*0.2).toFixed(3)
 eparam('cMar', v=>state.coastal.marshBand=v/100*0.1,  v=>(v/100*0.1).toFixed(3));
 eparam('cPas', v=>state.coastal.passes=v,             v=>''+v);
 { const el=document.getElementById('showRivers'); if(el){ el.addEventListener('change',()=>{ state.showRivers=el.checked; render(); }); } }
-{ const el=document.getElementById('smoothRivers'); if(el){ el.addEventListener('change',()=>{ state.viz.smoothRivers=el.checked; _riverField=null; render(); }); } }
 { const el=document.getElementById('sharpBiomes'); if(el){ el.addEventListener('change',()=>{ state.viz.sharpBiomes=el.checked; render(); }); } }
 { const el=document.getElementById('showLakes'); if(el){ el.addEventListener('change',()=>{ state.viz.showLakes=el.checked; render(); }); } }
+{ const el=document.getElementById('multiSun'); if(el){ el.addEventListener('change',()=>{ state.viz.multiSun=el.checked; render(); }); } }
 /* climate params: update state, recompute climate fields live, re-render (terrain unchanged) */
 function cparam(id, apply, label){ const el=document.getElementById(id), vEl=document.getElementById(id+'V'); el.addEventListener('input',()=>{ apply(+el.value); if(vEl&&label) vEl.textContent=label(+el.value); recomputeClimate(); render(); }); }
 cparam('latN',   v=>state.climate.latN=v,        v=>v+'°');
@@ -5353,11 +6264,13 @@ bind('bioBlend',e=>{ state.bioBlend=+e.target.value/100; document.getElementById
 function seg(segId,key,attr,after){ document.getElementById(segId).addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b)); state[key]=b.dataset[attr]; if(after)after(); }); }
 seg('modeSeg','mode','mode',render);
 seg('brushSeg','brush','brush');
-seg('debugSeg','debug','d',render);
+seg('debugSeg','debug','d',()=>{ hideSettleInfo(); render(); });   /* v0.110: dismiss the settlement popup when switching debug views */
+bind('dbgOpacity',e=>{ state.debugOpacity=+e.target.value/100; const el=document.getElementById('dbgOpacityV'); if(el)el.textContent=Math.round(state.debugOpacity*100)+'%'; render(); });   /* v0.110: debug-layer opacity */
 document.getElementById('resSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b)); state.resW=+b.dataset.w; GW=state.resW; GH=gridH(GW); allocate(); withBusy('generating…',generate); });
 document.getElementById('extentSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...e.currentTarget.children].forEach(c=>c.classList.toggle('on',c===b)); state.world=b.dataset.world==='1'; GW=state.resW; GH=gridH(GW); ['latN','latS'].forEach(id=>{ const el=document.getElementById(id); if(el)el.disabled=state.world; }); { const wd=document.getElementById('windDir'); if(wd)wd.disabled=state.world||state.climate.windMode!=='manual'; } allocate(); withBusy('generating…',generate); });
 
 document.getElementById('loadBtn').onclick=()=>document.getElementById('file').click();
+document.getElementById('inferTectBtn').onclick=()=>{ if(!_canInvert){ alert('Import a heightmap first (Load heightmap…), then infer tectonics from it.'); return; } withBusy('inferring tectonics…',inferTectonics); };
 document.getElementById('file').addEventListener('change',e=>{ if(e.target.files[0]) loadImage(e.target.files[0]); });
 document.getElementById('genBtn').onclick=()=>withBusy('generating…',generate);
 document.getElementById('reseedBtn').onclick=()=>{ state.tect.seed=(Math.random()*99999)|0; document.getElementById('seedN').value=state.tect.seed; withBusy('generating…',generate); };
@@ -5370,6 +6283,10 @@ document.getElementById('evolveBtn').onclick=()=>{ if(_eroBusy)return; pushUndo(
 bind('evoCyc',e=>{ state.stream.cycles=+e.target.value; lab('evoCycV',''+state.stream.cycles); });
 document.getElementById('sedimentBtn').onclick=()=>{ if(_eroBusy)return; pushUndo(); _eroBusy=true; showBusy('routing sediment…');
   setTimeout(()=>{ try{ depositSediment(); } finally { _eroBusy=false; hideBusy(); } },20); };
+document.getElementById('veloBtn').onclick=()=>{ if(_eroBusy)return; pushUndo(); velocityEroseAsync(); };   /* v0.112 Pillar 2; v0.114 worker-ified (sync fallback) */
+bind('vIt', e=>{ state.velo.iters=+e.target.value; lab('vItV',''+state.velo.iters); });
+bind('vStr',e=>{ state.velo.strength=+e.target.value/100; lab('vStrV',state.velo.strength.toFixed(2)); });
+bind('vMnd',e=>{ state.velo.meander=+e.target.value/100; lab('vMndV',state.velo.meander.toFixed(2)); });
 { const tb=document.getElementById('tidalFlatsBtn'); if(tb) tb.onclick=()=>{ if(_eroBusy)return; if(!tideField){ alert('Enable Tides (Planet → Tides) first — tidal flats need a tidal-range field.'); return; } pushUndo(); _eroBusy=true; showBusy('accreting tidal flats…');
   setTimeout(()=>{ try{ tidalFlats(); } finally { _eroBusy=false; hideBusy(); } },20); }; }
 { const dl=document.getElementById('dynLithChk'); if(dl){ dl.checked=!!state.tect.dynamicLithology; dl.addEventListener('change',()=>{ state.tect.dynamicLithology=dl.checked; }); } }

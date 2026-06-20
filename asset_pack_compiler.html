@@ -190,6 +190,29 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
 
 .footnote{color:var(--txt-faint);font-size:11.5px;text-align:center;margin-top:30px;line-height:1.6}
 .footnote code{font-family:var(--mono);color:var(--txt-dim)}
+/* ---- family accordions (schema-2 expanded vocabulary) ---- */
+.group-head{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--txt-faint);
+  margin:30px 2px 14px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.group-head:first-child{margin-top:4px}
+.fam{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  margin-bottom:12px;overflow:hidden}
+.fam.filled{border-color:#2f3a52}
+.fam>summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;gap:12px;
+  user-select:none}
+.fam>summary::-webkit-details-marker{display:none}
+.fam>summary::before{content:'\25B8';color:var(--txt-faint);font-size:11px;transition:transform .15s;width:10px}
+.fam[open]>summary::before{transform:rotate(90deg)}
+.fam>summary:hover{background:var(--panel-2)}
+.fam .fam-title{font-size:14px;font-weight:600}
+.fam .fam-count{font-family:var(--mono);font-size:11px;color:var(--txt-faint);margin-left:auto}
+.fam .fam-count.has{color:var(--ok)}
+.fam .grid{padding:0 14px 15px}
+.tag.bio{color:#6fcf97;border-color:#2f5e44}
+.tag.ter{color:#caa46a;border-color:#5e4d2f}
+.tag.str{color:#e08bb0;border-color:#6e3f55}
+.row.bio .code{color:#6fcf97}
+.row.ter .code{color:#caa46a}
+.row.str .code{color:#e08bb0}
 </style>
 </head>
 <body>
@@ -211,29 +234,19 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
 </header>
 
 <main>
-  <section class="section" id="texSection">
-    <div class="section-head">
-      <h2>Terrain Textures</h2>
-      <span class="tag tex">splatting channels</span>
-      <span class="hint">1 image per slot · forced to 512&times;512 · alpha flattened on black</span>
-    </div>
-    <div class="grid" id="texGrid"></div>
-  </section>
+  <div class="group-head">Terrain &amp; ground textures</div>
+  <div id="texFams"></div>
 
-  <section class="section" id="icoSection">
-    <div class="section-head">
-      <h2>Feature Icons</h2>
-      <span class="tag ico">structural biomes</span>
-      <span class="hint">1&ndash;N variants per slot · forced to 256&times;256 · alpha preserved</span>
-    </div>
-    <div class="grid" id="icoGrid"></div>
-  </section>
+  <div class="group-head">Icons &amp; structures</div>
+  <div id="icoFams"></div>
 
   <div class="footnote">
-    All textures map to the engine's <code>materialWeights</code> channels; icons feed
-    <code>placeMapIcons()</code> / <code>drawMapIcons()</code>. Variants are picked deterministically
-    per placement to break repetition. Empty slots fall back to procedural rendering.<br>
-    Output is an uncompressed (STORED) ZIP readable by Cartalith's <code>unzipStore</code> / <code>unzipAny</code> importer.
+    <strong>Splat channels</strong> + <strong>feature icons</strong> are read by today's elevation-foundation
+    importer (<code>parsePackManifest</code>) — variants are picked deterministically per placement to break
+    repetition; empty slots fall back to procedural rendering.<br>
+    <strong>Biome / terrain textures</strong> and <strong>settlement / trait / POI icons</strong> are emitted as a
+    <code>schema&nbsp;2</code> superset for the unified Cartalith app; the current engine harmlessly ignores them, so
+    one pack serves both. Output is an uncompressed (STORED) ZIP readable by <code>unzipStore</code> / <code>unzipAny</code>.
   </div>
 </main>
 
@@ -280,34 +293,143 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
 "use strict";
 /* ====================================================================
    Cartalith Asset Pack Compiler — app logic
+   Fixed vocabulary mirrored from:
+     - elevation_foundation: PACK_TEX_SLOTS, PACK_ICON_SLOTS
+     - Cartalith_V1.914:     BIOMES, TERRAINS, SETTLEMENT_CLASSES,
+                             SETTLEMENT_TRAITS, POI_TYPES
+   Output: pack.json (schema 2 superset) + STORED zip via inlined fflate.
    ==================================================================== */
 
-/* ---- fixed vocabulary (must match docs/ASSET_PACK_FORMAT.md) -------- */
-const TEX_SLOTS = [
-  {id:'grass',     code:'TX-01', name:'Grass',      desc:'Grassland / meadow ground'},
-  {id:'rock',      code:'TX-02', name:'Rock',       desc:'Bare rock / cliff / high slope'},
-  {id:'sand',      code:'TX-03', name:'Sand',       desc:'Desert / dune / beach'},
-  {id:'snow',      code:'TX-04', name:'Snow',       desc:'Snow / ice cap'},
-  {id:'wetland',   code:'TX-05', name:'Wetland',    desc:'Marsh / mud / swamp floor'},
-  {id:'canopy',    code:'TX-06', name:'Canopy',     desc:'Closed-forest ground tint'},
-  {id:'parchment', code:'TX-07', name:'Parchment',  desc:'Paper base multiplied over the map (optional)'},
-];
-const ICO_SLOTS = [
-  {id:'mountain',       code:'IC-01', name:'Mountain',        desc:'Peaks — land-relative elevation ≥ 0.58'},
-  {id:'hill',           code:'IC-02', name:'Hill',            desc:'Hills — elevation 0.53–0.58'},
-  {id:'tree_conifer',   code:'IC-03', name:'Conifer tree',    desc:'Boreal / conifer forest cells'},
-  {id:'tree_broadleaf', code:'IC-04', name:'Broadleaf tree',  desc:'Temperate / tropical broadleaf forest'},
-];
-const TEX_SIZE = 512, ICO_SIZE = 256;
-const KIND = {tex:{size:TEX_SIZE, opaque:true, multi:false}, ico:{size:ICO_SIZE, opaque:false, multi:true}};
+/* slot factory: prefix → auto-numbered code (TX-01 …) */
+function mkSlots(prefix, rows){
+  return rows.map((r,i) => ({
+    id:r[0], name:r[1], desc:r[2]||'',
+    code: prefix + '-' + String(i+1).padStart(2,'0')
+  }));
+}
 
-/* ---- in-memory store: store[slotId] = [ item, ... ] ----------------- */
-/* item = { name, img:HTMLImageElement, w, h, t:{scale,panX,panY} }      */
-const store = {};
-[...TEX_SLOTS, ...ICO_SLOTS].forEach(s => store[s.id] = []);
-const slotMeta = {};
-TEX_SLOTS.forEach(s => slotMeta[s.id] = {...s, kind:'tex'});
-ICO_SLOTS.forEach(s => slotMeta[s.id] = {...s, kind:'ico'});
+const TEX = {kind:'texture', size:512, opaque:true,  multi:false, anchor:null,     mount:'tex'};
+const ICO = {kind:'icon',    size:256, opaque:false, multi:true,                   mount:'ico'};
+
+/* ---- families ------------------------------------------------------ */
+const FAMILIES = [
+  /* === engine-active (schema 1) === */
+  Object.assign({key:'textures', title:'Splat channels', tag:'tex', tagText:'materialWeights',
+    dir:'textures', section:'textures', open:true,
+    slots:mkSlots('TX',[
+      ['grass','Grass','Grassland / meadow ground'],
+      ['rock','Rock','Bare rock / cliff / high slope'],
+      ['sand','Sand','Desert / dune / beach'],
+      ['snow','Snow','Snow / ice cap'],
+      ['wetland','Wetland','Marsh / mud / swamp floor'],
+      ['canopy','Canopy','Closed-forest ground tint'],
+      ['parchment','Parchment','Paper base multiplied over the map (optional)'],
+    ])}, TEX),
+
+  /* === schema-2: Cartalith biome paint textures (15) === */
+  Object.assign({key:'biomes', title:'Biome paint textures', tag:'bio', tagText:'Cartalith biomes',
+    dir:'biomes', section:'biomes', open:false,
+    slots:mkSlots('BI',[
+      ['coastal','Coastal Lowland','Low coastal plain'],
+      ['temperate_forest','Temperate Forest',''],
+      ['mediterranean','Mediterranean Scrub',''],
+      ['wetlands','Wetlands / Marshes',''],
+      ['steppe','Steppe / Grassland',''],
+      ['jungle','Tropical Jungle',''],
+      ['boreal','Boreal Taiga',''],
+      ['mountain','Mountain Highland',''],
+      ['cold_desert','Cold Desert / Badlands',''],
+      ['hot_desert','Hot Desert',''],
+      ['tundra','Tundra / Polar',''],
+      ['ruined','Ruined Wastes','Fantasy blight / wastes'],
+      ['hills','Hills',''],
+      ['lake_river','Lake / River','Inland fresh water'],
+      ['ocean','Ocean / Deep Water',''],
+    ])}, TEX),
+
+  /* === schema-2: Cartalith terrain paint textures (13) === */
+  Object.assign({key:'terrains', title:'Terrain paint textures', tag:'ter', tagText:'Cartalith terrains',
+    dir:'terrains', section:'terrains', open:false,
+    slots:mkSlots('TR',[
+      ['paved','Paved Road',''],
+      ['dirt','Dirt Track',''],
+      ['hardpack','Desert Hardpack',''],
+      ['plains','Open Plains',''],
+      ['forest_path','Forest Path',''],
+      ['hills','Hills',''],
+      ['rocky','Rocky Terrain',''],
+      ['mtn_pass','Mountain Pass',''],
+      ['mtn_trail','Mountain Trails',''],
+      ['swamp','Swamp / Marsh',''],
+      ['deep_sand','Deep Sand',''],
+      ['snow','Snow / Ice',''],
+      ['ruins','Ruins / Debris',''],
+    ])}, TEX),
+
+  /* === engine-active (schema 1) feature icons === */
+  Object.assign({key:'icons', title:'Feature icons', tag:'ico', tagText:'placeMapIcons',
+    dir:'icons', section:'icons', anchor:'bottom', open:true,
+    slots:mkSlots('IC',[
+      ['mountain','Mountain','Peaks — land-relative elevation ≥ 0.58'],
+      ['hill','Hill','Hills — elevation 0.53–0.58'],
+      ['tree_conifer','Conifer tree','Boreal / conifer forest cells'],
+      ['tree_broadleaf','Broadleaf tree','Temperate / tropical broadleaf'],
+    ])}, ICO),
+
+  /* === schema-2: Cartalith structures — settlement size classes (9) === */
+  Object.assign({key:'settlement', title:'Settlement pins', tag:'str', tagText:'size classes',
+    dir:'structures/settlement', section:'structures', sub:'settlement', anchor:'center', open:false,
+    slots:mkSlots('SC',[
+      ['hamlet','Hamlet','Smallest settlement · glyph ⌂'],
+      ['village','Village','glyph ●'],
+      ['town','Town','glyph ◉'],
+      ['city','City','glyph ⬣'],
+      ['capital','Capital','glyph ✦'],
+      ['monastery','Monastery','Special — identity is function · glyph †'],
+      ['fortress','Fortress','Special · glyph ♖'],
+      ['university','University','Special · glyph ⌘'],
+      ['industrial','Industrial','Special · glyph ⚙'],
+    ])}, ICO),
+
+  /* === schema-2: Cartalith structures — settlement trait overlays (7) === */
+  Object.assign({key:'trait', title:'Settlement traits', tag:'str', tagText:'role overlays',
+    dir:'structures/trait', section:'structures', sub:'trait', anchor:'center', open:false,
+    slots:mkSlots('ST',[
+      ['fortified','Fortified','glyph ⬢'],
+      ['mining','Mining','glyph ⚒'],
+      ['port','Port','glyph ⚓'],
+      ['administrative','Administrative','glyph ♜'],
+      ['trade_hub','Trade hub','glyph ♣'],
+      ['military','Military','glyph ⚔'],
+      ['religious','Religious','glyph ✝'],
+    ])}, ICO),
+
+  /* === schema-2: Cartalith structures — points of interest (10) === */
+  Object.assign({key:'poi', title:'Points of interest', tag:'str', tagText:'POI markers',
+    dir:'structures/poi', section:'structures', sub:'poi', anchor:'center', open:false,
+    slots:mkSlots('PI',[
+      ['ruin','Ruin / old settlement',''],
+      ['landmark','Landmark',''],
+      ['mountain_peak','Mountain peak',''],
+      ['lake','Lake / spring',''],
+      ['named_forest','Named forest',''],
+      ['battlefield','Battlefield',''],
+      ['shrine','Shrine / temple',''],
+      ['cave','Cave / tunnel',''],
+      ['bridge','Bridge / ford',''],
+      ['other','Other',''],
+    ])}, ICO),
+];
+
+/* ---- registry + store (keyed by unique family:slot id) ------------- */
+const SLOT_REG = {};        // uid → {fam, slot}
+const store = {};           // uid → [ item, ... ]
+FAMILIES.forEach(fam => fam.slots.forEach(slot => {
+  const uid = fam.key + ':' + slot.id;
+  slot.uid = uid;
+  SLOT_REG[uid] = {fam, slot};
+  store[uid] = [];
+}));
 
 const $ = id => document.getElementById(id);
 
@@ -316,7 +438,7 @@ const $ = id => document.getElementById(id);
    ==================================================================== */
 function defaultTransform(){ return {scale:1, panX:0, panY:0}; }
 
-// Draw one item into ctx at `size`×`size`. opaque → flatten on black (textures).
+// Draw one item into ctx at size×size. opaque → flatten on black (textures).
 function renderItem(ctx, item, size, opaque){
   ctx.clearRect(0,0,size,size);
   if(opaque){ ctx.fillStyle = '#000000'; ctx.fillRect(0,0,size,size); }
@@ -330,170 +452,175 @@ function renderItem(ctx, item, size, opaque){
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, x, y, dw, dh);
 }
-
-// Offscreen render → canvas (full target resolution).
 function renderToCanvas(item, size, opaque){
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   renderItem(c.getContext('2d'), item, size, opaque);
   return c;
 }
-
 function renderToBlob(item, size, opaque){
   return new Promise(res => renderToCanvas(item,size,opaque).toBlob(res, 'image/png'));
 }
 
-/* ====================================================================
-   Build rows
-   ==================================================================== */
-function buildGrid(slots, gridEl, kind){
-  gridEl.innerHTML = '';
-  slots.forEach(slot => {
-    const row = document.createElement('div');
-    row.className = 'row ' + kind;
-    row.dataset.slot = slot.id;
-    row.dataset.kind = kind;
-    const spec = kind==='tex'
-      ? `${TEX_SIZE}×${TEX_SIZE} · opaque`
-      : `${ICO_SIZE}×${ICO_SIZE} · RGBA · multi`;
-    row.innerHTML = `
-      <div class="row-id">
-        <span class="code">${slot.code}</span>
-        <span class="name">${slot.name}</span>
-        <span class="desc">${slot.desc}</span>
-        <span class="spec">${slot.id} · ${spec}</span>
-      </div>
-      <div class="row-body">
-        <div class="dropzone" data-slot="${slot.id}">
-          <div class="big">⬇</div>
-          <div class="t1">Drag &amp; drop image${kind==='ico'?'(s)':''} here</div>
-          <div class="t2">or click to browse</div>
-        </div>
-        <div class="thumbs" data-slot="${slot.id}"></div>
-      </div>`;
-    gridEl.appendChild(row);
+// Bottom-anchored icons: default pan so the image base sits at the bottom-center.
+function fitToBottom(item, size){
+  const baseFit = size / Math.max(item.w, item.h);
+  const dh = item.h * baseFit * item.t.scale;
+  item.t.panY = (size - dh)/2;        // (size-dh)/2 + panY = size-dh  →  bottom edge at canvas bottom
+}
 
-    const dz = row.querySelector('.dropzone');
-    dz.addEventListener('click', () => openPicker(slot.id));
-    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
-    dz.addEventListener('dragleave', () => dz.classList.remove('over'));
-    dz.addEventListener('drop', e => {
-      e.preventDefault(); dz.classList.remove('over');
-      handleFiles(slot.id, e.dataTransfer.files);
-    });
+/* ====================================================================
+   Build family accordions + rows
+   ==================================================================== */
+function buildFamily(fam, container){
+  const det = document.createElement('details');
+  det.className = 'fam';
+  if(fam.open) det.open = true;
+  const spec = fam.kind==='texture' ? `${fam.size}×${fam.size} · opaque`
+             : `${fam.size}×${fam.size} · RGBA · ${fam.multi?'multi':'single'}`;
+  det.innerHTML = `
+    <summary>
+      <span class="tag ${fam.tag}">${fam.tagText}</span>
+      <span class="fam-title">${fam.title}</span>
+      <span class="fam-count" id="cnt-${fam.key}">0 / ${fam.slots.length}</span>
+    </summary>
+    <div class="grid"></div>`;
+  container.appendChild(det);
+  const grid = det.querySelector('.grid');
+  fam.slots.forEach(slot => grid.appendChild(buildRow(fam, slot, spec)));
+}
+
+function buildRow(fam, slot, spec){
+  const row = document.createElement('div');
+  row.className = 'row ' + fam.tag;
+  row.dataset.uid = slot.uid;
+  row.innerHTML = `
+    <div class="row-id">
+      <span class="code">${slot.code}</span>
+      <span class="name">${slot.name}</span>
+      <span class="desc">${slot.desc}</span>
+      <span class="spec">${slot.id} · ${spec}</span>
+    </div>
+    <div class="row-body">
+      <div class="dropzone">
+        <div class="big">⬇</div>
+        <div class="t1">Drag &amp; drop image${fam.multi?'(s)':''} here</div>
+        <div class="t2">or click to browse</div>
+      </div>
+      <div class="thumbs"></div>
+    </div>`;
+  const dz = row.querySelector('.dropzone');
+  dz.addEventListener('click', () => openPicker(slot.uid));
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('over');
+    handleFiles(slot.uid, e.dataTransfer.files);
   });
+  return row;
+}
+
+function updateCount(famKey){
+  const fam = FAMILIES.find(f => f.key===famKey);
+  const filled = fam.slots.filter(s => store[s.uid].length>0).length;
+  const el = $('cnt-'+famKey);
+  if(el){ el.textContent = `${filled} / ${fam.slots.length}`; el.classList.toggle('has', filled>0); }
 }
 
 /* ---- file intake --------------------------------------------------- */
-let pickerSlot = null;
-function openPicker(slotId){
-  pickerSlot = slotId;
-  const multi = KIND[slotMeta[slotId].kind].multi;
-  $('filePicker').multiple = multi;
+let pickerUid = null;
+function openPicker(uid){
+  pickerUid = uid;
+  $('filePicker').multiple = SLOT_REG[uid].fam.multi;
   $('filePicker').value = '';
   $('filePicker').click();
 }
 $('filePicker').addEventListener('change', e => {
-  if(pickerSlot) handleFiles(pickerSlot, e.target.files);
+  if(pickerUid) handleFiles(pickerUid, e.target.files);
 });
 
-function handleFiles(slotId, fileList){
-  const meta = slotMeta[slotId];
-  if(!meta) return;
-  const multi = KIND[meta.kind].multi;
-  const files = [...fileList].filter(f => /^image\//.test(f.type) || /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name));
+function handleFiles(uid, fileList){
+  const {fam} = SLOT_REG[uid];
+  const files = [...fileList].filter(f => /^image\//.test(f.type) || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name));
   if(!files.length){ toast('No image files in that drop.', 'warn'); return; }
-  const toLoad = multi ? files : files.slice(0,1);
+  const toLoad = fam.multi ? files : files.slice(0,1);
   let loaded = 0, failed = 0;
   toLoad.forEach(file => {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const item = {name:file.name, img, w:img.naturalWidth, h:img.naturalHeight, t:defaultTransform()};
-      if(meta.kind==='ico') fitToBottom(item, ICO_SIZE);
-      if(multi) store[slotId].push(item);
-      else      store[slotId] = [item];
-      loaded++; afterLoad(slotId, loaded, failed, toLoad.length);
+      const item = {name:file.name, img, w:img.naturalWidth||fam.size, h:img.naturalHeight||fam.size, t:defaultTransform()};
+      if(fam.anchor==='bottom') fitToBottom(item, fam.size);
+      if(fam.multi) store[uid].push(item);
+      else          store[uid] = [item];
+      loaded++; afterLoad(uid, loaded, failed, toLoad.length);
     };
-    img.onerror = () => { URL.revokeObjectURL(url); failed++; afterLoad(slotId, loaded, failed, toLoad.length); };
+    img.onerror = () => { URL.revokeObjectURL(url); failed++; afterLoad(uid, loaded, failed, toLoad.length); };
     img.src = url;
   });
 }
-function afterLoad(slotId, loaded, failed, total){
+function afterLoad(uid, loaded, failed, total){
   if(loaded+failed < total) return;
-  renderThumbs(slotId);
+  renderThumbs(uid);
   if(failed) toast(`${loaded} loaded, ${failed} failed to decode.`, failed>loaded?'err':'warn');
 }
 
-// Icons: default pan so the image base sits near the bottom-center anchor.
-function fitToBottom(item, size){
-  const baseFit = size / Math.max(item.w, item.h);
-  const dh = item.h * baseFit * item.t.scale;
-  // move so bottom edge of drawn image ≈ bottom of canvas
-  item.t.panY = (size - dh)/2;          // (size-dh)/2 + panY = size-dh  →  panY = (size-dh)/2
-}
-
 /* ---- thumbnails ---------------------------------------------------- */
-function renderThumbs(slotId){
-  const meta = slotMeta[slotId];
-  const {size, opaque} = KIND[meta.kind];
-  const wrap = document.querySelector(`.thumbs[data-slot="${slotId}"]`);
-  const row = wrap.closest('.row');
-  const items = store[slotId];
+function renderThumbs(uid){
+  const {fam} = SLOT_REG[uid];
+  const row = document.querySelector(`.row[data-uid="${cssEsc(uid)}"]`);
+  const wrap = row.querySelector('.thumbs');
+  const items = store[uid];
   wrap.innerHTML = '';
   row.classList.toggle('filled', items.length>0);
-
   items.forEach((item, i) => {
     const card = document.createElement('div');
     card.className = 'thumb';
-    const label = meta.kind==='ico'
-      ? `${meta.id}_${String(i+1).padStart(2,'0')}`
-      : meta.id;
+    const stem = fam.multi ? `${fam.slots.find(s=>s.uid===uid).id}_${String(i+1).padStart(2,'0')}`
+                           : fam.slots.find(s=>s.uid===uid).id;
     card.innerHTML = `
       <div class="canvas-wrap"><canvas width="120" height="120"></canvas></div>
-      <div class="vlabel" title="${item.name}">${label}.png</div>
+      <div class="vlabel" title="${item.name}">${stem}.png</div>
       <div class="btns">
         <button class="tiny" data-act="edit">Edit</button>
         <button class="tiny danger" data-act="del">Delete</button>
       </div>`;
     wrap.appendChild(card);
-    // preview: full render scaled into the small canvas
-    const tc = card.querySelector('canvas');
-    const tctx = tc.getContext('2d');
-    const full = renderToCanvas(item, size, opaque);
+    const tc = card.querySelector('canvas'), tctx = tc.getContext('2d');
+    const full = renderToCanvas(item, fam.size, fam.opaque);
     tctx.imageSmoothingQuality = 'high';
     tctx.drawImage(full, 0, 0, tc.width, tc.height);
-    card.querySelector('[data-act=edit]').addEventListener('click', () => openEditor(slotId, i));
+    card.querySelector('[data-act=edit]').addEventListener('click', () => openEditor(uid, i));
     card.querySelector('[data-act=del]').addEventListener('click', () => {
-      store[slotId].splice(i,1); renderThumbs(slotId);
+      store[uid].splice(i,1); renderThumbs(uid);
     });
   });
+  updateCount(fam.key);
 }
+function cssEsc(s){ return (window.CSS && CSS.escape) ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g,'\\$&'); }
 
 /* ====================================================================
    Editor modal
    ==================================================================== */
-let editRef = null; // {slotId, index, item, size, opaque, kind}
-function openEditor(slotId, index){
-  const meta = slotMeta[slotId];
-  const {size, opaque} = KIND[meta.kind];
-  const item = store[slotId][index];
-  editRef = {slotId, index, item, size, opaque, kind:meta.kind};
+let editRef = null;   // {uid, index, item, size, opaque, anchor, fam, slot}
+function openEditor(uid, index){
+  const {fam, slot} = SLOT_REG[uid];
+  const item = store[uid][index];
+  editRef = {uid, index, item, size:fam.size, opaque:fam.opaque, anchor:fam.anchor, fam, slot};
 
-  $('mCode').textContent = meta.code;
-  $('mTitle').textContent = `${meta.name} — ${item.name}`;
+  $('mCode').textContent = slot.code;
+  $('mTitle').textContent = `${slot.name} — ${item.name}`;
   $('mInfo').innerHTML =
-    `source: ${item.w}×${item.h}px<br>output: ${size}×${size}px ` +
-    (opaque ? '· alpha flattened on black' : '· alpha preserved') +
-    (meta.kind==='ico' ? '<br>align glyph base to the crosshair' : '');
+    `source: ${item.w}×${item.h}px<br>output: ${fam.size}×${fam.size}px ` +
+    (fam.opaque ? '· alpha flattened on black' : '· alpha preserved') +
+    (fam.anchor==='bottom' ? '<br>align glyph base to the bottom crosshair'
+     : fam.anchor==='center' ? '<br>center the marker on the crosshair' : '');
 
-  // slider ranges scale to output size
-  $('sPanX').min = -size; $('sPanX').max = size;
-  $('sPanY').min = -size; $('sPanY').max = size;
-  $('editCanvas').width = size; $('editCanvas').height = size;
+  $('sPanX').min = -fam.size; $('sPanX').max = fam.size;
+  $('sPanY').min = -fam.size; $('sPanY').max = fam.size;
+  $('editCanvas').width = fam.size; $('editCanvas').height = fam.size;
 
-  syncSliders();
-  drawEditor();
+  syncSliders(); drawEditor();
   $('modal').classList.add('show');
 }
 function syncSliders(){
@@ -504,29 +631,35 @@ function syncSliders(){
   $('vPanY').textContent = Math.round(t.panY);
 }
 function drawEditor(){
-  const {item, size, opaque, kind} = editRef;
+  const {item, size, opaque, anchor} = editRef;
   const ctx = $('editCanvas').getContext('2d');
   renderItem(ctx, item, size, opaque);
-  if(kind==='ico') drawCrosshair(ctx, size);
+  if(anchor) drawAnchor(ctx, size, anchor);
 }
-// bottom-center anchor crosshair (editor-only; never baked into export)
-function drawCrosshair(ctx, size){
-  const cx = size/2, by = size;
+// anchor crosshair — editor-only, never baked into export
+function drawAnchor(ctx, size, anchor){
+  const cx = size/2, cy = anchor==='center' ? size/2 : size;
   ctx.save();
   ctx.lineWidth = Math.max(1, size/256);
-  // vertical center line
   ctx.strokeStyle = 'rgba(91,140,255,.55)';
   ctx.setLineDash([size/40, size/40]);
-  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,size); ctx.stroke();
-  // baseline near bottom
-  ctx.beginPath(); ctx.moveTo(0, by-1); ctx.lineTo(size, by-1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,size); ctx.stroke();        // vertical
+  ctx.beginPath();
+  if(anchor==='center'){ ctx.moveTo(0,cy); ctx.lineTo(size,cy); }              // full horizontal
+  else { ctx.moveTo(0,cy-1); ctx.lineTo(size,cy-1); }                          // baseline
+  ctx.stroke();
   ctx.setLineDash([]);
-  // anchor marker
   ctx.strokeStyle = 'rgba(255,210,80,.95)';
   ctx.lineWidth = Math.max(1.5, size/170);
   const r = size*0.045;
-  ctx.beginPath(); ctx.moveTo(cx-r, by-2); ctx.lineTo(cx+r, by-2); ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx, by-2, r*0.55, Math.PI, 2*Math.PI); ctx.stroke();
+  if(anchor==='center'){
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-r*1.6,cy); ctx.lineTo(cx-r*0.5,cy);
+    ctx.moveTo(cx+r*0.5,cy); ctx.lineTo(cx+r*1.6,cy); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(cx-r, cy-2); ctx.lineTo(cx+r, cy-2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy-2, r*0.55, Math.PI, 2*Math.PI); ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -536,11 +669,11 @@ $('sPanY').addEventListener('input',  e => { editRef.item.t.panY  = parseFloat(e
 $('mReset').addEventListener('click', () => { editRef.item.t = defaultTransform(); syncSliders(); drawEditor(); });
 $('mFit').addEventListener('click', () => {
   editRef.item.t = defaultTransform();
-  if(editRef.kind==='ico') fitToBottom(editRef.item, editRef.size);
+  if(editRef.anchor==='bottom') fitToBottom(editRef.item, editRef.size);
   syncSliders(); drawEditor();
 });
 function closeEditor(){
-  if(editRef) renderThumbs(editRef.slotId);
+  if(editRef) renderThumbs(editRef.uid);
   editRef = null;
   $('modal').classList.remove('show');
 }
@@ -550,53 +683,61 @@ $('modal').addEventListener('click', e => { if(e.target === $('modal')) closeEdi
 document.addEventListener('keydown', e => { if(e.key==='Escape' && editRef) closeEditor(); });
 
 /* ====================================================================
-   Build & export — pack.json + STORED zip via inlined fflate
+   Build & export — pack.json (schema 2 superset) + STORED zip
    ==================================================================== */
 $('buildBtn').addEventListener('click', exportPack);
+
+function putManifest(m, fam, slotId, val){
+  if(fam.sub){
+    (m.structures || (m.structures = {}));
+    (m.structures[fam.sub] || (m.structures[fam.sub] = {}))[slotId] = val;
+  } else {
+    (m[fam.section] || (m[fam.section] = {}))[slotId] = val;
+  }
+}
 
 async function exportPack(){
   if(typeof fflate === 'undefined' || !fflate.zipSync){
     toast('fflate failed to load — cannot build ZIP.', 'err'); return;
   }
-  const textures = {}, icons = {};
+  const name = ($('packName').value || 'Custom Asset Pack').trim();
+  // seed key order: schema 1 fields first, then schema-2 sections appear as encountered
+  const manifest = {
+    schema: 2,
+    name,
+    author: ($('packAuthor').value || 'Cartalith Compiler').trim(),
+    license: ($('packLicense').value || 'CC0').trim(),
+    textures: {},
+    icons: {},
+  };
   const files = {};
-  let count = 0;
+  let count = 0, nTex = 0, nIco = 0;
 
-  // textures: one image each, 512² opaque
-  for(const slot of TEX_SLOTS){
-    const item = store[slot.id][0];
-    if(!item) continue;
-    const path = `textures/${slot.id}.png`;
-    const blob = await renderToBlob(item, TEX_SIZE, true);
-    files[path] = new Uint8Array(await blob.arrayBuffer());
-    textures[slot.id] = path;
-    count++;
-  }
-  // icons: 1..N variants, 256² alpha, 1-based zero-padded names
-  for(const slot of ICO_SLOTS){
-    const arr = store[slot.id];
-    if(!arr.length) continue;
-    icons[slot.id] = [];
-    for(let i=0;i<arr.length;i++){
-      const path = `icons/${slot.id}_${String(i+1).padStart(2,'0')}.png`;
-      const blob = await renderToBlob(arr[i], ICO_SIZE, false);
-      files[path] = new Uint8Array(await blob.arrayBuffer());
-      icons[slot.id].push(path);
-      count++;
+  for(const fam of FAMILIES){
+    for(const slot of fam.slots){
+      const arr = store[slot.uid];
+      if(!arr.length) continue;
+      if(fam.kind === 'texture'){
+        const path = `${fam.dir}/${slot.id}.png`;
+        const blob = await renderToBlob(arr[0], fam.size, true);
+        files[path] = new Uint8Array(await blob.arrayBuffer());
+        putManifest(manifest, fam, slot.id, path);
+        count++; nTex++;
+      } else {
+        const paths = [];
+        for(let i=0;i<arr.length;i++){
+          const path = `${fam.dir}/${slot.id}_${String(i+1).padStart(2,'0')}.png`;
+          const blob = await renderToBlob(arr[i], fam.size, false);
+          files[path] = new Uint8Array(await blob.arrayBuffer());
+          paths.push(path); count++; nIco++;
+        }
+        putManifest(manifest, fam, slot.id, paths);
+      }
     }
   }
 
   if(count === 0){ toast('Add at least one image before exporting.', 'warn'); return; }
 
-  const name = ($('packName').value || 'Custom Asset Pack').trim();
-  const manifest = {
-    schema: 1,
-    name,
-    author: ($('packAuthor').value || 'Cartalith Compiler').trim(),
-    license: ($('packLicense').value || 'CC0').trim(),
-    textures,
-    icons,
-  };
   files['pack.json'] = fflate.strToU8(JSON.stringify(manifest, null, 2));
 
   // STORED (uncompressed) → readable by the engine's unzipStore / unzipAny
@@ -604,13 +745,10 @@ async function exportPack(){
   const blob = new Blob([zipped], {type:'application/zip'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = slug(name) + '.zip';
+  a.href = url; a.download = slug(name) + '.zip';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 
-  const nTex = Object.keys(textures).length;
-  const nIco = Object.values(icons).reduce((s,a)=>s+a.length,0);
   toast(`Exported "${a.download}" — ${nTex} texture${nTex!==1?'s':''}, ${nIco} icon${nIco!==1?'s':''}.`, 'ok');
 }
 function slug(s){ return (s.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'asset_pack'); }
@@ -625,14 +763,13 @@ function toast(msg, kind){
   toastTimer = setTimeout(() => el.className = (kind||''), 3600);
 }
 
-/* ---- whole-window drop guard (prevent navigating away) ------------- */
+/* ---- whole-window drop guard --------------------------------------- */
 ['dragover','drop'].forEach(ev => window.addEventListener(ev, e => {
   if(!e.target.closest('.dropzone')) e.preventDefault();
 }));
 
 /* ---- init ---------------------------------------------------------- */
-buildGrid(TEX_SLOTS, $('texGrid'), 'tex');
-buildGrid(ICO_SLOTS, $('icoGrid'), 'ico');
+FAMILIES.forEach(fam => buildFamily(fam, $(fam.mount==='tex' ? 'texFams' : 'icoFams')));
 </script>
 </body>
 </html>

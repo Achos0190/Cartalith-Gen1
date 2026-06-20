@@ -816,13 +816,13 @@ fieldsFinite('generate(world)');
     state.climate.albedo = 0.65;
     const pk = JSON.parse(JSON.stringify(serializeState()));   // serialize → JSON string → parse, like params.json
     // replicate loadZip's default-merges
-    const viz = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, pk.state.viz || {});
+    const viz = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, pk.state.viz || {});
     check('save round-trip: new viz sliders preserved', viz.crest === 0.5 && viz.rockSlope === 0.4 && viz.texture === 0.6 && viz.minorStreams === 0.3 && viz.ridgedRelief === 0.7 && viz.ao === 0.55);
     const tt = pk.state.tect;   // tect uses `if(==null)` guards → explicit values survive
     check('save round-trip: T5 tect params preserved', tt.foldIntensity === 1.5 && tt.trenchDepth === 0.8 && tt.tectonicGraph === true);
     check('save round-trip: L6 albedo preserved', pk.state.climate.albedo === 0.65);
     // an OLD save (missing the new fields) gets defaults, not undefined
-    const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, smoothRivers:true, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
+    const old = Object.assign({ parchment:0, icons:false, waves:false, scaleBar:true, splat:0.7, sharpBiomes:true, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0 }, { parchment:0.2 });
     check('save round-trip: legacy save merges new viz defaults', old.crest === 0 && old.ridgedRelief === 0 && old.parchment === 0.2);
     state.viz = savedViz; state.tect = savedTect; state.climate = savedClim;
   }
@@ -1704,14 +1704,14 @@ if (typeof applyTidalSedimentation === 'function') {
   _lodEdit = false; _lodOn = false; _lodEdits.clear(); _lodUndo.length = 0; lodCacheClear();
 }
 
-/* ---------- v0.076: discharge-widened smooth rivers ---------- */
+/* ---------- discharge-widened rivers (v0.076 render-overlay properties, now via the v0.111 network) ---------- */
 {
   // synthetic land with a trunk river (high discharge) and a tributary (low discharge)
   const W = 40, H = 40, fld = new Float32Array(W * H).fill(0.6), flow = new Float32Array(W * H);
   const thresh = W * H * 0.0004;
   for (let y = 5; y < 35; y++) flow[y * W + 20] = thresh * 200;   // trunk down the middle
   for (let x = 20; x < 35; x++) flow[10 * W + x] = thresh * 8;    // thin tributary
-  const rf = buildRiverField(flow, fld, W, H, 0.42);
+  const rf = buildRiverNetwork(fld, flow, W, H, 0.42, {}).intensity;   // v0.115: buildRiverField removed — the network's intensity is the overlay
   check('river field finite', allFinite(rf));
   // width: count lit cells across the trunk row vs the tributary column
   let trunkW = 0, tribW = 0;
@@ -1720,11 +1720,11 @@ if (typeof applyTidalSedimentation === 'function') {
   check('trunk river is wider than the tributary (' + trunkW + ' vs ' + tribW + ')', trunkW > tribW && trunkW >= 3);
   // ocean cells get no river
   const fldSea = new Float32Array(W * H).fill(0.2);   // all below sea
-  const rfSea = buildRiverField(flow, fldSea, W, H, 0.42);
+  const rfSea = buildRiverNetwork(fldSea, flow, W, H, 0.42, {}).intensity;
   check('no river overlay on ocean cells', rfSea.every(v => v === 0));
   // deterministic
-  const rf2 = buildRiverField(flow, fld, W, H, 0.42);
-  check('buildRiverField deterministic', rf.every((v, i) => v === rf2[i]));
+  const rf2 = buildRiverNetwork(fld, flow, W, H, 0.42, {}).intensity;
+  check('river overlay deterministic', rf.every((v, i) => v === rf2[i]));
 }
 
 /* ---------- v0.077: river carving interplay (monotonic channel + entrenchment) ---------- */
@@ -2020,13 +2020,13 @@ if (typeof applyTidalSedimentation === 'function') {
   let idx = -1; for (let i = 0; i < GW * GH; i++){ if (field[i] >= state.seaLevel && flowField[i] > lo && flowField[i] < hi){ idx = i; break; } }
   const savedM = state.viz.minorStreams, savedR2 = state.showRivers; state.showRivers = true;
   if (idx >= 0){ const x = idx % GW, y = (idx / GW) | 0;
-    _riverField = null; state.viz.minorStreams = 0;   const c0 = surfaceColor(x, y, idx, field[idx]);
-    _riverField = null; state.viz.minorStreams = 0;   const c0b = surfaceColor(x, y, idx, field[idx]);
+    _riverNet = null; state.viz.minorStreams = 0;   const c0 = surfaceColor(x, y, idx, field[idx]);
+    _riverNet = null; state.viz.minorStreams = 0;   const c0b = surfaceColor(x, y, idx, field[idx]);
     check('minor channels off ⇒ surfaceColor unchanged/deterministic', c0.every((v, i) => v === c0b[i]));
-    _riverField = null; state.viz.minorStreams = 0.9; const c1 = surfaceColor(x, y, idx, field[idx]);
+    _riverNet = null; state.viz.minorStreams = 0.9; const c1 = surfaceColor(x, y, idx, field[idx]);
     check('minor channels on ⇒ band cell shifts blue-grey', c1.some((v, i) => v !== c0[i]) && c1[2] >= c1[0]);
   } else { console.log('skip - no minor-band cell found at this seed/res'); check('minor channels band lookup', true); }
-  state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverField = null;
+  state.viz.minorStreams = savedM; state.showRivers = savedR2; _riverNet = null;
 }
 
 /* ---------- R4: ridged-noise elevation-weighted relief detail (v0.089) ---------- */

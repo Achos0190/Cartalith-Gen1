@@ -213,6 +213,34 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
 .row.bio .code{color:#6fcf97}
 .row.ter .code{color:#caa46a}
 .row.str .code{color:#e08bb0}
+.row.cus .code{color:#7fd3e0}
+.tag.cus{color:#7fd3e0;border-color:#2f5560}
+/* custom-slot add row */
+.fam .add-slot{display:flex;gap:8px;align-items:center;padding:10px 2px 2px;margin-top:4px;
+  border-top:1px dashed var(--line)}
+.fam .add-slot input{flex:1;background:var(--panel-2);color:var(--txt);border:1px solid var(--line);
+  border-radius:7px;padding:8px 10px;font:inherit;font-size:12.5px}
+.fam .add-slot input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.row-id .rm{margin-top:8px;align-self:flex-start}
+/* generic select */
+select{background:var(--panel-2);color:var(--txt);border:1px solid var(--line);border-radius:7px;
+  padding:8px 9px;font:inherit;font-size:12.5px;width:100%}
+select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+/* slice-sheet modal */
+.modal.slice{max-width:1000px;width:96vw}
+.slice-body{grid-template-columns:1fr 290px}
+.slice-left{display:flex;flex-direction:column;gap:14px;min-width:0}
+.slice-canvas-wrap{
+  background:conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px;
+  border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:64vh;
+  display:flex;align-items:center;justify-content:center;padding:10px}
+#sliceCanvas{cursor:crosshair;display:block;max-width:100%;image-rendering:pixelated}
+.slice-controls{display:flex;flex-direction:column;gap:14px}
+.slice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.slice-sel-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.slice-sel-row .slcount{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--txt-faint)}
+.chk{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--txt-dim);cursor:pointer}
+.chk input{accent-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -230,6 +258,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
     <div class="field short"><label for="packLicense">License</label>
       <input id="packLicense" type="text" value="CC0" spellcheck="false"></div>
   </div>
+  <button id="sliceBtn" class="ghost">✂ Slice sheet…</button>
   <button id="buildBtn" class="primary">Build &amp; Export Asset Pack</button>
 </header>
 
@@ -246,7 +275,10 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
     repetition; empty slots fall back to procedural rendering.<br>
     <strong>Biome / terrain textures</strong> and <strong>settlement / trait / POI icons</strong> are emitted as a
     <code>schema&nbsp;2</code> superset for the unified Cartalith app; the current engine harmlessly ignores them, so
-    one pack serves both. Output is an uncompressed (STORED) ZIP readable by <code>unzipStore</code> / <code>unzipAny</code>.
+    one pack serves both. Output is an uncompressed (STORED) ZIP readable by <code>unzipStore</code> / <code>unzipAny</code>.<br>
+    <strong>Custom icons</strong> are free-form user slots (exported under a <code>custom</code> section). Use
+    <strong>✂ Slice sheet</strong> to load one image holding many icons, overlay a columns × rows grid, click the
+    cells you want, and drop them into any slot (or a new custom one) as cropped variants.
   </div>
 </main>
 
@@ -286,7 +318,58 @@ input[type=range]{width:100%;accent-color:var(--accent);height:22px}
   </div>
 </div>
 
+<!-- slice-sheet modal -->
+<div class="modal-backdrop" id="sliceModal">
+  <div class="modal slice">
+    <div class="modal-head">
+      <span class="mcode">✂ slice</span>
+      <h3>Slice sprite sheet</h3>
+      <button class="ghost tiny x" id="slClose">Close ✕</button>
+    </div>
+    <div class="modal-body slice-body">
+      <div class="slice-left">
+        <div class="dropzone" id="slDrop">
+          <div class="big">⬇</div>
+          <div class="t1">Drop a sprite-sheet image</div>
+          <div class="t2">or click to browse — load a different sheet anytime</div>
+        </div>
+        <div class="slice-canvas-wrap" id="slCanvasWrap" style="display:none">
+          <canvas id="sliceCanvas"></canvas>
+        </div>
+      </div>
+      <div class="slice-controls">
+        <div class="slice-grid">
+          <div class="field"><label for="slCols">Columns</label>
+            <input id="slCols" type="number" min="1" max="128" value="4"></div>
+          <div class="field"><label for="slRows">Rows</label>
+            <input id="slRows" type="number" min="1" max="128" value="4"></div>
+          <div class="field"><label for="slMargin">Margin px</label>
+            <input id="slMargin" type="number" min="0" value="0"></div>
+          <div class="field"><label for="slSpacing">Spacing px</label>
+            <input id="slSpacing" type="number" min="0" value="0"></div>
+        </div>
+        <div class="slice-sel-row">
+          <button class="ghost tiny" id="slAll">Select all</button>
+          <button class="ghost tiny" id="slNone">Clear</button>
+          <button class="ghost tiny" id="slInvert">Invert</button>
+          <span class="slcount" id="slCount">0 selected</span>
+        </div>
+        <label class="chk"><input type="checkbox" id="slSkipBlank" checked> skip fully-transparent cells</label>
+        <div class="field"><label for="sliceTarget">Add selected cells to…</label>
+          <select id="sliceTarget"></select></div>
+        <div class="field"><label for="sliceNewName">…or type a new custom-icon name</label>
+          <input id="sliceNewName" type="text" placeholder="e.g. windmill" spellcheck="false"></div>
+        <div class="editor-info" id="slInfo">Load a sheet, set the grid, then click cells to select.</div>
+        <div class="editor-actions">
+          <button class="primary" id="slAdd">Add selected cells →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="filePicker" accept="image/*" style="display:none">
+<input type="file" id="sheetPicker" accept="image/*" style="display:none">
 <div id="toast"></div>
 
 <script>
@@ -419,6 +502,11 @@ const FAMILIES = [
       ['bridge','Bridge / ford',''],
       ['other','Other',''],
     ])}, ICO),
+
+  /* === schema-2: free-form custom icons (user-defined slots; exported under "custom") === */
+  Object.assign({key:'custom', title:'Custom icons', tag:'cus', tagText:'user-defined',
+    dir:'custom', section:'custom', anchor:'center', open:false, custom:true,
+    slots:[]}, ICO),
 ];
 
 /* ---- registry + store (keyed by unique family:slot id) ------------- */
@@ -472,12 +560,15 @@ function fitToBottom(item, size){
 /* ====================================================================
    Build family accordions + rows
    ==================================================================== */
+function famSpec(fam){
+  return fam.kind==='texture' ? `${fam.size}×${fam.size} · opaque`
+                              : `${fam.size}×${fam.size} · RGBA · ${fam.multi?'multi':'single'}`;
+}
+
 function buildFamily(fam, container){
   const det = document.createElement('details');
   det.className = 'fam';
   if(fam.open) det.open = true;
-  const spec = fam.kind==='texture' ? `${fam.size}×${fam.size} · opaque`
-             : `${fam.size}×${fam.size} · RGBA · ${fam.multi?'multi':'single'}`;
   det.innerHTML = `
     <summary>
       <span class="tag ${fam.tag}">${fam.tagText}</span>
@@ -487,10 +578,24 @@ function buildFamily(fam, container){
     <div class="grid"></div>`;
   container.appendChild(det);
   const grid = det.querySelector('.grid');
-  fam.slots.forEach(slot => grid.appendChild(buildRow(fam, slot, spec)));
+  fam.detEl = det; fam.gridEl = grid;
+  fam.slots.forEach(slot => grid.appendChild(buildRow(fam, slot)));
+  if(fam.custom){
+    const add = document.createElement('div');
+    add.className = 'add-slot';
+    add.innerHTML = `
+      <input type="text" placeholder="New custom icon name (e.g. lighthouse)" spellcheck="false">
+      <button class="primary tiny">+ Add slot</button>`;
+    grid.appendChild(add);
+    fam.addEl = add;
+    const inp = add.querySelector('input'), btn = add.querySelector('button');
+    const go = () => { const v = inp.value.trim(); if(!v) return; addCustomSlot(fam, v); inp.value=''; inp.focus(); };
+    btn.addEventListener('click', go);
+    inp.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); go(); } });
+  }
 }
 
-function buildRow(fam, slot, spec){
+function buildRow(fam, slot){
   const row = document.createElement('div');
   row.className = 'row ' + fam.tag;
   row.dataset.uid = slot.uid;
@@ -499,7 +604,8 @@ function buildRow(fam, slot, spec){
       <span class="code">${slot.code}</span>
       <span class="name">${slot.name}</span>
       <span class="desc">${slot.desc}</span>
-      <span class="spec">${slot.id} · ${spec}</span>
+      <span class="spec">${slot.id} · ${famSpec(fam)}</span>
+      ${fam.custom ? '<button class="ghost tiny danger rm">remove slot</button>' : ''}
     </div>
     <div class="row-body">
       <div class="dropzone">
@@ -517,7 +623,36 @@ function buildRow(fam, slot, spec){
     e.preventDefault(); dz.classList.remove('over');
     handleFiles(slot.uid, e.dataTransfer.files);
   });
+  if(fam.custom){
+    const rm = row.querySelector('.rm');
+    if(rm) rm.addEventListener('click', () => removeCustomSlot(slot.uid));
+  }
   return row;
+}
+
+/* ---- custom slots (free-form, user-defined) ------------------------ */
+function slugId(s){ return (String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')) || 'icon'; }
+function addCustomSlot(fam, name){
+  const id = slugId(name);
+  const existing = fam.slots.find(s => s.id===id);
+  if(existing){ if(fam.detEl) fam.detEl.open = true; return existing; }
+  const slot = {id, name:name.trim(), desc:'custom icon', code:'CU-'+String(fam.slots.length+1).padStart(2,'0'),
+                uid:fam.key+':'+id};
+  fam.slots.push(slot);
+  SLOT_REG[slot.uid] = {fam, slot};
+  store[slot.uid] = [];
+  fam.gridEl.insertBefore(buildRow(fam, slot), fam.addEl);
+  if(fam.detEl) fam.detEl.open = true;
+  updateCount(fam.key); refreshTargetOptions();
+  return slot;
+}
+function removeCustomSlot(uid){
+  const {fam} = SLOT_REG[uid];
+  fam.slots = fam.slots.filter(s => s.uid!==uid);
+  delete SLOT_REG[uid]; delete store[uid];
+  const row = document.querySelector(`.row[data-uid="${cssEsc(uid)}"]`);
+  if(row) row.remove();
+  updateCount(fam.key); refreshTargetOptions();
 }
 
 function updateCount(famKey){
@@ -763,6 +898,151 @@ function toast(msg, kind){
   toastTimer = setTimeout(() => el.className = (kind||''), 3600);
 }
 
+/* ====================================================================
+   Slice sprite sheet — load one image of many icons, overlay a
+   columns × rows grid, select cells, crop them into any slot.
+   ==================================================================== */
+let sheet = null;            // {img, w, h, name}
+let slCells = [];            // current cell rects in SOURCE pixels
+let slScale = 1;             // source→display scale of #sliceCanvas
+const slSel = new Set();     // selected cell indices
+
+function clampInt(v, lo, hi){ v = parseInt(v,10); if(!isFinite(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
+
+function computeCells(){
+  const cols = clampInt($('slCols').value,1,128), rows = clampInt($('slRows').value,1,128);
+  const m = Math.max(0, parseFloat($('slMargin').value)||0);
+  const g = Math.max(0, parseFloat($('slSpacing').value)||0);
+  const cw = (sheet.w - 2*m - (cols-1)*g)/cols;
+  const ch = (sheet.h - 2*m - (rows-1)*g)/rows;
+  const cells = [];
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
+    cells.push({c, r, idx:r*cols+c, x:m+c*(cw+g), y:m+r*(ch+g), w:cw, h:ch});
+  return {cells, cw, ch};
+}
+
+function drawSliceGrid(){
+  if(!sheet) return;
+  const {cells, cw, ch} = computeCells();
+  slCells = cells;
+  if(cw<=0 || ch<=0){ $('slInfo').textContent = 'Grid too dense for this margin/spacing — reduce cols/rows or margins.'; return; }
+  const maxW = 740, maxH = Math.max(240, Math.round(window.innerHeight*0.62));
+  let scale = Math.min(maxW/sheet.w, maxH/sheet.h, 8);
+  if(!isFinite(scale) || scale<=0) scale = 1;
+  slScale = scale;
+  const cv = $('sliceCanvas'), ctx = cv.getContext('2d');
+  cv.width = Math.max(1, Math.round(sheet.w*scale));
+  cv.height = Math.max(1, Math.round(sheet.h*scale));
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.drawImage(sheet.img, 0,0, cv.width, cv.height);
+  ctx.lineWidth = 1;
+  for(const cell of slCells){
+    const x=cell.x*scale, y=cell.y*scale, w=cell.w*scale, h=cell.h*scale;
+    if(slSel.has(cell.idx)){
+      ctx.fillStyle = 'rgba(91,140,255,.32)'; ctx.fillRect(x,y,w,h);
+      ctx.strokeStyle = 'rgba(140,180,255,.95)';
+    } else { ctx.strokeStyle = 'rgba(255,255,255,.32)'; }
+    ctx.strokeRect(x+.5, y+.5, Math.max(0,w-1), Math.max(0,h-1));
+  }
+  $('slCount').textContent = slSel.size + ' selected';
+  $('slInfo').textContent = `${sheet.name} — ${sheet.w}×${sheet.h}px · ${slCells.length} cells (~${Math.round(cw)}×${Math.round(ch)}px each)`;
+}
+
+function sliceCanvasClick(e){
+  if(!sheet) return;
+  const cv = e.currentTarget, rect = cv.getBoundingClientRect();
+  const px = (e.clientX-rect.left) * (cv.width/rect.width) / slScale;
+  const py = (e.clientY-rect.top)  * (cv.height/rect.height) / slScale;
+  const cell = slCells.find(c => px>=c.x && px<c.x+c.w && py>=c.y && py<c.y+c.h);
+  if(!cell) return;
+  if(slSel.has(cell.idx)) slSel.delete(cell.idx); else slSel.add(cell.idx);
+  drawSliceGrid();
+}
+
+function isBlankCanvas(ctx, w, h){
+  const d = ctx.getImageData(0,0,w,h).data;
+  for(let i=3;i<d.length;i+=4) if(d[i]>8) return false;
+  return true;
+}
+
+function addSlices(){
+  if(!sheet){ toast('Load a sprite sheet first.', 'warn'); return; }
+  if(!slSel.size){ toast('Click at least one cell to select it.', 'warn'); return; }
+  // resolve target: a typed custom name wins; else the dropdown selection
+  let uid = null;
+  const newName = $('sliceNewName').value.trim();
+  if(newName){
+    uid = addCustomSlot(FAMILIES.find(f => f.custom), newName).uid;
+  } else {
+    uid = $('sliceTarget').value;
+    if(!uid || uid==='__new__'){ toast('Pick a target slot, or type a new custom-icon name.', 'warn'); return; }
+  }
+  const {fam, slot} = SLOT_REG[uid];
+  const skipBlank = $('slSkipBlank').checked;
+  const idxs = [...slSel].sort((a,b)=>a-b);
+  let added = 0, skipped = 0;
+  for(const idx of idxs){
+    const cell = slCells.find(c => c.idx===idx); if(!cell) continue;
+    const sx = Math.round(cell.x), sy = Math.round(cell.y);
+    const sw = Math.max(1, Math.round(cell.w)), sh = Math.max(1, Math.round(cell.h));
+    const cc = document.createElement('canvas'); cc.width = sw; cc.height = sh;
+    const cx = cc.getContext('2d');
+    cx.drawImage(sheet.img, sx, sy, sw, sh, 0, 0, sw, sh);
+    if(skipBlank && isBlankCanvas(cx, sw, sh)){ skipped++; continue; }
+    const base = sheet.name.replace(/\.[^.]+$/,'');
+    const item = {name:`${base}_r${cell.r+1}c${cell.c+1}`, img:cc, w:sw, h:sh, t:defaultTransform()};
+    if(fam.anchor==='bottom') fitToBottom(item, fam.size);
+    if(fam.multi){ store[uid].push(item); added++; }
+    else { store[uid] = [item]; added++; break; }   // single-slot families take one crop
+  }
+  renderThumbs(uid);
+  toast(`Added ${added} cell${added!==1?'s':''}${skipped?` (${skipped} blank skipped)`:''} → ${slot.name}.`,
+        added ? 'ok' : 'warn');
+  slSel.clear(); $('sliceNewName').value = ''; drawSliceGrid();
+}
+
+function loadSheet(file){
+  if(!file) return;
+  if(!/^image\//.test(file.type) && !/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name)){
+    toast('That is not an image file.', 'warn'); return;
+  }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    sheet = {img, w:img.naturalWidth||1, h:img.naturalHeight||1, name:file.name};
+    slSel.clear();
+    $('slCanvasWrap').style.display = 'flex';
+    drawSliceGrid();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); toast('Could not decode that image.', 'err'); };
+  img.src = url;
+}
+
+/* rebuild the slice-target dropdown from every non-empty family */
+function refreshTargetOptions(){
+  const sel = $('sliceTarget'); if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '';
+  const optNew = document.createElement('option');
+  optNew.value = '__new__'; optNew.textContent = '➕ new custom icon (type a name below)';
+  sel.appendChild(optNew);
+  for(const fam of FAMILIES){
+    if(!fam.slots.length) continue;
+    const og = document.createElement('optgroup'); og.label = fam.title;
+    for(const slot of fam.slots){
+      const o = document.createElement('option');
+      o.value = slot.uid; o.textContent = `${slot.code} · ${slot.name}`;
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  if([...sel.options].some(o => o.value===cur)) sel.value = cur;
+}
+
+function openSlicer(){ refreshTargetOptions(); $('sliceModal').classList.add('show'); }
+function closeSlicer(){ $('sliceModal').classList.remove('show'); }
+
 /* ---- whole-window drop guard --------------------------------------- */
 ['dragover','drop'].forEach(ev => window.addEventListener(ev, e => {
   if(!e.target.closest('.dropzone')) e.preventDefault();
@@ -770,6 +1050,28 @@ function toast(msg, kind){
 
 /* ---- init ---------------------------------------------------------- */
 FAMILIES.forEach(fam => buildFamily(fam, $(fam.mount==='tex' ? 'texFams' : 'icoFams')));
+
+// slicer wiring
+$('sliceBtn').addEventListener('click', openSlicer);
+$('slClose').addEventListener('click', closeSlicer);
+$('sliceModal').addEventListener('click', e => { if(e.target === $('sliceModal')) closeSlicer(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape' && $('sliceModal').classList.contains('show')) closeSlicer(); });
+$('slDrop').addEventListener('click', () => $('sheetPicker').click());
+$('slDrop').addEventListener('dragover', e => { e.preventDefault(); $('slDrop').classList.add('over'); });
+$('slDrop').addEventListener('dragleave', () => $('slDrop').classList.remove('over'));
+$('slDrop').addEventListener('drop', e => { e.preventDefault(); $('slDrop').classList.remove('over'); loadSheet(e.dataTransfer.files[0]); });
+$('sheetPicker').addEventListener('change', e => { loadSheet(e.target.files[0]); e.target.value=''; });
+['slCols','slRows','slMargin','slSpacing'].forEach(id =>
+  $(id).addEventListener('input', () => { slSel.clear(); drawSliceGrid(); }));
+$('slAll').addEventListener('click', () => { slCells.forEach(c => slSel.add(c.idx)); drawSliceGrid(); });
+$('slNone').addEventListener('click', () => { slSel.clear(); drawSliceGrid(); });
+$('slInvert').addEventListener('click', () => {
+  const inv = new Set(); slCells.forEach(c => { if(!slSel.has(c.idx)) inv.add(c.idx); });
+  slSel.clear(); inv.forEach(i => slSel.add(i)); drawSliceGrid();
+});
+$('sliceCanvas').addEventListener('click', sliceCanvasClick);
+$('slAdd').addEventListener('click', addSlices);
+refreshTargetOptions();
 </script>
 </body>
 </html>

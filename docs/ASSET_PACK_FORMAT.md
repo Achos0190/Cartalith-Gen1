@@ -225,3 +225,25 @@ Biome/terrain keys are the suffixes of Cartalith's `--biome-*` / `--terrain-*` C
 `key` fields of `SETTLEMENT_CLASSES` / `SETTLEMENT_TRAITS` / `POI_TYPES`. Anchor differs by family: feature icons
 (`mountain`/`hill`/trees) stay **bottom-anchored** (glyph base on the cell); settlement/trait/POI symbols are
 **center-anchored** (centered on the point), matching how Cartalith places pins today.
+
+### Custom icons (`custom` section)
+
+Beyond the fixed vocabulary, the compiler lets the user define **free-form icon slots** under a `custom` section
+(same shape as `icons` — `key → [paths]`, 256×256 RGBA, center-anchored, 1..N variants, files in `custom/`):
+
+```json
+"custom": { "lighthouse": ["custom/lighthouse_01.png", "custom/lighthouse_02.png"], "windmill": ["custom/windmill_01.png"] }
+```
+
+Keys are slugified from the user's name (`Wind Mill!!` → `windmill`) and de-duplicated. Like every schema-2
+section, `custom` is invisible to the current elevation-foundation importer; it is carried for the unified app to
+bind to user-authored symbology.
+
+### Sprite-sheet slicing (authoring convenience)
+
+The compiler's **✂ Slice sheet** tool lets one image holding many icons be cut into individual sprites without
+external tooling. The user loads a sheet, overlays a **columns × rows** grid (with optional outer **margin** and
+inter-cell **spacing**), clicks the cells to keep (select-all / clear / invert; an option skips fully-transparent
+cells), then assigns the selection to **any slot** — a fixed-family slot or a new custom one — as cropped variants
+(single-slot families take one crop). Cropping is purely an authoring step: each cell is rendered to its own canvas
+and enters the normal per-item editor + export path, so the output ZIP is identical to dropping pre-cut PNGs.

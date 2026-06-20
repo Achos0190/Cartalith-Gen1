@@ -2721,6 +2721,37 @@ if (typeof featherSeamX === 'function') {
   check('featherSeamX smooths a seam step (' + before.toFixed(2) + '→' + after.toFixed(2) + ')', after < before && a.every(Number.isFinite));
 }
 
+/* ---------- v0.127: roads — terrain-aware least-cost paths between designated places ---------- */
+if (typeof buildRoadNetwork === 'function') {
+  const W = 30, H = 20, sea = 0.42;
+  // a low gentle corridor across the middle, with a steep ridge to the north and a sea channel splitting the east
+  const fld = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+    let h = 0.55 + (y < 8 ? (8 - y) * 0.05 : 0);        // steep rise to the north (expensive)
+    if (y >= 9 && y <= 11) h = 0.45;                      // a gentle valley corridor (cheap)
+    fld[y * W + x] = h;
+  }
+  const cost = buildTravelCost(fld, W, H, sea, {});
+  check('buildTravelCost: water ≫ land cost', (() => { const sf = new Float32Array(W * H).fill(0.2); const c = buildTravelCost(sf, W, H, sea, {}); return c[0] > 1e5 && cost[10 * W + 5] < 1e5; })());
+  check('buildTravelCost: steeper ground costs more', cost[2 * W + 5] > cost[10 * W + 5]);
+  // path through the corridor prefers the gentle valley (stays near rows 9-11)
+  const r = roadDijkstra(cost, W, H, 2, 10, false);
+  check('roadDijkstra: reaches a far cell with finite cost', r.dist[10 * W + (W - 2)] < 1e6 && Number.isFinite(r.dist[10 * W + (W - 2)]));
+  // network between 3 places in the corridor → connected (2 edges for 3 reachable nodes)
+  const places = [{ x: 2, y: 10 }, { x: 15, y: 10 }, { x: 27, y: 11 }];
+  const net = buildRoadNetwork(places, cost, W, H, {});
+  check('buildRoadNetwork: MST connects N reachable places with N−1 edges', net.edges.length === 2);
+  check('buildRoadNetwork: each edge has a contiguous path of cells', net.edges.every(e => e.path.length >= 2 && e.path.every(i => i >= 0 && i < W * H)));
+  // a place stranded across the sea gets no road
+  const fld2 = fld.slice(); for (let y = 0; y < H; y++) fld2[y * W + 20] = 0.2;   // a full-height sea wall at x=20
+  const cost2 = buildTravelCost(fld2, W, H, sea, {});
+  const net2 = buildRoadNetwork([{ x: 2, y: 10 }, { x: 10, y: 10 }, { x: 27, y: 11 }], cost2, W, H, {});
+  check('buildRoadNetwork: places on separate landmasses get no road (sea barrier)', net2.edges.length < 2);
+  // determinism
+  const netB = buildRoadNetwork(places, cost, W, H, {});
+  check('buildRoadNetwork deterministic', net.edges.length === netB.edges.length && net.edges.every((e, i) => e.path.length === netB.edges[i].path.length));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

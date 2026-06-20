@@ -2763,6 +2763,14 @@ if (typeof addZoomDetail === 'function') {
   const ta = pyramidTile(co2, cW2, cH2, 6, 10, 8, ts, opts), tb = pyramidTile(co2, cW2, cH2, 6, 11, 8, ts, opts);
   let sm = 0; for (let y = 0; y < ta.h; y++) sm = Math.max(sm, Math.abs(ta.data[y * ta.w + (ta.w - 1)] - tb.data[y * tb.w]));
   check('addZoomDetail: high-z (z=6) adjacent tiles stay seam-Δ=0 (' + sm.toExponential(1) + ')', sm < 1e-6);
+  // v0.133: zoom-detail amount (zoomDetailK) — 1 (or omitted) is bit-identical; >1 adds more relief; seam-Δ stays 0
+  const d8k1 = mkData(); addZoomDetail(d8k1, W, H, coarse, cW, cH, b, 8, { seed: 7, zoomDetailK: 1 });
+  check('addZoomDetail zoomDetailK=1 bit-identical to omitted', d8k1.every((v, i) => v === d8[i]));
+  const d8k2 = mkData(); addZoomDetail(d8k2, W, H, coarse, cW, cH, b, 8, { seed: 7, zoomDetailK: 2 });
+  check('addZoomDetail zoomDetailK>1 adds more on-zoom relief', dev(d8k2) > dev(d8) && d8k2.every(Number.isFinite));
+  const tak = pyramidTile(co2, cW2, cH2, 6, 10, 8, ts, { seed: 7, detailAmp: 0.14, zoomDetailK: 2.5 }), tbk = pyramidTile(co2, cW2, cH2, 6, 11, 8, ts, { seed: 7, detailAmp: 0.14, zoomDetailK: 2.5 });
+  let smk = 0; for (let y = 0; y < tak.h; y++) smk = Math.max(smk, Math.abs(tak.data[y * tak.w + (tak.w - 1)] - tbk.data[y * tbk.w]));
+  check('addZoomDetail: zoomDetailK keeps seam-Δ=0 (' + smk.toExponential(1) + ')', smk < 1e-6);
 }
 if (typeof featherSeamX === 'function') {
   const W = 12, H = 4, a = new Float32Array(W * H);

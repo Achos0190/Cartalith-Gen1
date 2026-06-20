@@ -2639,6 +2639,47 @@ if (typeof shiftGridX === 'function' && typeof bestEmptyColumn === 'function') {
   check('shiftGridX works on Int16Array', ai[0] === 3 && ai[W - 1] === (W + 2) % W);
 }
 
+/* ---------- v0.120: fjords — constrained glacial-coastal incision ---------- */
+if (typeof buildFjordMask === 'function' && typeof carveFjords === 'function') {
+  const W = 24, H = 16, sea = 0.42;
+  // ocean (x<6), then a steep granite coastal mountain wall, with a near-sea valley notch cutting through it (a fjord candidate)
+  const mkField = () => { const f = new Float32Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++){
+      let h = x < 6 ? 0.30 : 0.42 + (x - 6) * 0.20;     // ocean then a very steep rising coast
+      if (y === 8 && x >= 6 && x < 14) h = 0.43;         // a near-sea valley floor between the steep walls
+      f[y * W + x] = Math.min(0.95, h);
+    }
+    return f; };
+  const coastDist = (f) => { const sm = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) sm[i] = f[i] < sea ? 1 : 0; return chamferDist(sm, W, H); };
+  const lithGran = new Uint8Array(W * H).fill(0);   // granite everywhere (competent)
+  const lithSed  = new Uint8Array(W * H).fill(4);   // sandstone everywhere (weak)
+  const cold = new Float32Array(W * H).fill(-3);    // paleo-adjusted lands in the glacial band
+  const warm = new Float32Array(W * H).fill(26);    // tropical
+
+  const f = mkField(), cd = coastDist(f);
+  const maskCold = buildFjordMask(f, cold, lithGran, cd, W, H, sea, {});
+  check('fjord mask: finite & in [0,1]', allFinite(maskCold) && (([a, b]) => a >= 0 && b <= 1)(minMax(maskCold)));
+  check('fjord mask: fires on the cold steep granite coast', maskCold.some(v => v > 0.05));
+  // tropical coast ⇒ no fjords
+  const maskWarm = buildFjordMask(f, warm, lithGran, cd, W, H, sea, {});
+  check('fjord mask: zero on a tropical coast', maskWarm.every(v => v === 0));
+  // weak sedimentary rock ⇒ strongly suppressed vs crystalline
+  const maskSed = buildFjordMask(f, cold, lithSed, cd, W, H, sea, {});
+  const sum = a => a.reduce((s, v) => s + v, 0);
+  check('fjord mask: weak sedimentary rock suppresses vs crystalline', sum(maskSed) < sum(maskCold) * 0.5);
+  // interior (far from coast) stays zero
+  check('fjord mask: interior (far from coast) is zero', (() => { for (let y = 0; y < H; y++){ const i = y * W + (W - 1); if (maskCold[i] !== 0) return false; } return true; })());
+  // carving overdeepens the valley below sea, leaves ridges, only deepens
+  const carved = carveFjords(f, maskCold, W, H, sea, {});
+  check('carveFjords: finite & never raises terrain', allFinite(carved) && carved.every((v, i) => v <= f[i] + 1e-9));
+  check('carveFjords: drowns a masked coastal valley below sea level', (() => { for (let x = 6; x < 12; x++){ const i = 8 * W + x; if (maskCold[i] > 0.05 && carved[i] < sea) return true; } return false; })());
+  // low-mask cells untouched
+  check('carveFjords: leaves low-mask cells untouched', (() => { for (let i = 0; i < W * H; i++) if (maskCold[i] <= 0.02 && carved[i] !== f[i]) return false; return true; })());
+  // determinism
+  const carved2 = carveFjords(f, maskCold, W, H, sea, {});
+  check('carveFjords deterministic', carved.every((v, i) => v === carved2[i]));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

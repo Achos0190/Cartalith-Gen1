@@ -2825,6 +2825,62 @@ if (typeof applyFeatureToLOD === 'function') {
   check('applyFeatureToLOD: deterministic (same tile count)', touched2 === touched);
   _lodEdits.clear(); lodCacheClear(); _lodOn = sOn; _lodZoom = sZ; _lodCx = sCx; _lodCy = sCy; _lodTile = sTile;
 }
+/* ---------- v0.135: multicore generate() noise fills — Invariant 11 (worker-stringify) + row-slice offset ---------- */
+if (typeof fillWarpRows === 'function') {
+  const noiseSrc = [hash, vnoise, fbm, ridged, pvnoise, pfbm, pridged].map(f => f.toString()).join('\n');
+  const shadows = ['GW', 'GH', 'state', 'field', 'warpX', 'warpY', 'ageField', 'baseField', 'stressField', 'flexureField', 'heterogeneityField', 'orogenyField', 'plates', 'plateId'];
+  const rebuild = fn => { try { return new Function(...shadows, noiseSrc + '\nreturn (' + fn.toString() + ');').apply(null, shadows.map(() => undefined)); } catch (e){ return null; } };
+  const rW = rebuild(fillWarpRows), rHet = rebuild(fillHeteroRows), rHt = rebuild(fillHeightRows);
+  check('fill kernels rebuild from source (worker stringification, module globals shadowed)', !!rW && !!rHet && !!rHt);
+  const W = 40, H = 24, n = W * H;
+  if (rW) {
+    const P = { s: 123, wf: 2.5 / W, pX: 3, amp: 5, world: false };
+    const ax = new Float32Array(n), ay = new Float32Array(n), bx = new Float32Array(n), by = new Float32Array(n);
+    fillWarpRows(ax, ay, W, 0, H, 0, P); rW(bx, by, W, 0, H, 0, P);
+    let id = true, fin = true; for (let i = 0; i < n; i++){ if (ax[i] !== bx[i] || ay[i] !== by[i]) id = false; if (!Number.isFinite(ax[i]) || !Number.isFinite(ay[i])) fin = false; }
+    check('fillWarpRows: rebuilt (worker) bit-identical + finite', id && fin);
+    const y0 = 6, y1 = 14, sx = new Float32Array((y1 - y0) * W), sy = new Float32Array((y1 - y0) * W);
+    fillWarpRows(sx, sy, W, y0, y1, y0, P);
+    let sl = true; for (let i = 0; i < (y1 - y0) * W; i++) if (sx[i] !== ax[y0 * W + i] || sy[i] !== ay[y0 * W + i]) sl = false;
+    check('fillWarpRows: row-slice (rb=y0) == full-array rows (worker stitch correctness)', sl);
+  }
+  if (rHet) {
+    const P = { seed: 77, hf: 1.5, world: false };
+    const age = new Float32Array(n), wx = new Float32Array(n), wy = new Float32Array(n);
+    for (let i = 0; i < n; i++){ age[i] = (i % 13) / 13; wx[i] = Math.sin(i * 0.1); wy[i] = Math.cos(i * 0.07); }
+    const a = new Float32Array(n), b = new Float32Array(n);
+    fillHeteroRows(a, age, wx, wy, W, 0, H, 0, P); rHet(b, age, wx, wy, W, 0, H, 0, P);
+    let id = true; for (let i = 0; i < n; i++) if (a[i] !== b[i]) id = false;
+    check('fillHeteroRows: rebuilt (worker) bit-identical', id && a.every(Number.isFinite));
+    const y0 = 4, y1 = 12, sa = new Float32Array((y1 - y0) * W);
+    fillHeteroRows(sa, age.slice(y0 * W, y1 * W), wx.slice(y0 * W, y1 * W), wy.slice(y0 * W, y1 * W), W, y0, y1, y0, P);
+    let sl = true; for (let i = 0; i < (y1 - y0) * W; i++) if (sa[i] !== a[y0 * W + i]) sl = false;
+    check('fillHeteroRows: row-slice (sliced inputs + rb) == full', sl);
+    const c = new Float32Array(n); fillHeteroRows(c, age, null, null, W, 0, H, 0, P);
+    check('fillHeteroRows: null-warp path finite', c.every(Number.isFinite));
+  }
+  if (rHt) {
+    const P = { nf: 5, seed: 321, A: 0.6, B: 0.4, ageInf: 0.3, Fwt: 0.2, Hwt: 0.1, world: false, ridged: false };
+    const bf = new Float32Array(n), st = new Float32Array(n), fl = new Float32Array(n), he = new Float32Array(n), age = new Float32Array(n), wx = new Float32Array(n), wy = new Float32Array(n);
+    for (let i = 0; i < n; i++){ bf[i] = 0.1 * Math.sin(i * 0.05); st[i] = 0.2 * Math.cos(i * 0.03); fl[i] = 0.05; he[i] = 0.02; age[i] = (i % 9) / 9; wx[i] = Math.sin(i * 0.02); wy[i] = Math.cos(i * 0.02); }
+    const a = new Float32Array(n), b = new Float32Array(n);
+    fillHeightRows(a, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P); rHt(b, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P);
+    let id = true; for (let i = 0; i < n; i++) if (a[i] !== b[i]) id = false;
+    check('fillHeightRows: rebuilt (worker) bit-identical + finite', id && a.every(Number.isFinite));
+    const P2 = Object.assign({}, P, { world: true, ridged: true });
+    const c = new Float32Array(n), d = new Float32Array(n);
+    fillHeightRows(c, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P2); rHt(d, bf, st, fl, he, age, wx, wy, null, W, 0, H, 0, P2);
+    let id2 = true; for (let i = 0; i < n; i++) if (c[i] !== d[i]) id2 = false;
+    check('fillHeightRows: rebuilt bit-identical (world+ridged path)', id2 && c.every(Number.isFinite));
+    const oro = new Float32Array(n); for (let i = 0; i < n; i++) oro[i] = 0.03 * Math.sin(i * 0.04);
+    const full = new Float32Array(n); fillHeightRows(full, bf, st, fl, he, age, wx, wy, oro, W, 0, H, 0, P);
+    const y0 = 8, y1 = 18, sa = new Float32Array((y1 - y0) * W);
+    fillHeightRows(sa, bf.slice(y0 * W, y1 * W), st.slice(y0 * W, y1 * W), fl.slice(y0 * W, y1 * W), he.slice(y0 * W, y1 * W), age.slice(y0 * W, y1 * W), wx.slice(y0 * W, y1 * W), wy.slice(y0 * W, y1 * W), oro.slice(y0 * W, y1 * W), W, y0, y1, y0, P);
+    let sl = true; for (let i = 0; i < (y1 - y0) * W; i++) if (sa[i] !== full[y0 * W + i]) sl = false;
+    check('fillHeightRows: row-slice (sliced inputs + oro + rb) == full', sl);
+  }
+  check('GENPOOL present & inert headless (no Worker ⇒ usableFor=false ⇒ sync generate)', typeof GENPOOL === 'object' && GENPOOL.usableFor(1e7) === false);
+}
 if (typeof featherSeamX === 'function') {
   const W = 12, H = 4, a = new Float32Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a[y * W + x] = x < 6 ? 0.2 : 0.8;   // step discontinuity between col 5 and 6

@@ -2384,7 +2384,7 @@ if (typeof landColorCore === 'function') {
       px === undefined ? 100 : px, py === undefined ? 100 : py, 1, 1, gx || 0, gy || 0);
   };
   const savedViz = JSON.parse(JSON.stringify(state.viz));
-  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0, cel: 0, crosshatch: 0, stipple: 0, blueprint: 0, sepia: 0, risograph: 0, pointillism: 0 };
+  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0, cel: 0, crosshatch: 0, stipple: 0, sepia: 0, risograph: 0, pointillism: 0 };
   Object.assign(state.viz, off);
   const base = callLC();
   check('NPR: all-off baseline finite RGB', base.every(Number.isFinite));
@@ -2443,12 +2443,7 @@ if (typeof landColorCore === 'function') {
   { Object.assign(state.viz, off); state.viz.stipple = 0.9;
     check('NPR stipple: stays finite when on', [98, 100, 102, 104].every(p => finiteRGB(lcDark(p, 100))));
     Object.assign(state.viz, off); check('NPR stipple: off ⇒ bit-identical', sameAsBase(callLC())); }
-  // v0.131 new styles: blueprint, sepia, risograph, pointillism
-  { Object.assign(state.viz, off); const b0 = callLC(undefined, 60, 80, 0, 0);
-    state.viz.blueprint = 0.9; const bOn = callLC(undefined, 60, 80, 0, 0);
-    check('NPR blueprint: shifts colour toward navy-blue (blue channel rises or colour changes)', bOn.some((v, i) => v !== b0[i]) && finiteRGB(bOn));
-    check('NPR blueprint: blue channel ≥ its proportion in base (duotone leans blue)', bOn[2] >= b0[2] * 0.7);
-    Object.assign(state.viz, off); check('NPR blueprint: off ⇒ bit-identical', sameAsBase(callLC())); }
+  // v0.131 new styles: sepia, risograph, pointillism (blueprint removed v0.141)
   { Object.assign(state.viz, off); const s0 = callLC(undefined, 70, 90, 0, 0);
     state.viz.sepia = 0.9; const sOn = callLC(undefined, 70, 90, 0, 0);
     check('NPR sepia: shifts colour toward warm brown & stays finite', sOn.some((v, i) => v !== s0[i]) && finiteRGB(sOn));
@@ -2465,9 +2460,9 @@ if (typeof landColorCore === 'function') {
     check('NPR pointillism: stays finite', finiteRGB(callLC(undefined, 77, 83)));
     Object.assign(state.viz, off); check('NPR pointillism: off ⇒ bit-identical', sameAsBase(callLC())); }
   // water/below-sea (r<=0) is never touched by any NPR style
-  { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1, blueprint: 1, sepia: 1, risograph: 1, pointillism: 1 });
+  { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1, sepia: 1, risograph: 1, pointillism: 1 });
     const wOff = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
-    state.viz.contours = state.viz.ink = state.viz.hachure = state.viz.watercolor = state.viz.blueprint = state.viz.sepia = state.viz.risograph = state.viz.pointillism = 0;
+    state.viz.contours = state.viz.ink = state.viz.hachure = state.viz.watercolor = state.viz.sepia = state.viz.risograph = state.viz.pointillism = 0;
     const wOn = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
     check('NPR: r<=0 (at/below sea) untouched by all styles', wOff.every((v, i) => v === wOn[i]));
   }

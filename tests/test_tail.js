@@ -2772,6 +2772,41 @@ if (typeof addZoomDetail === 'function') {
   let smk = 0; for (let y = 0; y < tak.h; y++) smk = Math.max(smk, Math.abs(tak.data[y * tak.w + (tak.w - 1)] - tbk.data[y * tbk.w]));
   check('addZoomDetail: zoomDetailK keeps seam-Δ=0 (' + smk.toExponential(1) + ')', smk < 1e-6);
 }
+/* ---------- v0.134: mip-consistent edit composition (composeEditInto) — the level-locking fix ---------- */
+if (typeof composeEditInto === 'function') {
+  // an edit-delta tile: 8×8 px over coarse world rect eb, base flat 0.5, a +0.4 bump in a 2×2 block
+  const ew = 8, eh = 8, eb = { x: 16, y: 16, w: 8, h: 8 };
+  const ebase = new Float32Array(ew * eh).fill(0.5), edata = Float32Array.from(ebase);
+  for (let y = 3; y <= 4; y++) for (let x = 3; x <= 4; x++) edata[y * ew + x] = 0.9;   // delta +0.4 over 4 px
+  const e = { w: ew, h: eh, eb, base: ebase, data: edata };
+  const deltaSum = 4 * 0.4;   // total delta mass
+
+  // 1) SAME-resolution target (tw=ew, tb=eb): the delta is reproduced exactly (nearest, no blur)
+  { const out = new Float32Array(ew * eh); composeEditInto(out, ew, eh, eb, e);
+    let ok = true, mass = 0; for (let i = 0; i < out.length; i++){ mass += out[i]; if ((edata[i] - ebase[i]) > 1e-9 && out[i] <= 1e-9) ok = false; }
+    check('composeEditInto same-res: delta reproduced where painted', ok && out[3 * ew + 3] > 0.39 && out[3 * ew + 3] < 0.41);
+    check('composeEditInto same-res: untouched cells stay 0', out[0] === 0 && out[ew * eh - 1] === 0); }
+
+  // 2) COARSER target (4×4 over the same eb): the bump survives as a faithful AREA-AVERAGED notch (smaller magnitude, mass-ish preserved, never absent, never an alias spike)
+  { const tw = 4, th = 4, out = new Float32Array(tw * th); composeEditInto(out, tw, th, eb, e);
+    let peak = 0, mass = 0, fin = true; for (let i = 0; i < out.length; i++){ peak = Math.max(peak, out[i]); mass += out[i]; if (!Number.isFinite(out[i])) fin = false; }
+    check('composeEditInto coarse view: notch present but averaged-down (' + peak.toFixed(3) + ' < 0.4)', peak > 0.01 && peak < 0.4 && fin);
+    check('composeEditInto coarse view: contribution non-zero (detail does not vanish on zoom-out)', mass > 0.02); }
+
+  // 3) FINER target (16×16 over the same eb): the delta up-samples (nonzero, finite, peak ≈ painted magnitude)
+  { const tw = 16, th = 16, out = new Float32Array(tw * th); composeEditInto(out, tw, th, eb, e);
+    let peak = 0, fin = true; for (let i = 0; i < out.length; i++){ peak = Math.max(peak, out[i]); if (!Number.isFinite(out[i])) fin = false; }
+    check('composeEditInto fine view: delta resolves at higher res (peak ' + peak.toFixed(3) + ' ≈ 0.4)', peak > 0.35 && peak <= 0.4 + 1e-6 && fin); }
+
+  // 4) non-overlapping target bounds ⇒ no change
+  { const out = new Float32Array(ew * eh).fill(0.3), before = Float32Array.from(out); composeEditInto(out, ew, eh, { x: 100, y: 100, w: 8, h: 8 }, e);
+    check('composeEditInto: non-overlapping bounds leave the target untouched', out.every((v, i) => v === before[i])); }
+
+  // 5) additive onto an existing surface + clamp to [0,1]
+  { const out = new Float32Array(ew * eh).fill(0.8), b0 = out[3 * ew + 3]; composeEditInto(out, ew, eh, eb, e);
+    let inRange = true; for (const v of out) if (v < 0 || v > 1) inRange = false;
+    check('composeEditInto: adds onto base & clamps to [0,1]', inRange && out[3 * ew + 3] > b0); }
+}
 if (typeof featherSeamX === 'function') {
   const W = 12, H = 4, a = new Float32Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a[y * W + x] = x < 6 ? 0.2 : 0.8;   // step discontinuity between col 5 and 6

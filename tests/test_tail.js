@@ -541,7 +541,17 @@ check('render wrote opaque pixels', img.data.length === GW * GH * 4 && img.data[
   }
   check('waves on: water pixels change (' + waterDiff + ')', waterDiff > 50);
   check('waves on: land pixels untouched (' + landChanged + ' changed)', landChanged === 0);
-  state.viz.waves = false; renderNow();
+  // v0.132: wave-reach slider — default 1× is bit-identical to the legacy band; a wider reach paints MORE foam water cells
+  if (state.viz.waveDist === undefined) state.viz.waveDist = 1;
+  state.viz.waves = true; state.viz.waveDist = 1; renderNow();
+  const wave1 = Uint8ClampedArray.from(img.data);
+  state.viz.waveDist = 2; renderNow();
+  let foamGrew = 0; for (let i = 0; i < GW * GH; i++){ const p = i * 4; if (field[i] < state.seaLevel && (img.data[p] !== wave1[p] || img.data[p + 1] !== wave1[p + 1] || img.data[p + 2] !== wave1[p + 2])) foamGrew++; }
+  check('wave reach 2× extends foam to more offshore cells (' + foamGrew + ')', foamGrew > 0);
+  state.viz.waveDist = 1; renderNow();
+  let same1 = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== wave1[i]){ same1 = false; break; }
+  check('wave reach 1× → bit-identical to legacy band', same1);
+  state.viz.waves = false; state.viz.waveDist = 1; renderNow();
   let same = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== base[i]){ same = false; break; }
   check('waves off → bit-identical (default neutrality)', same);
 }

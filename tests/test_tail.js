@@ -2617,6 +2617,28 @@ if (typeof flowMapPhases === 'function') {
   check('flowMapPhases: triangle crossfade hands off between streams', (() => { const mid = flowMapPhases(1.2, 2.4), edge = flowMapPhases(0, 2.4); return mid.weight0 > 0.9 && edge.weight1 > 0.9; })());
 }
 
+/* ---------- v0.119: center landmasses (X-seam fix) ---------- */
+if (typeof shiftGridX === 'function' && typeof bestEmptyColumn === 'function') {
+  const W = 12, H = 6, sea = 0.42;
+  // a field with a clear all-ocean column and land straddling the x=0/x=W seam
+  const mk = () => { const f = new Float32Array(W * H).fill(0.2);   // ocean everywhere
+    for (let y = 0; y < H; y++){ for (const x of [0, 1, 10, 11]) f[y * W + x] = 0.8; }   // land split across the seam
+    return f; };
+  const f = mk();
+  const off = bestEmptyColumn(f, null, W, H, sea);
+  check('bestEmptyColumn finds an empty meridian (col ' + off + ' has no land)', (() => { for (let y = 0; y < H; y++) if (f[y * W + off] > sea) return false; return true; })());
+  const g0 = mk(); shiftGridX(g0, W, H, 0); check('shiftGridX off=0 is identity', g0.every((v, i) => v === f[i]));
+  const g = mk(); shiftGridX(g, W, H, off); shiftGridX(g, W, H, W - off);
+  check('shiftGridX round-trips (off then W-off)', g.every((v, i) => v === f[i]));
+  const g2 = mk(); shiftGridX(g2, W, H, off);
+  check('shiftGridX preserves each row sum (X-rotation; Y untouched)', (() => {
+    for (let y = 0; y < H; y++){ let s1 = 0, s2 = 0; for (let x = 0; x < W; x++){ s1 += f[y * W + x]; s2 += g2[y * W + x]; } if (Math.abs(s1 - s2) > 1e-6) return false; } return true; })());
+  const g3 = mk(); shiftGridX(g3, W, H, off);
+  check('shiftGridX moves the emptiest meridian to column 0', (() => { for (let y = 0; y < H; y++) if (g3[y * W + 0] !== f[y * W + off]) return false; return true; })());
+  const ai = new Int16Array(W * H); for (let i = 0; i < ai.length; i++) ai[i] = i % W; shiftGridX(ai, W, H, 3);
+  check('shiftGridX works on Int16Array', ai[0] === 3 && ai[W - 1] === (W + 2) % W);
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

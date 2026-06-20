@@ -2690,6 +2690,37 @@ if (typeof buildFjordMask === 'function' && typeof carveFjords === 'function') {
   check('carveFjords deterministic', carved.every((v, i) => v === carved2[i]));
 }
 
+/* ---------- v0.126: progressive zoom detail (addZoomDetail) + seam feather ---------- */
+if (typeof addZoomDetail === 'function') {
+  const W = 40, H = 30, cW = 20, cH = 15, coarse = new Float32Array(cW * cH);
+  for (let y = 0; y < cH; y++) for (let x = 0; x < cW; x++) coarse[y * cW + x] = 0.5 + 0.15 * Math.sin(x * 0.6) + 0.1 * Math.cos(y * 0.5);
+  const b = { x: 2, y: 2, w: 4, h: 3 };
+  const mkData = () => { const d = new Float32Array(W * H); for (let oy = 0; oy < H; oy++) for (let ox = 0; ox < W; ox++){ const cx = b.x + ox / (W - 1) * b.w, cy = b.y + oy / (H - 1) * b.h; d[oy * W + ox] = 0.6 + 0.08 * Math.sin(cx) + 0.06 * Math.cos(cy); } return d; };
+  const varOf = a => { let s = 0, s2 = 0; for (const v of a){ s += v; s2 += v * v; } const n = a.length; return s2 / n - (s / n) * (s / n); };
+  const base = mkData();
+  const d2 = mkData(); addZoomDetail(d2, W, H, coarse, cW, cH, b, 2, { seed: 7 });
+  check('addZoomDetail: z≤zBase is a no-op', d2.every((v, i) => v === base[i]));
+  const dev = d => { let s = 0; for (let i = 0; i < d.length; i++) s += Math.abs(d[i] - base[i]); return s; };
+  const d5 = mkData(); addZoomDetail(d5, W, H, coarse, cW, cH, b, 5, { seed: 7 });
+  const d8 = mkData(); addZoomDetail(d8, W, H, coarse, cW, cH, b, 8, { seed: 7 });
+  check('addZoomDetail: deeper zoom adds MORE detail (' + dev(d5).toFixed(2) + ' → ' + dev(d8).toFixed(2) + ')', dev(d8) > dev(d5) && dev(d5) > 0 && d8.every(Number.isFinite));
+  const d8b = mkData(); addZoomDetail(d8b, W, H, coarse, cW, cH, b, 8, { seed: 7 });
+  check('addZoomDetail deterministic', d8.every((v, i) => v === d8b[i]));
+  // seam safety at high z: adjacent same-level pyramid tiles still match exactly (detail in shared coarse coords)
+  const cW2 = 33, cH2 = 17, co2 = new Float32Array(cW2 * cH2);
+  for (let y = 0; y < cH2; y++) for (let x = 0; x < cW2; x++) co2[y * cW2 + x] = 0.5 + 0.3 * Math.sin(x * 0.4) * Math.cos(y * 0.5);
+  const ts = 32, opts = { seed: 7, detailAmp: 0.14 };
+  const ta = pyramidTile(co2, cW2, cH2, 6, 10, 8, ts, opts), tb = pyramidTile(co2, cW2, cH2, 6, 11, 8, ts, opts);
+  let sm = 0; for (let y = 0; y < ta.h; y++) sm = Math.max(sm, Math.abs(ta.data[y * ta.w + (ta.w - 1)] - tb.data[y * tb.w]));
+  check('addZoomDetail: high-z (z=6) adjacent tiles stay seam-Δ=0 (' + sm.toExponential(1) + ')', sm < 1e-6);
+}
+if (typeof featherSeamX === 'function') {
+  const W = 12, H = 4, a = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a[y * W + x] = x < 6 ? 0.2 : 0.8;   // step discontinuity between col 5 and 6
+  const before = Math.abs(a[6] - a[5]); featherSeamX(a, W, H, 6, 2); const after = Math.abs(a[6] - a[5]);
+  check('featherSeamX smooths a seam step (' + before.toFixed(2) + '→' + after.toFixed(2) + ')', after < before && a.every(Number.isFinite));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

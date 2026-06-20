@@ -1070,6 +1070,16 @@ fieldsFinite('generate(world)');
   const Urift = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, opts);
   check('rift → axial graben below shoulders', Urift[48 * W + 60] < 0 && Urift.some(v => v > 0.1));
 
+  // v0.121 Phase 2: fault-block repetition. faultBlockK=0 ⇒ bit-identical to the plain graben; >0 ⇒ extra parallel ridge/valley alternations across the rift
+  const UriftB0 = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, Object.assign({ faultBlockK: 0 }, opts));
+  check('fault-block faultBlockK=0 ⇒ bit-identical to plain rift', Urift.every((v, i) => v === UriftB0[i]));
+  const UriftB = buildOrogenyField([{ pts, type: BTYPE.rift }], stress, cont, W, H, Object.assign({}, opts, { faultBlockK: 1.0 }));
+  check('fault-block faultBlockK>0 changes the rift profile', UriftB.some((v, i) => Math.abs(v - Urift[i]) > 1e-4));
+  // the fault-block CONTRIBUTION (UriftB − Urift) is a periodic sawtooth across the margin ⇒ several sign alternations
+  const fbDiff = new Float32Array(W * H); for (let i = 0; i < fbDiff.length; i++) fbDiff[i] = UriftB[i] - Urift[i];
+  let alt = 0, prev = 0; for (let x = 36; x < 84; x++){ const s = Math.sign(fbDiff[48 * W + x]); if (s !== 0){ if (prev !== 0 && s !== prev) alt++; prev = s; } }
+  check('fault-block adds repeating parallel ridge/valley blocks (' + alt + ' alternations)', alt >= 3);
+
   // T4 transform: amplitude from SHEAR; linear fault valley + a pressure ridge offset laterally ∝ shear sense/size
   const shearP = new Float32Array(W * H); for (const p of pts) shearP[p[1] * W + p[0]] = 0.8;   // uniform + shear along the fault
   const optT = { blurR: 18, seed: 7, jitter: 0, shear: shearP };

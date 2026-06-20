@@ -2374,7 +2374,7 @@ if (typeof landColorCore === 'function') {
       px === undefined ? 100 : px, py === undefined ? 100 : py, 1, 1, gx || 0, gy || 0);
   };
   const savedViz = JSON.parse(JSON.stringify(state.viz));
-  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0 };
+  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0, cel: 0, crosshatch: 0, stipple: 0 };
   Object.assign(state.viz, off);
   const base = callLC();
   check('NPR: all-off baseline finite RGB', base.every(Number.isFinite));
@@ -2420,6 +2420,19 @@ if (typeof landColorCore === 'function') {
     Object.assign(state.viz, off);
     check('NPR watercolor: off ⇒ bit-identical', sameAsBase(callLC()));
   }
+  // v0.129 new styles: cel/toon (posterize) + crosshatch (engraving) visibly modify; stipple stays finite; each off ⇒ bit-identical
+  const lcDark = (px, py) => landColorCore(15, 0.5, 0.05, 0.5, .5, .5, .5, .25, .25, 5, 0, .01, state.bioBlend, 1, px, py, 1, 1, 0, 0);
+  { Object.assign(state.viz, off); const d0 = lcDark(100, 100);
+    state.viz.cel = 0.9; const celOn = lcDark(100, 100);
+    check('NPR cel/toon: posterizes the pixel & finite', celOn.some((v, i) => v !== d0[i]) && finiteRGB(celOn));
+    Object.assign(state.viz, off); check('NPR cel: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); let changed = false;
+    for (let p = 96; p < 116 && !changed; p++){ const b = lcDark(p, 100); state.viz.crosshatch = 0.9; const on = lcDark(p, 100); state.viz.crosshatch = 0; if (on.some((v, i) => v !== b[i])) changed = true; }
+    check('NPR engraving (crosshatch): hatches dark cells', changed);
+    Object.assign(state.viz, off); check('NPR crosshatch: off ⇒ bit-identical', sameAsBase(callLC())); }
+  { Object.assign(state.viz, off); state.viz.stipple = 0.9;
+    check('NPR stipple: stays finite when on', [98, 100, 102, 104].every(p => finiteRGB(lcDark(p, 100))));
+    Object.assign(state.viz, off); check('NPR stipple: off ⇒ bit-identical', sameAsBase(callLC())); }
   // water/below-sea (r<=0) is never touched by NPR
   { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1 });
     const wOff = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);

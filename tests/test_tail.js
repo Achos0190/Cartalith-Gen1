@@ -2919,6 +2919,72 @@ if (typeof buildRoadNetwork === 'function') {
   check('buildRoadNetwork deterministic', net.edges.length === netB.edges.length && net.edges.every((e, i) => e.path.length === netB.edges[i].path.length));
 }
 
+/* ---------- v0.137: natural rivers — R1 slope-area threshold, R2/R3a polyline tracing, R4 sinuosity ---------- */
+if (typeof channelThreshold === 'function') {
+  const base = 100;
+  // R1 identity at density===1 (the bit-identical default), for any slope
+  check('channelThreshold: identity at density=1 (flat)', channelThreshold(base, 0, 1) === base);
+  check('channelThreshold: identity at density=1 (steep)', channelThreshold(base, 5, 1) === base);
+  check('channelThreshold: identity when density omitted/0', channelThreshold(base, 3, 0) === base && channelThreshold(base, 3, undefined) === base);
+  // higher density ⇒ lower threshold ⇒ more channels; lower density ⇒ higher
+  check('channelThreshold: density>1 lowers threshold (more channels)', channelThreshold(base, 1, 2) < base);
+  check('channelThreshold: density<1 raises threshold on flat ground (fewer channels)', channelThreshold(base, 0, 0.5) > base);
+  // slope-area placement: when density≠1, steeper ground channelizes easier (lower threshold)
+  check('channelThreshold: steep < flat when density≠1', channelThreshold(base, 5, 1.5) < channelThreshold(base, 0, 1.5));
+  check('channelThreshold: no slope effect at density=1', channelThreshold(base, 5, 1) === channelThreshold(base, 0, 1));
+  check('channelThreshold: finite', Number.isFinite(channelThreshold(base, 2, 1.7)) && Number.isFinite(channelThreshold(base, 0, 0.4)));
+}
+
+if (typeof buildRiverNetwork === 'function') {
+  const W = 24, H = 24, fld = new Float32Array(W * H), flow = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; fld[i] = 0.9 - y * 0.02; }
+  for (let y = 0; y < H; y++) { const i = y * W + 12; flow[i] = 50 + y * 25; }
+  // R1: density=1 reproduces the legacy flat-threshold network bit-for-bit
+  const netDef = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false });
+  const netD1 = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false, riverDensity: 1 });
+  check('buildRiverNetwork: riverDensity=1 ⇒ bit-identical to default', netDef.order.every((o, i) => o === netD1.order[i]) && netDef.intensity.every((v, i) => v === netD1.intensity[i]));
+  // higher density ⇒ at least as many channel cells
+  const countCh = net => { let c = 0; for (const o of net.order) if (o > 0) c++; return c; };
+  const netHi = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false, riverDensity: 2.5 });
+  const netLo = buildRiverNetwork(fld, flow, W, H, 0.42, { world: false, riverDensity: 0.5 });
+  check('buildRiverNetwork: higher density ⇒ ≥ channels', countCh(netHi) >= countCh(netDef));
+  check('buildRiverNetwork: lower density ⇒ ≤ channels', countCh(netLo) <= countCh(netDef));
+  // recv + slope now returned
+  check('buildRiverNetwork: returns recv + slope arrays', netDef.recv && netDef.recv.length === W * H && netDef.slope && netDef.slope.length === W * H);
+
+  // R3a: traceRiverPolylines walks the receiver chain into ordered polylines
+  if (typeof traceRiverPolylines === 'function') {
+    const polys = traceRiverPolylines(netDef.order, netDef.recv, W, H, 1);
+    check('traceRiverPolylines: produces ≥1 polyline on a channel', polys.length >= 1 && polys[0].length >= 2);
+    check('traceRiverPolylines: points are cell centres in-bounds', polys.every(pl => pl.every(p => p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H)));
+    // higher minOrder ⇒ fewer/shorter traced cells (filters headwaters)
+    const tot = ps => ps.reduce((s, pl) => s + pl.length, 0);
+    const p2 = traceRiverPolylines(netDef.order, netDef.recv, W, H, 2);
+    check('traceRiverPolylines: minOrder≥2 traces ≤ minOrder≥1', tot(p2) <= tot(polys));
+    // determinism
+    const polysB = traceRiverPolylines(netDef.order, netDef.recv, W, H, 1);
+    check('traceRiverPolylines deterministic', tot(polysB) === tot(polys) && polysB.length === polys.length);
+  }
+}
+
+if (typeof riverSinuosity === 'function' && typeof riverSinuAmp === 'function') {
+  // a straight horizontal sampled line
+  const line = []; for (let k = 0; k <= 20; k++) line.push({ x: k, y: 10 });
+  const len = pts => { let s = 0; for (let k = 1; k < pts.length; k++) s += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y); return s; };
+  const out = riverSinuosity(line, 1.5, 6, 7);
+  check('riverSinuosity: amp=0 returns input unchanged', riverSinuosity(line, 0, 6, 7) === line);
+  check('riverSinuosity: endpoints fixed', out[0].x === line[0].x && out[0].y === line[0].y && out[out.length - 1].x === line[line.length - 1].x && out[out.length - 1].y === line[line.length - 1].y);
+  check('riverSinuosity: meandered path is longer than straight', len(out) > len(line));
+  check('riverSinuosity: all points finite', out.every(p => Number.isFinite(p.x) && Number.isFinite(p.y)));
+  // determinism
+  const outB = riverSinuosity(line, 1.5, 6, 7);
+  check('riverSinuosity deterministic', out.every((p, i) => p.x === outB[i].x && p.y === outB[i].y));
+  // R4 amplitude scaling: rises with order, falls with slope
+  check('riverSinuAmp: rises with Strahler order', riverSinuAmp(5, 0.1) > riverSinuAmp(1, 0.1));
+  check('riverSinuAmp: falls with slope', riverSinuAmp(4, 2) < riverSinuAmp(4, 0));
+  check('riverSinuAmp: positive & finite', riverSinuAmp(3, 0.5) > 0 && Number.isFinite(riverSinuAmp(1, 0)));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

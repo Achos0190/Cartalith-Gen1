@@ -91,6 +91,27 @@ All render/extraction-only; the heightmap and physics are untouched ⇒ default 
 Recommended order: **R2 (instant relief) → R1 (right density) → R3a (smooth look) → R4 (meanders) → R3b/R5
 (polish)**. R2+R1+R3a address the report directly; R4 adds the natural feel.
 
+## Shipped — v0.137 (R1 + R2 + R3a + R4)
+
+- **R1** `channelThreshold(baseThresh, slopeN, density)` = `(base/density)·(1+8·slopeN)^−|ln density|` replaces
+  the flat `flow>W·H·0.0004` test in `buildRiverNetwork` (which now also returns `recv`+`slope`). **Exactly
+  identity at `density===1`** (`|ln 1|=0`) ⇒ the default network is bit-identical; a **"River density"** Style
+  slider (`state.viz.riverDensity`, default 1) drives it. Steep ground channelizes with less area.
+- **R2** `state.viz.minRiverOrder` (default 1) + a **"Min stream order"** slider: the Flow and Strahler views
+  draw only cells with Strahler order ≥ k (Horton–Strahler generalization). Default 1 ⇒ views unchanged.
+- **R3a** `traceRiverPolylines(order, recv, W, H, minOrder)` walks the receiver chains into ordered,
+  non-overlapping polylines (main stems first, visited-mask tree); the Strahler view now strokes
+  `rdpSimplify`→`catmullRomSample` splines on `vctx` (order-scaled width/hue) instead of per-cell discs — the
+  45° staircase is gone. The Strahler pixel branch is dim-terrain-only.
+- **R4** `riverSinuosity(samples, amp, wavelen, seed)` perturbs the spline perpendicular by an `fbm` wave;
+  amplitude `riverSinuAmp(order, slopeN) = (0.6+0.5(order−1))/(1+6·slopeN)` (straight headwaters, meandering
+  lowland trunks).
+
+Render/extraction-only ⇒ `generate()` FIELD/TEMP/RAIN + default biome RENDER bit-identical to v0.136. 791
+assertions green (+24). **Still open** (documented follow-ups): biome-overlay min-order (needs an order-aware
+intensity), **R3b** D∞ receivers in `buildRiverNetwork`/`computeFlow` (physically removes the D8 bias, heavier),
+**R5** Flow-view log-floor. Browser pass owed for the smooth/sinuous Strahler look + the density slider.
+
 ## 4. Sources
 - D8 vs D∞ vs MFD: Tarboton 1997 (D∞); Freeman 1991 / Quinn 1991 (MFD); O'Callaghan & Mark 1984 (D8);
   review of DEM flow-direction methods (ResearchGate); Rivix "D8 vs D-Infinity"; TauDEM/QGIS, WhiteboxTools,

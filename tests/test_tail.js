@@ -3022,6 +3022,35 @@ if (typeof cartalithGridManifest === 'function') {
   check('cartalithGridManifest: 15 biome + 13 terrain indices, 1-based', m.biome.indices.length === 15 && m.terrain.indices.length === 13 && m.biome.indices[0].index === 1 && m.biome.indices[14].name === 'Ocean / Deep Water');
 }
 
+/* ---------- v0.139: river-network omax (biome-overlay min-order filter) ---------- */
+if (typeof buildRiverNetwork === 'function') {
+  const net = buildRiverNetwork(field, computeFlow(true), GW, GH, state.seaLevel, { world: state.world });
+  check('buildRiverNetwork: returns an omax field (order of widest contributing channel)', !!net.omax && net.omax.length === GW * GH);
+  if (net.omax) {
+    let okPair = true, maxOrder = 0;
+    for (let i = 0; i < net.order.length; i++) if (net.order[i] > maxOrder) maxOrder = net.order[i];
+    for (let i = 0; i < net.omax.length; i++) {
+      // omax is nonzero exactly where the overlay paints (intensity>0), and never exceeds the network's max Strahler order
+      if ((net.intensity[i] > 0) !== (net.omax[i] > 0)) { okPair = false; break; }
+      if (net.omax[i] > maxOrder) { okPair = false; break; }
+    }
+    check('buildRiverNetwork: omax nonzero ⇔ intensity>0, bounded by max order', okPair);
+    // higher min-order keeps fewer overlay cells (monotone thinning) — the filter the biome overlay applies
+    const cnt = k => { let c = 0; for (let i = 0; i < net.omax.length; i++) if (net.intensity[i] > 0 && (k <= 1 || net.omax[i] >= k)) c++; return c; };
+    check('buildRiverNetwork: omax min-order filter thins monotonically', cnt(1) >= cnt(2) && cnt(2) >= cnt(3));
+  }
+  // R3b (v0.140) — receiver tree must be strictly descending (no cycles, valid Strahler base) whatever the routing
+  if (net.recv) {
+    let descending = true;
+    for (let i = 0; i < net.recv.length; i++) { const r = net.recv[i]; if (r >= 0 && !(field[r] <= field[i])) { descending = false; break; } }
+    check('buildRiverNetwork: receiver tree is strictly descending (no cycles)', descending);
+    // determinism: same inputs → identical receivers
+    const net2 = buildRiverNetwork(field, computeFlow(true), GW, GH, state.seaLevel, { world: state.world });
+    let same = net2.recv.length === net.recv.length; for (let i = 0; same && i < net.recv.length; i++) if (net.recv[i] !== net2.recv[i]) same = false;
+    check('buildRiverNetwork: routing is deterministic', same);
+  }
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

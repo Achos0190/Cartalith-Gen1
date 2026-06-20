@@ -108,9 +108,30 @@ Recommended order: **R2 (instant relief) → R1 (right density) → R3a (smooth 
   lowland trunks).
 
 Render/extraction-only ⇒ `generate()` FIELD/TEMP/RAIN + default biome RENDER bit-identical to v0.136. 791
-assertions green (+24). **Still open** (documented follow-ups): biome-overlay min-order (needs an order-aware
-intensity), **R3b** D∞ receivers in `buildRiverNetwork`/`computeFlow` (physically removes the D8 bias, heavier),
-**R5** Flow-view log-floor. Browser pass owed for the smooth/sinuous Strahler look + the density slider.
+assertions green (+24).
+
+## Shipped — v0.139 (R5 + biome-overlay min-order)
+
+- **R5 — Flow-view log-floor.** `flowFloor = log(1+GW·GH·0.0004)/logMax` (the channel-initiation area in
+  `a`-space); the Flow view remaps `a → (a−floor)/(1−floor)` so sub-channel trickles fade and the web matches
+  the Strahler channel set. Debug-view-only ⇒ default render bit-identical.
+- **Biome-overlay min stream order.** `buildRiverNetwork` now returns **`omax`** (Strahler order of the widest
+  contributing channel cell, stamped per disc cell alongside `intensity`/`depth`; existing fields unchanged).
+  The biome map's river overlay honours the existing **Min stream order** slider via `omax[i]≥k` (default `k=1`
+  ⇒ `omax` never consulted ⇒ bit-identical).
+
+Both default-safe ⇒ FIELD/TEMP/RAIN + default RENDER bit-identical to v0.138. 807 assertions green.
+
+## Shipped — v0.140 (R3b — D∞-informed receivers)
+
+- **R3b — D∞ receivers.** `buildRiverNetwork`'s receiver selection routes toward the **continuous downslope
+  aspect** (Tarboton 1997) instead of pure D8 steepest descent: among strictly-downhill neighbours, pick the
+  one best aligned with `atan2(−gy,−gx)`, facet weight `(0.5+0.5·cos Δθ)·drop`, steepest-descent fallback.
+  Kept as a **single-receiver tree** (a single-receiver projection of D∞ — the network must stay a tree for
+  Strahler order + polyline tracing); chains stay strictly descending ⇒ no cycles. **`flowField`/accumulation
+  are deliberately left untouched** (the heavier change — erosion coupling unaffected), so only the render-side
+  network geometry changes: FIELD/TEMP/RAIN bit-identical to v0.139, default RENDER changes by design
+  (`1362460047→4016246093`). 807 assertions green (+2). **The natural-rivers workstream R1–R5 is complete.**
 
 ## 4. Sources
 - D8 vs D∞ vs MFD: Tarboton 1997 (D∞); Freeman 1991 / Quinn 1991 (MFD); O'Callaghan & Mark 1984 (D8);

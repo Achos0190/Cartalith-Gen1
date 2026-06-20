@@ -2593,6 +2593,26 @@ if (typeof velocityErodeKernel === 'function') {
   }
 }
 
+/* ---------- v0.113 Pillar 3: Beer–Lambert water shading + flow-map ---------- */
+if (typeof waterShade === 'function') {
+  const bed = [120, 100, 80];
+  // shallow (depth 0) ⇒ transmission 1 ⇒ bed revealed exactly
+  check('waterShade: depth 0 reveals the bed exactly', (() => { const c = waterShade(bed, 0, 0.3, 5); return Math.abs(c[0] - bed[0]) < 1e-6 && Math.abs(c[1] - bed[1]) < 1e-6 && Math.abs(c[2] - bed[2]) < 1e-6; })());
+  // deep ⇒ approaches the scatter colour (not the bed), finite, in range
+  { const c = waterShade(bed, 1, 0.3, 5); check('waterShade: deep water absorbs toward the scatter colour', c[0] < bed[0] && c.every(v => v >= 0 && v <= 255) && c.every(Number.isFinite)); }
+  // Beer–Lambert monotonicity: deeper ⇒ less bed transmitted (here bed is brighter than deep blue, so deeper = darker red channel)
+  check('waterShade: monotone in depth (Beer–Lambert)', waterShade(bed, 1.0, 0.3, 5)[0] < waterShade(bed, 0.3, 0.3, 5)[0]);
+  // sediment shifts the deep colour blue → green/brown (more green/red, less blue)
+  { const clear = waterShade(bed, 1, 0.0, 6), turbid = waterShade(bed, 1, 1.0, 6); check('waterShade: sediment shifts hue blue→green/brown', turbid[1] > clear[1] && turbid[2] < clear[2]); }
+}
+if (typeof flowMapPhases === 'function') {
+  const p = flowMapPhases(0.7, 2.4);
+  check('flowMapPhases: weights ≥0 and sum to 1', p.weight0 >= 0 && p.weight1 >= 0 && Math.abs(p.weight0 + p.weight1 - 1) < 1e-9);
+  check('flowMapPhases: phases in [0,1)', p.phase0 >= 0 && p.phase0 < 1 && p.phase1 >= 0 && p.phase1 < 1);
+  check('flowMapPhases: seamless (t and t+period identical)', (() => { const a = flowMapPhases(0.7, 2.4), b = flowMapPhases(0.7 + 2.4, 2.4); return Math.abs(a.phase0 - b.phase0) < 1e-9 && Math.abs(a.weight0 - b.weight0) < 1e-9; })());
+  check('flowMapPhases: triangle crossfade hands off between streams', (() => { const mid = flowMapPhases(1.2, 2.4), edge = flowMapPhases(0, 2.4); return mid.weight0 > 0.9 && edge.weight1 > 0.9; })());
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

@@ -57,9 +57,19 @@ never auto-runs ⇒ default `generate()`/render bit-identical to v0.111).
 - UI: **Velocity (momentum)** Erosion accordion (Iterations/Strength/Meander, `state.velo`).
 - 680 assertions. Worker-ification (blob-URL, like the other ops) is a follow-up — sync for now.
 
-## Pillar 3 — Optical realism: water shading (planned)
+## Pillar 3 — Optical realism: water shading — **shipped, v0.113** (overhaul feature-complete)
 
-Beer–Lambert depth transmittance `I = I₀·e^(−Kd·depth)` over the river `depth` field from Pillar 1
-(shallow reveals bed, deep → turbid green/blue by sediment load); dynamic flow-map animation skewing ripple
-UVs by the normalised velocity field with two phase-shifted streams (seamless travel). Math headless-testable;
-the rAF/canvas animation needs a manual browser pass. Credited to Premože & Ashikhmin.
+- `waterShade(bed, depth, sed, Kd)` — Beer–Lambert `I=I₀·e^(−Kd·depth)`: shallow transmits the bed colour,
+  deep absorbs to a turbid scatter colour (hue blue→green/brown with sediment). Applied by default in
+  `surfaceColor`'s river block over the Pillar-1 `_riverNet.depth` (`RIVER_KD=5`); replaces the flat-blue
+  overlay ⇒ `field`/`temp` bit-identical to v0.112, RENDER changes by design. Pure → tested.
+- `flowMapPhases(t, period)` — two phase-shifted streams + triangle crossfade (seamless infinite flow). Pure → tested.
+- Opt-in flow-map animation: `startWaterAnim`/`stopWaterAnim`/`waterAnimFrame` — a perf-capped (≤400k cells)
+  rAF loop drawing a travelling shimmer over river cells on `polyOverlay`, flowing along `_veloVx/_veloVy`
+  (Pillar 2) or the downhill gradient. `state.viz.waterAnim` + a Style→Overlays toggle, default off ⇒ never
+  runs. Browser-only — the live animation needs a manual pass. Credited to Premože & Ashikhmin.
+- 688 assertions.
+
+## Status: P1–P3 shipped (v0.111–v0.113); P4 (provenance) threaded throughout. Follow-ups: worker-ify the
+P2 velocity op (blob-URL, like the other erosion kernels); browser pass on meander/oxbow emergence, the
+Beer–Lambert water look, and the flow-map animation.

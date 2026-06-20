@@ -59,6 +59,8 @@ Neither path is privileged; the editor consumes whichever produced the heightmap
 
 ## Phases
 
+**P0a — Data-layer bridge (SHIPPED, elevation_foundation v0.138).** The paint-grid handoff is proven end-to-end *before* any shell work: the engine's `CART_BIOMES`/`CART_TERRAINS` already match v1.914's `BIOMES`/`TERRAINS` storage order byte-for-byte; v0.138 folds the biome debug views into one "Biomes" view on the Cartalith palette, ports `encodeBiomeRLE`/`decodeBiomeRLE` **verbatim** from v1.914, and exports `biome_baked.bin`/`terrain_baked.bin` (RLE of `buildCartBiome`/`buildCartTerrain`) + `cartalith_grid.json`. Round-trip is bit-identical through the editor's codec (headless-tested). Remaining at merge: a `GW×GH → widthCells×heightCells` resample on import (engine raster is 1 cell/px; editor grid uses `cellSize`).
+
 **P0 — Namespace the engine (in elevation_foundation repo file, prove with tests)**
 Wrap engine globals into `Gen` scope; `tests/run.sh` must stay green. This is the only risky mechanical step, so it happens *before* any merging, in isolation.
 

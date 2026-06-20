@@ -2985,6 +2985,43 @@ if (typeof riverSinuosity === 'function' && typeof riverSinuAmp === 'function') 
   check('riverSinuAmp: positive & finite', riverSinuAmp(3, 0.5) > 0 && Number.isFinite(riverSinuAmp(1, 0)));
 }
 
+/* ---------- v0.138: Cartalith RLE bridge (encodeBiomeRLE round-trip, manifest, cart-grid export) ---------- */
+if (typeof encodeBiomeRLE === 'function' && typeof decodeBiomeRLE === 'function') {
+  // basic round-trip incl. zeros + multi-value runs
+  const a = new Uint8Array([0, 0, 0, 5, 5, 1, 1, 1, 1, 0]);
+  const rt = decodeBiomeRLE(encodeBiomeRLE(a), a.length);
+  check('encodeBiomeRLE: round-trips a small grid exactly', rt.length === a.length && a.every((v, i) => v === rt[i]));
+  // 3-byte-per-run wire format (value, lo, hi)
+  const enc = encodeBiomeRLE(new Uint8Array([7, 7, 7]));
+  check('encodeBiomeRLE: 3-byte run format (value,lo,hi)', enc.length === 3 && enc[0] === 7 && enc[1] === 3 && enc[2] === 0);
+  // runs > 65535 split into multiple chunks but still decode whole
+  const big = new Uint8Array(70000).fill(3);
+  const rtBig = decodeBiomeRLE(encodeBiomeRLE(big), big.length);
+  check('encodeBiomeRLE: splits runs > 65535 and decodes whole', rtBig.length === 70000 && rtBig.every(v => v === 3));
+  // empty input
+  check('encodeBiomeRLE: empty input → empty output', encodeBiomeRLE(new Uint8Array(0)).length === 0);
+
+  // payoff: a generated Cartalith paint grid survives the editor's RLE codec byte-for-byte
+  if (typeof buildCartBiome === 'function') {
+    const grid = buildCartBiome();
+    const back = decodeBiomeRLE(encodeBiomeRLE(grid), grid.length);
+    check('buildCartBiome → RLE → decode is bit-identical (editor-loadable)', back.length === grid.length && grid.every((v, i) => v === back[i]));
+    check('buildCartBiome: indices within 0..15 (CART_BIOMES 1-based + 0 unpainted)', grid.every(v => v <= 15));
+  }
+  if (typeof buildCartTerrain === 'function') {
+    const tg = buildCartTerrain();
+    const tback = decodeBiomeRLE(encodeBiomeRLE(tg), tg.length);
+    check('buildCartTerrain → RLE → decode is bit-identical', tg.every((v, i) => v === tback[i]));
+    check('buildCartTerrain: indices within 0..13 (CART_TERRAINS 1-based + 0)', tg.every(v => v <= 13));
+  }
+}
+if (typeof cartalithGridManifest === 'function') {
+  const m = cartalithGridManifest();
+  check('cartalithGridManifest: kind + rle encoding', m.kind === 'cartalith-paint-grid' && m.encoding === 'rle-u8-3byte');
+  check('cartalithGridManifest: dims match the working grid', m.widthCells === GW && m.heightCells === GH);
+  check('cartalithGridManifest: 15 biome + 13 terrain indices, 1-based', m.biome.indices.length === 15 && m.terrain.indices.length === 13 && m.biome.indices[0].index === 1 && m.biome.indices[14].name === 'Ocean / Deep Water');
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

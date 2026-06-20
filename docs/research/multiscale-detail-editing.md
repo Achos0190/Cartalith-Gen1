@@ -75,7 +75,12 @@ small notch). This breaks the very behaviour the user wants ("detail surfaces as
 consistently"). It is the multi-resolution-consistency problem that quadtree LOD solves by making
 coarse nodes faithful down-samples of fine ones.
 
-## 4. Proposed design (staged, bit-identical at defaults)
+## 4. Proposed design (staged, bit-identical at defaults) — **SHIPPED v0.133–0.134**
+
+*Status: Stage 1 shipped in v0.133 (detail-amount slider `viz.zoomDetail`, zoom-aware unified brush,
+auto-LOD on zoom). Stages 2 & 3 shipped in v0.134 (mip-consistent world-anchored edit store via
+`composeEditInto`/`composeTileEdits`; feature brushes → detail layer via `applyFeatureToLOD`). All
+bit-identical at defaults; pure cores headless-tested; interaction browser-verified.*
 
 The guiding principle (from the atlas doc): **the macro `field` is the scaffold; detail lives in a
 world-anchored, mip-consistent override that is *added on top* of the procedural base and only

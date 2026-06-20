@@ -2807,6 +2807,24 @@ if (typeof composeEditInto === 'function') {
     let inRange = true; for (const v of out) if (v < 0 || v > 1) inRange = false;
     check('composeEditInto: adds onto base & clamps to [0,1]', inRange && out[3 * ew + 3] > b0); }
 }
+/* ---------- v0.134 Stage 3: feature brushes → detail layer at zoom (applyFeatureToLOD) ---------- */
+if (typeof applyFeatureToLOD === 'function') {
+  const sOn = _lodOn, sZ = _lodZoom, sCx = _lodCx, sCy = _lodCy, sTile = _lodTile;
+  _lodEdits.clear(); lodCacheClear();
+  _lodOn = true; _lodTile = 256; _lodZoom = 4; _lodCx = GW / 2; _lodCy = GH / 2;
+  const v = lodViewRect();
+  const curve = []; for (let t = 0; t <= 10; t++) curve.push({ x: v.x0 + (v.x1 - v.x0) * (0.2 + 0.6 * t / 10), y: (v.y0 + v.y1) / 2 });
+  const touched = applyFeatureToLOD(curve, 'mountainRange', 2, 0.8, 123);
+  check('applyFeatureToLOD: stamps into ≥1 detail tile', touched > 0 && _lodEdits.size > 0);
+  let anyDelta = false, finite = true; for (const e of _lodEdits.values()){ for (let i = 0; i < e.data.length; i++){ if (!Number.isFinite(e.data[i])) finite = false; if (Math.abs(e.data[i] - e.base[i]) > 1e-6) anyDelta = true; } }
+  check('applyFeatureToLOD: produces a nonzero detail delta (stored as base+data)', anyDelta);
+  check('applyFeatureToLOD: detail edits stay finite', finite);
+  check('applyFeatureToLOD: edits carry world bounds eb (mip-consistent via Stage 2)', [..._lodEdits.values()].every(e => e.eb && e.base));
+  _lodEdits.clear(); lodCacheClear();
+  const touched2 = applyFeatureToLOD(curve, 'mountainRange', 2, 0.8, 123);
+  check('applyFeatureToLOD: deterministic (same tile count)', touched2 === touched);
+  _lodEdits.clear(); lodCacheClear(); _lodOn = sOn; _lodZoom = sZ; _lodCx = sCx; _lodCy = sCy; _lodTile = sTile;
+}
 if (typeof featherSeamX === 'function') {
   const W = 12, H = 4, a = new Float32Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) a[y * W + x] = x < 6 ? 0.2 : 0.8;   // step discontinuity between col 5 and 6

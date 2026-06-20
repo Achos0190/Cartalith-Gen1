@@ -5823,6 +5823,30 @@ function composeTileEdits(data, tw, th, tb){
   }
   return out||data;
 }
+/* v0.134 Stage 3: stamp a plotline feature (mountainRange/river/canyon/fjord-scale escarpment/…) into the
+   DETAIL LAYER at the current zoom instead of the coarse field — so a delta/fjord drawn at z=6 is stored at
+   z=6 resolution, surfaces (area-averaged) in the world view, and only resolves its fine shape on zoom-in.
+   The curve is in GW×GH grid coords; per visible tile it is remapped to tile-local px and the radius scaled
+   coarse-cells→tile-px, then `applyFeatureAlongCurve` carves the tile's delta (base+eb from Stage 2). */
+function applyFeatureToLOD(curve, ft, R, str, seed){
+  const v=lodViewRect(), dims=pyramidDims(v.z), td=tileDims({x:0,y:0,w:GW-1,h:GH-1},dims.cols,dims.rows,_lodTile);
+  let touched=0;
+  for(const k of visibleTileKeys(v.z, v.x0, v.y0, v.x1, v.y1)){
+    if(bakedCover(v.z,k.col,k.row)) continue;                                  // no carving beneath a baked chunk
+    const b=pyramidTileBounds(GW,GH,v.z,k.col,k.row);
+    const localCurve=curve.map(p=>({ x:((p.x-b.x)/b.w)*(td.w-1), y:((p.y-b.y)/b.h)*(td.h-1) }));   // grid → tile px
+    const rTile=Math.max(1, R*(td.w-1)/b.w);                                   // coarse cells → tile px
+    let near=false; for(const p of localCurve){ if(p.x>-rTile&&p.x<td.w+rTile&&p.y>-rTile&&p.y<td.h+rTile){ near=true; break; } }
+    if(!near) continue;                                                        // curve+radius doesn't touch this tile
+    const key=lodCacheKey(v.z,k.col,k.row,_lodTile);
+    let t=lodCacheGet(key); if(!t){ t=pyramidTile(field,GW,GH,v.z,k.col,k.row,_lodTile,lodTileOpts()); lodCachePut(key,t); }
+    let ed=_lodEdits.get(key);
+    if(!ed){ ed={ data:Float32Array.from(t.data), base:Float32Array.from(t.data), eb:b, w:t.w, h:t.h, z:v.z, col:k.col, row:k.row, edited:true }; _lodEdits.set(key,ed); }
+    applyFeatureAlongCurve(ed.data, ed.w, ed.h, localCurve, ft, rTile, str, seed, {sea:state.seaLevel});
+    touched++;
+  }
+  return touched;
+}
 /* the coarse-coord rect + pyramid level the current LOD view covers (pure given the _lod* nav state) */
 function lodViewRect(){
   const span=Math.max(1,_lodZoom), regW=(GW-1)/span, regH=(GH-1)/span;
@@ -6739,17 +6763,25 @@ document.getElementById('refineBtn').addEventListener('click',async()=>{
 document.getElementById('featApplyBtn').addEventListener('click',()=>{
   if(guidePts.length<2) return;
   const pts=guidePts.slice(), R=featRadius, str=featStrength, ft=featType;
-  pushUndo(); guidePts=[]; resetGuideUI(); renderGuideOverlay();
+  guidePts=[]; resetGuideUI(); renderGuideOverlay();
   withBusy('applying feature…',()=>{
     const t0=performance.now();
     const curve=catmullRomSample(pts,2);
+    const fs=document.getElementById('featStats');
+    if(_lodOn){ /* v0.134 Stage 3: zoomed in ⇒ stamp the feature into the detail layer (non-destructive, mip-consistent) instead of the coarse field */
+      const v=lodViewRect(), sxw=(v.x1-v.x0)/GW;   // canvas-grid coords (what the user drew over the zoomed view) → world coords
+      const worldCurve=curve.map(p=>({ x:v.x0+(p.x/GW)*(v.x1-v.x0), y:v.y0+(p.y/GH)*(v.y1-v.y0) }));
+      const seed=(Math.random()*1e9)|0, touched=applyFeatureToLOD(worldCurve,ft,Math.max(0.5,R*sxw),str,seed); renderNow();   // scale radius so on-screen brush size is zoom-independent
+      if(fs)fs.textContent='Applied '+ft+' to '+touched+' detail tile(s) · '+(performance.now()-t0).toFixed(0)+' ms';
+      return;
+    }
+    pushUndo();
     applyFeatureAlongCurve(field,GW,GH,curve,ft,R,str,(Math.random()*1e9)|0,{sea:state.seaLevel});
     if(ft==='river'){ /* v0.077: make the brushed river a monotonic, entrenched drainage seed erosion respects */
       const cells=enforceChannelDescent(field,GW,GH,curve,state.seaLevel,Math.max(1,R*0.13));
       for(const i of cells){ riverMask[i]=1; riverFloor[i]=field[i]; } if(cells.length) _riverAny=true;
     }
     computeFlow(true); refreshClimate(); renderNow();
-    const fs=document.getElementById('featStats');
     if(fs)fs.textContent='Applied '+ft+' · '+(performance.now()-t0).toFixed(0)+' ms · '+curve.length+' curve pts';
   });
 });

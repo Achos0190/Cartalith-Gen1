@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartalith — RC v0.01</title>
+<style>
+  :root{
+    --bg:#0d1219; --panel:#151c24; --panel2:#1b2430; --panel3:#10171f; --deepest:#0a0f15;
+    --border:#2b3848; --text:#d4dde6; --muted:#6e8699; --faint:#54677a;
+    --accent:#b08d54; --accent-hover:#c89a64; --accent-text:#1a1f26; --accent-dim:rgba(176,141,84,.12);
+    --ok:#6a9e7a; --warn:#c9a45a; --err:#b86060;
+    --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;display:flex;flex-direction:column;overflow:hidden}
+
+  /* ---- menubar ---- */
+  header.menubar{display:flex;align-items:center;gap:6px;height:46px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--border);flex:0 0 auto;z-index:30}
+  .brand{display:flex;align-items:baseline;gap:8px;margin-right:10px;user-select:none}
+  .brand b{font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.10em;text-transform:uppercase;color:var(--text)}
+  .brand .rc{font-family:var(--mono);font-size:11px;color:var(--accent);border:1px solid var(--border);border-radius:999px;padding:1px 8px}
+  nav.tabs{display:flex;gap:2px}
+  nav.tabs button{font-family:var(--sans);font-size:12.5px;color:var(--muted);background:transparent;border:0;border-radius:7px;padding:7px 13px;cursor:pointer;letter-spacing:.02em}
+  nav.tabs button:hover{color:var(--text);background:var(--panel2)}
+  nav.tabs button.on{color:var(--accent-text);background:var(--accent);font-weight:600}
+  .spacer{flex:1}
+  .menu{position:relative}
+  .menu>button.mbtn{font-family:var(--sans);font-size:12.5px;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:7px 13px;cursor:pointer}
+  .menu>button.mbtn:hover{border-color:var(--accent);color:var(--accent-hover)}
+  .menu .drop{position:absolute;right:0;top:calc(100% + 6px);min-width:230px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;box-shadow:0 12px 36px rgba(0,0,0,.5);padding:6px;display:none;z-index:40}
+  .menu.open .drop{display:block}
+  .menu .drop button{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:transparent;border:0;border-radius:6px;padding:9px 10px;color:var(--text);cursor:pointer;font-size:12.5px}
+  .menu .drop button:hover{background:var(--accent-dim)}
+  .menu .drop button small{color:var(--muted);font-size:10.5px}
+  .menu .drop hr{border:0;border-top:1px solid var(--border);margin:5px 2px}
+
+  /* ---- flow / handoff bar ---- */
+  .flowbar{display:flex;align-items:center;gap:10px;min-height:34px;padding:5px 14px;background:linear-gradient(180deg,var(--panel3),var(--bg));border-bottom:1px solid var(--border);flex:0 0 auto;font-size:12px;color:var(--muted)}
+  .flowbar.hide{display:none}
+  .flowbar .fb-msg{flex:1}
+  .flowbar .fb-msg b{color:var(--text);font-weight:600}
+  .flowbar button.flowbtn{font-family:var(--sans);font-size:12px;color:var(--accent-text);background:var(--accent);border:0;border-radius:7px;padding:6px 13px;cursor:pointer;font-weight:600;white-space:nowrap}
+  .flowbar button.flowbtn:hover{background:var(--accent-hover)}
+  .flowbar button.flowbtn[disabled]{opacity:.5;cursor:default}
+
+  /* ---- stage / panes ---- */
+  main.stage{position:relative;flex:1 1 auto;min-height:0;background:var(--deepest)}
+  .pane{position:absolute;inset:0;display:none}
+  .pane.on{display:block}
+  .pane iframe{width:100%;height:100%;border:0;display:block;background:var(--deepest)}
+  .pane .booting{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-family:var(--mono);font-size:12px;letter-spacing:.05em}
+
+  /* ---- information pane ---- */
+  #pane-info{overflow:auto}
+  .info-wrap{max-width:980px;margin:0 auto;padding:34px 30px 80px}
+  .info-wrap h1{font-family:var(--mono);font-size:18px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 4px;color:var(--text)}
+  .info-wrap .by{color:var(--accent);font-family:var(--mono);font-size:12px;margin:0 0 20px}
+  .info-wrap h2{font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:6px;margin:30px 0 12px}
+  .info-wrap h3{font-size:12.5px;color:var(--text);margin:16px 0 6px;letter-spacing:.02em}
+  .info-wrap p{color:var(--muted);line-height:1.6;margin:8px 0}
+  .info-wrap ul{margin:6px 0 10px;padding-left:20px}
+  .info-wrap li{color:var(--muted);line-height:1.55;margin:3px 0}
+  .info-wrap li b{color:var(--text);font-weight:600}
+  .info-wrap code{font-family:var(--mono);font-size:11.5px;color:var(--accent-hover);background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+  .info-wrap a{color:var(--accent-hover);text-decoration:none;border-bottom:1px dotted var(--accent-border,#6d5a36)}
+  .info-wrap a:hover{color:var(--accent)}
+  .toolgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:10px 0}
+  .toolcard{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 15px}
+  .toolcard h3{margin:0 0 4px;color:var(--accent)}
+  .toolcard p{margin:4px 0 0;font-size:12px}
+  .refcols{columns:2;column-gap:30px}
+  @media(max-width:760px){.refcols{columns:1}}
+  .refcols .refgrp{break-inside:avoid;margin-bottom:14px}
+  .note{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:11px 14px;margin:14px 0;color:var(--muted);font-size:12px;line-height:1.6}
+
+  /* ---- toast ---- */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:9px;padding:11px 18px;color:var(--text);font-size:12.5px;box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .22s, transform .22s;z-index:60;max-width:80vw}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+
+<header class="menubar">
+  <div class="brand"><b>Cartalith</b><span class="rc">RC v0.01</span></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="generate" class="on">Generate</button>
+    <button data-tab="cartograph">Cartograph</button>
+    <button data-tab="assets">Asset Packs</button>
+    <button data-tab="info">Information</button>
+  </nav>
+  <div class="spacer"></div>
+  <div class="menu" id="projMenu">
+    <button class="mbtn" id="projBtn">Project ▾</button>
+    <div class="drop">
+      <button id="pmNew">New project<small>Reload a clean session (discards unsaved changes)</small></button>
+      <button id="pmOpen">Open project…<small>Restore a unified <code>.cartalith</code> bundle into every tool</small></button>
+      <button id="pmSave">Save project<small>Bundle Generate + Cartograph + Asset Packs into one file</small></button>
+      <hr>
+      <button id="pmInfo">About &amp; references<small>Sources, licenses, author</small></button>
+    </div>
+  </div>
+</header>
+
+<div class="flowbar" id="flowbar">
+  <div class="fb-msg" id="fbMsg"></div>
+  <button class="flowbtn hidden" id="fbBtn"></button>
+</div>
+
+<main class="stage" id="stage">
+  <section class="pane on" id="pane-generate"><div class="booting">booting the world engine…</div></section>
+  <section class="pane" id="pane-cartograph"><div class="booting">opening the cartographer…</div></section>
+  <section class="pane" id="pane-assets"><div class="booting">opening the asset pack compiler…</div></section>
+  <section class="pane" id="pane-info">
+    <div class="info-wrap">
+      <h1>Cartalith — Worldbuilding System</h1>
+      <p class="by">Release Candidate v0.01 · created by V. Post</p>
+
+      <p>Cartalith unifies three purpose-built, zero-dependency tools into one cohesive, offline,
+      single-file worldbuilding system: a procedural <b>world engine</b>, a <b>cartographic editor</b>,
+      and an <b>asset-pack compiler</b>. Each tool runs intact; a generated world flows straight into the
+      cartographer, authored art flows into the engine, and a single project file saves everything.</p>
+
+      <div class="toolgrid">
+        <div class="toolcard"><h3>Generate</h3><p>Elevation Foundation v0.144 — procedural tectonics, climate, hydrology, erosion, biomes, LOD atlas.</p></div>
+        <div class="toolcard"><h3>Cartograph</h3><p>Cartalith V1.915 — routes, settlements, painted biome/terrain grids, politics timeline, journey planner.</p></div>
+        <div class="toolcard"><h3>Asset Packs</h3><p>Asset Pack Compiler — author texture/icon/symbol packs (schema 2) with a sprite-sheet slicer.</p></div>
+      </div>
+
+      <div class="note">Each tool's own <b>Save / Load / Import</b> buttons remain fully functional inside its
+      pane. <b>Project ▾ → Save</b> additionally bundles all three tools' native saves into one coherent
+      <code>.cartalith</code> file, and <b>Open</b> restores them — nothing from any tool is lost.</div>
+
+      <h2>References &amp; Sources</h2>
+      <p>The three base tools were built from published research and open prior art. <b>Algorithms were
+      studied; no third-party source code was copied</b>, with one exception noted under Libraries. Full
+      per-topic notes live in the project's <code>docs/research/</code> reports.</p>
+
+      <div class="refcols">
+        <div class="refgrp"><h3>Map-tool prior art (UI &amp; workflow)</h3><ul>
+          <li>Azgaar's Fantasy Map Generator</li>
+          <li>World Machine · Gaea · World Creator</li>
+          <li>Wonderdraft · Inkarnate</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Rivers, hydrology &amp; erosion</h3><ul>
+          <li>Horton (1945); <b>Strahler (1957)</b> — stream ordering</li>
+          <li>Leopold &amp; Maddock (1953); Lacey (1930) — hydraulic geometry</li>
+          <li>Rosgen (1994) — natural channel classification</li>
+          <li>Montgomery &amp; Dietrich — slope–area channel initiation</li>
+          <li>Tarboton (1997) D∞; Freeman (1991) MFD — flow routing</li>
+          <li>Mei et al. (2007) — virtual-pipes shallow-water erosion</li>
+          <li>Beyer (2015) — hydraulic-erosion method</li>
+          <li>Hellweger &amp; Maidment — AGREE stream burning</li>
+          <li>Bolla Pittaluga et al. — channel bifurcation; Kinoshita — meanders</li>
+          <li>Génevaux et al. (2013); Galin et al. (2019) — terrain from rivers</li>
+          <li>England &amp; Molnar (1990) — surface uplift / isostatic rebound</li>
+          <li>Premože &amp; Ashikhmin — “Rendering Natural Waters”</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Tectonics &amp; geomorphology</h3><ul>
+          <li>Zhang &amp; Suen (1984) — skeleton thinning</li>
+          <li>Rong &amp; Tan (2006) — Jump Flooding Algorithm</li>
+          <li>Stewart (1978); Wernicke (1985) — Basin &amp; Range / detachment faulting</li>
+          <li>Holtedahl (1993); Montgomery (2001); Benn &amp; Evans (2014) — fjords / glacial valleys</li>
+          <li>Riley et al. (1999) — Terrain Ruggedness Index</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Climate &amp; weather</h3><ul>
+          <li>Köppen–Geiger climate classification</li>
+          <li>Bulk-aerodynamic (Dalton) evaporation</li>
+          <li>Hadley / Ferrel / Polar circulation banding</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Soils</h3><ul>
+          <li>Jenny (1941) — <i>Factors of Soil Formation</i> (CLORPT)</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Ecology &amp; biogeography (wildlife)</h3><ul>
+          <li>Lieth (1972) — Miami model of net primary productivity</li>
+          <li>MacArthur &amp; Wilson (1967) — species–area (S = c·Aᶻ)</li>
+          <li>Wright (1983) — species–energy hypothesis</li>
+          <li>Stein et al. (2014) — heterogeneity &amp; richness</li>
+          <li>Rosenzweig (1995) — latitudinal diversity gradient</li>
+          <li>Lindeman (1942) — 10% trophic energy transfer</li>
+          <li>Kleiber (1932) — metabolic scaling (B ∝ M<sup>¾</sup>)</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Rendering &amp; cartography</h3><ul>
+          <li>Kennelly &amp; Kimerling — multidirectional (multi-sun) hillshade</li>
+          <li>Beer–Lambert law — depth-based water shading</li>
+          <li>Musgrave — ridged-multifractal terrain noise</li>
+          <li>Nortantis — icon-placement approach <i>(studied only; AGPL, not copied)</i></li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Gravity &amp; planetary</h3><ul>
+          <li>J2 rotational-bulge geoid model</li>
+          <li>Equilibrium tidal theory (moons &amp; tidal range)</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Open-source studied (no code copied)</h3><ul>
+          <li>Pasternack Lab / RiverBuilder (UC Davis)</li>
+          <li>LanLou123 / Webgl-Erosion</li>
+          <li>Sebastian Lague / Hydraulic-Erosion</li>
+          <li>weigert / SimpleHydrology</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>CC0 / public-domain art</h3><ul>
+          <li>ambientCG — ground textures</li>
+          <li>Poly Haven — terrain textures</li>
+          <li>K. M. Alexander #NoBadMaps — Hyacinth · Harrewyn · Blaeu · Lumbia brush sets (CC0)</li>
+          <li>OpenGameArt — CC0 map symbols</li>
+        </ul></div>
+
+        <div class="refgrp"><h3>Libraries</h3><ul>
+          <li><b>fflate</b> (MIT, © Arjun Barrett) — ZIP creation, vendored in the Asset Pack Compiler</li>
+        </ul></div>
+      </div>
+
+      <h2>Licensing &amp; provenance</h2>
+      <p>The Cartalith tools and engine are original works by <b>V. Post</b> (see the repository
+      <code>LICENSE</code>). Cited research is used for its methods only. CC0 assets carry no attribution
+      requirement; provenance is recorded here regardless. fflate is used under the MIT License.</p>
+
+      <p style="margin-top:26px;color:var(--faint);font-size:11px">Cartalith RC v0.01 — integration build. Component
+      engines run isolated and unmodified; a later release will fuse them into a single namespace
+      (see <code>docs/DEEP_MERGE_PLAN.md</code>).</p>
+    </div>
+  </section>
+</main>
+
+<div id="toast"></div>
+<input type="file" id="openInput" accept=".cartalith,.zip" class="hidden">
+
+<!-- inert source carriers; the assembler injects each full app here (closing script tags are backslash-escaped, reversed at runtime) -->
+<script type="text/html" id="src-generate"><!--SRC_GENERATE--></script>
+<script type="text/html" id="src-cartograph"><!--SRC_CARTOGRAPH--></script>
+<script type="text/html" id="src-assets"><!--SRC_ASSETS--></script>
+
+<script>
+"use strict";
+/* =====================================================================================================
+ * Cartalith RC v0.01 — parent integration shell.
+ * Hosts the three tools in isolated frames, routes a postMessage bridge, owns the unified project
+ * save/open (a "project of projects": each tool's own native save, bundled), and the cross-tool
+ * handoffs (Generate → Cartograph, Asset Packs → Generate).
+ * ===================================================================================================== */
+const NS = "cartalith-rc";
+const TOOLS = ["generate", "cartograph", "assets"];
+const frames = {};          // tool -> iframe element (created lazily)
+const frameReady = {};      // tool -> bool
+const readyWaiters = {};    // tool -> [resolve fns]
+let activeTab = "generate";
+
+/* ---------- tiny utils ---------- */
+function $(id){ return document.getElementById(id); }
+function strToU8(s){ return new TextEncoder().encode(s); }
+function u8(b){ return (b instanceof Uint8Array) ? b : new Uint8Array(b); }
+function dataUrlToU8(d){ const i=d.indexOf(","); const bin=atob(d.slice(i+1)); const a=new Uint8Array(bin.length); for(let k=0;k<bin.length;k++)a[k]=bin.charCodeAt(k); return a; }
+function dateStr(){ return new Date().toISOString().slice(0,10); }
+let _toastT=null;
+function toast(msg, ms){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); if(_toastT)clearTimeout(_toastT); _toastT=setTimeout(()=>t.classList.remove("show"), ms||2600); }
+function download(bytes, name){ const blob=new Blob([bytes],{type:"application/octet-stream"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),2000); }
+
+/* ---------- minimal STORED zip (writer + reader) for the outer bundle & synthesized handoff ---------- */
+const _CRC=(function(){ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(a){ let c=0xFFFFFFFF; for(let i=0;i<a.length;i++) c=_CRC[(c^a[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(entries){
+  const enc=new TextEncoder(); const parts=[]; const central=[]; let offset=0;
+  for(const e of entries){
+    const nb=enc.encode(e.name); const data=u8(e.data); const crc=crc32(data);
+    const lh=new Uint8Array(30+nb.length); const dv=new DataView(lh.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0,true); dv.setUint16(8,0,true);
+    dv.setUint16(10,0,true); dv.setUint16(12,0x21,true); dv.setUint32(14,crc,true);
+    dv.setUint32(18,data.length,true); dv.setUint32(22,data.length,true); dv.setUint16(26,nb.length,true); dv.setUint16(28,0,true);
+    lh.set(nb,30); parts.push(lh,data);
+    const ch=new Uint8Array(46+nb.length); const cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true); cv.setUint16(8,0,true); cv.setUint16(10,0,true);
+    cv.setUint16(12,0,true); cv.setUint16(14,0x21,true); cv.setUint32(16,crc,true); cv.setUint32(20,data.length,true); cv.setUint32(24,data.length,true);
+    cv.setUint16(28,nb.length,true); cv.setUint16(30,0,true); cv.setUint16(32,0,true); cv.setUint16(34,0,true); cv.setUint16(36,0,true);
+    cv.setUint32(38,0,true); cv.setUint32(42,offset,true); ch.set(nb,46); central.push(ch);
+    offset += lh.length + data.length;
+  }
+  let cSize=0; for(const c of central) cSize+=c.length;
+  const end=new Uint8Array(22); const ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,entries.length,true); ev.setUint16(10,entries.length,true);
+  ev.setUint32(12,cSize,true); ev.setUint32(16,offset,true);
+  let total=offset+cSize+22, out=new Uint8Array(total), p=0;
+  for(const b of parts){ out.set(b,p); p+=b.length; }
+  for(const c of central){ out.set(c,p); p+=c.length; }
+  out.set(end,p); return out;
+}
+function zipRead(buf){
+  const a=u8(buf); const dv=new DataView(a.buffer,a.byteOffset,a.byteLength);
+  let i=a.length-22; for(; i>=0; i--){ if(dv.getUint32(i,true)===0x06054b50) break; }
+  if(i<0) throw new Error("not a project bundle");
+  const count=dv.getUint16(i+10,true); let p=dv.getUint32(i+16,true); const out={};
+  for(let n=0;n<count;n++){
+    if(dv.getUint32(p,true)!==0x02014b50) break;
+    const csize=dv.getUint32(p+20,true), nlen=dv.getUint16(p+28,true), elen=dv.getUint16(p+30,true), clen=dv.getUint16(p+32,true), lho=dv.getUint32(p+42,true);
+    const name=new TextDecoder().decode(a.subarray(p+46,p+46+nlen));
+    const lnlen=dv.getUint16(lho+26,true), lelen=dv.getUint16(lho+28,true), dstart=lho+30+lnlen+lelen;
+    out[name]=a.subarray(dstart,dstart+csize).slice();
+    p += 46+nlen+elen+clen;
+  }
+  return out;
+}
+
+/* ---------- frame lifecycle ---------- */
+function unesc(s){ return s.replace(/<\\\/(script)/gi, "</$1"); }   /* inverse of the assembler's </script escape */
+function createFrame(tool){
+  if(frames[tool]) return frames[tool];
+  const host=$("pane-"+tool);
+  const src=unesc($("src-"+tool).textContent);
+  const f=document.createElement("iframe");
+  f.setAttribute("title", tool);
+  f.srcdoc=src;
+  host.appendChild(f);
+  frames[tool]=f;
+  return f;
+}
+function ensureFrame(tool){
+  createFrame(tool);
+  if(frameReady[tool]) return Promise.resolve();
+  return new Promise((resolve)=>{
+    (readyWaiters[tool] || (readyWaiters[tool]=[])).push(resolve);
+    setTimeout(resolve, 9000);   /* fallback so a handoff never hangs */
+  });
+}
+function postTo(tool, msg){ const f=frames[tool]; if(!f||!f.contentWindow) return; msg.ns=NS; f.contentWindow.postMessage(msg, "*"); }
+
+/* one-shot waiter for a specific reply from a tool */
+const oneShots=[];
+function once(tool, cmd){ return new Promise((resolve)=>{ oneShots.push({tool,cmd,resolve}); setTimeout(()=>resolve(null), 30000); }); }
+
+/* ---------- message router ---------- */
+window.addEventListener("message",(e)=>{
+  const d=e.data; if(!d||d.ns!==NS||!d.tool) return;
+  if(d.cmd==="ready"){
+    frameReady[d.tool]=true;
+    const w=readyWaiters[d.tool]; if(w){ w.forEach(fn=>{try{fn();}catch(_){}}); readyWaiters[d.tool]=[]; }
+    return;
+  }
+  for(let i=oneShots.length-1;i>=0;i--){ const s=oneShots[i]; if(s.tool===d.tool && s.cmd===d.cmd){ oneShots.splice(i,1); s.resolve(d); } }
+});
+
+/* ---------- tabs ---------- */
+function switchTab(tab){
+  activeTab=tab;
+  document.querySelectorAll(".pane").forEach(p=>p.classList.remove("on"));
+  $("pane-"+tab).classList.add("on");
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on", b.dataset.tab===tab));
+  if(tab!=="info") createFrame(tab);
+  updateFlowbar();
+}
+$("tabs").addEventListener("click",(e)=>{ const b=e.target.closest("button"); if(b) switchTab(b.dataset.tab); });
+
+/* ---------- flow / handoff bar ---------- */
+function updateFlowbar(){
+  const bar=$("flowbar"), msg=$("fbMsg"), btn=$("fbBtn");
+  bar.classList.remove("hide"); btn.classList.add("hidden");
+  if(activeTab==="generate"){
+    msg.innerHTML="<b>Generate</b> a world, then send it straight into the cartographer as a base map with biome &amp; terrain paint grids.";
+    btn.textContent="Send world → Cartograph"; btn.classList.remove("hidden"); btn.onclick=handoffWorldToCartograph;
+  }else if(activeTab==="assets"){
+    msg.innerHTML="<b>Author</b> a texture/icon pack, then push it into the world engine's renderer.";
+    btn.textContent="Send pack → Generate"; btn.classList.remove("hidden"); btn.onclick=handoffPackToGenerate;
+  }else if(activeTab==="cartograph"){
+    msg.innerHTML="Draw routes, settlements and politics over your generated world. <b>Project ▾ → Save</b> stores the whole project in one file.";
+  }else{ bar.classList.add("hide"); }
+}
+
+/* ---------- handoff: Generate → Cartograph ---------- */
+async function handoffWorldToCartograph(){
+  const btn=$("fbBtn"); btn.disabled=true;
+  try{
+    toast("Sending world to the cartographer…", 6000);
+    postTo("generate", {cmd:"extractWorld"});
+    const r=await once("generate","worldParts");
+    if(!r||!r.parts){ toast("Could not read the generated world."); return; }
+    const zip=buildCartographProject(r.parts);
+    await ensureFrame("cartograph");
+    postTo("cartograph", {cmd:"loadProject", bytes:zip});
+    await once("cartograph","loadResult");
+    switchTab("cartograph");
+    toast("World opened in Cartograph — base map, biome & terrain grids loaded.");
+  }catch(err){ toast("Handoff failed: "+err.message); }
+  finally{ btn.disabled=false; }
+}
+function buildCartographProject(parts){
+  const gw=parts.gw||0, gh=parts.gh||0, km=parts.mapWidthKm||800;
+  const proj={
+    version:9,
+    image: parts.imageDataUrl ? {name:"generated.png", mime:"image/png", width:gw, height:gh} : null,
+    grid:{ cellSize:1, appliedCellSize:1, widthCells:gw, heightCells:gh, baked:true },
+    terrain: parts.terrainRLE ? {baked:true} : null,
+    calibration:{ calibrated:true, pixelsPerUnit:(km>0?gw/km:1), unit:"km", points:[] },
+    routes:[], places:[], ways:[],
+    politics:{ polities:[], timeline:{start:1,end:10,interval:1}, activeYear:1, opacity:0.5, showInRoutes:true, years:[] },
+    activeRouteId:null,
+    filters:{ settlements:true, pois:true, hiddenClasses:[], hiddenPoiTypes:[] }
+  };
+  const entries=[{name:"project.json", data:strToU8(JSON.stringify(proj))}];
+  if(parts.imageDataUrl) entries.push({name:"image.png", data:dataUrlToU8(parts.imageDataUrl)});
+  if(parts.biomeRLE)     entries.push({name:"biome_baked.bin", data:u8(parts.biomeRLE)});
+  if(parts.terrainRLE)   entries.push({name:"terrain_baked.bin", data:u8(parts.terrainRLE)});
+  return zipStore(entries);
+}
+
+/* ---------- handoff: Asset Packs → Generate ---------- */
+async function handoffPackToGenerate(){
+  const btn=$("fbBtn"); btn.disabled=true;
+  try{
+    toast("Packing your assets…", 6000);
+    postTo("assets", {cmd:"extractPack"});
+    const r=await once("assets","packBytes");
+    if(!r||r.empty||!r.bytes){ toast("No assets to send — add textures or icons first."); return; }
+    await ensureFrame("generate");
+    postTo("generate", {cmd:"loadPack", bytes:r.bytes, name:r.name||"pack.zip"});
+    await once("generate","packLoaded");
+    switchTab("generate");
+    toast("Asset pack loaded into the world engine.");
+  }catch(err){ toast("Handoff failed: "+err.message); }
+  finally{ btn.disabled=false; }
+}
+
+/* ---------- unified SAVE ---------- */
+async function saveProject(){
+  toast("Gathering all changes (this may bake the world)…", 12000);
+  const results={};
+  for(const t of TOOLS){
+    if(!frames[t] || !frameReady[t]) continue;     /* only tools that have been opened can hold state */
+    postTo(t, {cmd:"save"});
+    const res=await once(t, "saveResult");
+    if(res && res.bytes && !res.empty) results[t]=res;
+  }
+  const manifest={ kind:"cartalith-rc-project", rcVersion:"0.01", author:"V. Post", created:new Date().toISOString(), components:{} };
+  const entries=[];
+  if(results.generate){ entries.push({name:"generate/world.zip", data:results.generate.bytes}); manifest.components.generate=results.generate.name||"world.zip"; }
+  if(results.cartograph){ entries.push({name:"cartograph/project.zip", data:results.cartograph.bytes}); manifest.components.cartograph=results.cartograph.name||"project.zip"; }
+  if(results.assets){ entries.push({name:"assets/pack.zip", data:results.assets.bytes}); manifest.components.assets=results.assets.name||"pack.zip"; }
+  entries.unshift({name:"manifest.json", data:strToU8(JSON.stringify(manifest,null,2))});
+  if(entries.length===1){ toast("Nothing to save yet — generate or edit something first."); return; }
+  download(zipStore(entries), "worldbuilding_"+dateStr()+".cartalith");
+  const n=Object.keys(results).length;
+  toast("Saved unified project — "+n+" tool"+(n===1?"":"s")+" bundled.");
+}
+
+/* ---------- unified OPEN ---------- */
+async function openProject(file){
+  let entries;
+  try{ entries=zipRead(new Uint8Array(await file.arrayBuffer())); }
+  catch(err){ toast("Not a Cartalith project bundle."); return; }
+  let any=false, target=null;
+  if(entries["generate/world.zip"]){ any=true; await ensureFrame("generate"); postTo("generate",{cmd:"loadProject", bytes:entries["generate/world.zip"]}); await once("generate","loadResult"); target=target||"generate"; }
+  if(entries["assets/pack.zip"]){ any=true; await ensureFrame("generate"); postTo("generate",{cmd:"loadPack", bytes:entries["assets/pack.zip"], name:"pack.zip"}); }
+  if(entries["cartograph/project.zip"]){ any=true; await ensureFrame("cartograph"); postTo("cartograph",{cmd:"loadProject", bytes:entries["cartograph/project.zip"]}); await once("cartograph","loadResult"); target="cartograph"; }
+  if(!any){ toast("Bundle contained no tool data."); return; }
+  switchTab(target||"generate");
+  toast("Project opened — all saved tools restored.");
+}
+
+/* ---------- menu wiring ---------- */
+(function(){
+  const m=$("projMenu"), b=$("projBtn");
+  b.addEventListener("click",(e)=>{ e.stopPropagation(); m.classList.toggle("open"); });
+  document.addEventListener("click",()=>m.classList.remove("open"));
+  $("pmSave").addEventListener("click",()=>{ m.classList.remove("open"); saveProject(); });
+  $("pmOpen").addEventListener("click",()=>{ m.classList.remove("open"); $("openInput").click(); });
+  $("pmInfo").addEventListener("click",()=>{ m.classList.remove("open"); switchTab("info"); });
+  $("pmNew").addEventListener("click",()=>{ m.classList.remove("open"); if(confirm("Start a new project? Unsaved changes in all tools will be lost.")) location.reload(); });
+})();
+$("openInput").addEventListener("change",(e)=>{ const f=e.target.files[0]; if(f) openProject(f); e.target.value=""; });
+
+/* ---------- boot ---------- */
+createFrame("generate");   /* default tab — boot the engine immediately so a world generates */
+updateFlowbar();
+</script>
+
+</body>
+</html>

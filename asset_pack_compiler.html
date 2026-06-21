@@ -266,6 +266,14 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
   border-radius:6px;padding:5px 8px;font:inherit;font-size:12px}
 .cellnames .cn input:focus{outline:none;border-color:var(--accent)}
 .cellnames .empty{font-size:11.5px;color:var(--txt-faint)}
+/* custom-icon sets */
+.fam .set-head{display:flex;justify-content:space-between;align-items:center;margin:12px 2px 2px;
+  font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#7fd3e0;
+  border-bottom:1px solid var(--line);padding-bottom:5px}
+.fam .set-head .set-c{font-family:var(--mono);color:var(--txt-faint)}
+.fam .add-slot{flex-wrap:wrap}
+.fam .add-slot .set-in{flex:0 0 130px}
+.fam .add-slot .name-in{flex:1 1 160px}
 </style>
 </head>
 <body>
@@ -402,6 +410,8 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
         <label class="chk"><input type="checkbox" id="slSkipBlank" checked> skip fully-transparent cells</label>
         <div class="field"><label for="sliceTarget">Add selected cells to…</label>
           <select id="sliceTarget"></select></div>
+        <div class="field"><label for="sliceSet">…custom set (for new custom icons)</label>
+          <input id="sliceSet" type="text" value="Default" spellcheck="false" list="custSets"></div>
         <div class="field"><label for="sliceNewName">…or type a new custom-icon name</label>
           <input id="sliceNewName" type="text" placeholder="e.g. windmill" spellcheck="false"></div>
         <div class="field"><label>Per-cell names <span class="slcount" id="cnHint" style="margin:0"></span></label>
@@ -626,20 +636,47 @@ function buildFamily(fam, container){
   container.appendChild(det);
   const grid = det.querySelector('.grid');
   fam.detEl = det; fam.gridEl = grid;
-  fam.slots.forEach(slot => grid.appendChild(buildRow(fam, slot)));
-  if(fam.custom){
-    const add = document.createElement('div');
-    add.className = 'add-slot';
-    add.innerHTML = `
-      <input type="text" placeholder="New custom icon name (e.g. lighthouse)" spellcheck="false">
-      <button class="primary tiny">+ Add slot</button>`;
-    grid.appendChild(add);
-    fam.addEl = add;
-    const inp = add.querySelector('input'), btn = add.querySelector('button');
-    const go = () => { const v = inp.value.trim(); if(!v) return; addCustomSlot(fam, v); inp.value=''; inp.focus(); };
-    btn.addEventListener('click', go);
-    inp.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); go(); } });
+  if(fam.custom) rebuildCustomGrid(fam);
+  else fam.slots.forEach(slot => grid.appendChild(buildRow(fam, slot)));
+}
+
+/* custom family is grouped by set → rebuild its grid wholesale on add/remove */
+function rebuildCustomGrid(fam){
+  const grid = fam.gridEl; grid.innerHTML = '';
+  const order = [], bySet = {};
+  for(const slot of fam.slots){
+    const s = slot.set || 'Default';
+    if(!bySet[s]){ bySet[s] = []; order.push(s); }
+    bySet[s].push(slot);
   }
+  for(const s of order){
+    const head = document.createElement('div'); head.className = 'set-head';
+    head.innerHTML = `<span>${s}</span><span class="set-c">${bySet[s].length}</span>`;
+    grid.appendChild(head);
+    for(const slot of bySet[s]) grid.appendChild(buildRow(fam, slot));
+  }
+  const add = document.createElement('div'); add.className = 'add-slot';
+  add.innerHTML = `
+    <input class="set-in" type="text" placeholder="Set (e.g. Naval)" spellcheck="false" list="custSets">
+    <input class="name-in" type="text" placeholder="Icon name (e.g. lighthouse)" spellcheck="false">
+    <button class="primary tiny">+ Add</button>`;
+  grid.appendChild(add); fam.addEl = add;
+  const setIn = add.querySelector('.set-in'), nameIn = add.querySelector('.name-in'), btn = add.querySelector('button');
+  const go = () => { const nm = nameIn.value.trim(); if(!nm) return; addCustomSlot(fam, nm, setIn.value.trim() || 'Default'); nameIn.value=''; nameIn.focus(); };
+  btn.addEventListener('click', go);
+  nameIn.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); go(); } });
+  setIn.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); nameIn.focus(); } });
+  // repaint thumbnails for slots that already hold images
+  fam.slots.forEach(s => { if(store[s.uid] && store[s.uid].length) renderThumbs(s.uid); });
+  refreshCustSets();
+}
+function refreshCustSets(){
+  let dl = document.getElementById('custSets');
+  if(!dl){ dl = document.createElement('datalist'); dl.id = 'custSets'; document.body.appendChild(dl); }
+  const fam = FAMILIES.find(f => f.custom), seen = new Set();
+  dl.innerHTML = '';
+  for(const s of fam.slots){ const nm = s.set || 'Default'; if(seen.has(nm)) continue; seen.add(nm);
+    const o = document.createElement('option'); o.value = nm; dl.appendChild(o); }
 }
 
 function buildRow(fam, slot){
@@ -679,16 +716,18 @@ function buildRow(fam, slot){
 
 /* ---- custom slots (free-form, user-defined) ------------------------ */
 function slugId(s){ return (String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')) || 'icon'; }
-function addCustomSlot(fam, name){
-  const id = slugId(name);
-  const existing = fam.slots.find(s => s.id===id);
+function addCustomSlot(fam, name, setName){
+  setName = (setName || 'Default').trim() || 'Default';
+  const id = slugId(name), setId = slugId(setName);
+  const uid = fam.key + ':' + setId + '/' + id;
+  const existing = fam.slots.find(s => s.uid===uid);
   if(existing){ if(fam.detEl) fam.detEl.open = true; return existing; }
-  const slot = {id, name:name.trim(), desc:'custom icon', code:'CU-'+String(fam.slots.length+1).padStart(2,'0'),
-                uid:fam.key+':'+id};
+  const slot = {id, name:name.trim(), set:setName, setId, desc:'custom icon',
+                code:'CU-'+String(fam.slots.length+1).padStart(2,'0'), uid};
   fam.slots.push(slot);
-  SLOT_REG[slot.uid] = {fam, slot};
-  store[slot.uid] = [];
-  fam.gridEl.insertBefore(buildRow(fam, slot), fam.addEl);
+  SLOT_REG[uid] = {fam, slot};
+  store[uid] = [];
+  rebuildCustomGrid(fam);
   if(fam.detEl) fam.detEl.open = true;
   updateCount(fam.key); refreshTargetOptions();
   return slot;
@@ -697,8 +736,7 @@ function removeCustomSlot(uid){
   const {fam} = SLOT_REG[uid];
   fam.slots = fam.slots.filter(s => s.uid!==uid);
   delete SLOT_REG[uid]; delete store[uid];
-  const row = document.querySelector(`.row[data-uid="${cssEsc(uid)}"]`);
-  if(row) row.remove();
+  rebuildCustomGrid(fam);
   updateCount(fam.key); refreshTargetOptions();
 }
 
@@ -899,6 +937,18 @@ async function exportPack(){
     for(const slot of fam.slots){
       const arr = store[slot.uid];
       if(!arr.length) continue;
+      if(fam.custom){                                  // grouped: custom[set][id] = [paths]
+        const paths = [];
+        for(let i=0;i<arr.length;i++){
+          const path = `custom/${slot.setId}/${slot.id}_${String(i+1).padStart(2,'0')}.png`;
+          const blob = await renderToBlob(arr[i], fam.size, false);
+          files[path] = new Uint8Array(await blob.arrayBuffer());
+          paths.push(path); count++; nIco++;
+        }
+        (manifest.custom || (manifest.custom = {}));
+        (manifest.custom[slot.set] || (manifest.custom[slot.set] = {}))[slot.id] = paths;
+        continue;
+      }
       if(fam.kind === 'texture'){
         const path = `${fam.dir}/${slot.id}.png`;
         const blob = await renderToBlob(arr[0], fam.size, true);
@@ -956,9 +1006,18 @@ let slScale = 1;             // source→display scale of #sliceCanvas
 let gridRect = null;         // {x,y,w,h} grid bounds in SOURCE px (draggable)
 let sliceMode = 'select';    // 'select' | 'grid' | 'pick'
 let pdrag = null;            // pointer-drag state
+let colF = [0,1];            // vertical-line positions as fractions of gridRect.w (length cols+1)
+let rowF = [0,1];            // horizontal-line positions as fractions of gridRect.h (length rows+1)
 const slSel = new Set();     // selected cell indices
 const cellNames = {};        // idx → user name
 const chroma = {enabled:false, color:[255,255,255], tol:40};   // colour-key (background→transparent)
+
+/* reset the interior lines to an even division for the current cols/rows */
+function resetLines(){
+  const cols = clampInt($('slCols').value,1,128), rows = clampInt($('slRows').value,1,128);
+  colF = []; for(let i=0;i<=cols;i++) colF.push(i/cols);
+  rowF = []; for(let j=0;j<=rows;j++) rowF.push(j/rows);
+}
 
 function clampInt(v, lo, hi){ v = parseInt(v,10); if(!isFinite(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
 function evToSrc(e){
@@ -970,12 +1029,19 @@ function evToSrc(e){
 function computeCells(){
   const cols = clampInt($('slCols').value,1,128), rows = clampInt($('slRows').value,1,128);
   const g = Math.max(0, parseFloat($('slSpacing').value)||0);
+  if(colF.length !== cols+1 || rowF.length !== rows+1) resetLines();   // stale → re-even
   const R = gridRect;
-  const cw = (R.w - (cols-1)*g)/cols;
-  const ch = (R.h - (rows-1)*g)/rows;
   const cells = [];
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
-    cells.push({c, r, idx:r*cols+c, x:R.x+c*(cw+g), y:R.y+r*(ch+g), w:cw, h:ch});
+  let cw = Infinity, ch = Infinity;                                    // min cell dims (for the "too dense" guard)
+  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+    const x0 = R.x + colF[c]*R.w   + (c>0      ? g/2 : 0);
+    const x1 = R.x + colF[c+1]*R.w - (c<cols-1 ? g/2 : 0);
+    const y0 = R.y + rowF[r]*R.h   + (r>0      ? g/2 : 0);
+    const y1 = R.y + rowF[r+1]*R.h - (r<rows-1 ? g/2 : 0);
+    const w = x1-x0, h = y1-y0;
+    cw = Math.min(cw, w); ch = Math.min(ch, h);
+    cells.push({c, r, idx:r*cols+c, x:x0, y:y0, w, h});
+  }
   return {cells, cw, ch};
 }
 
@@ -997,14 +1063,22 @@ function handlePoints(){
           w:{x:r.x,y:my}, e:{x:r.x+r.w,y:my},
           sw:{x:r.x,y:r.y+r.h}, s:{x:mx,y:r.y+r.h}, se:{x:r.x+r.w,y:r.y+r.h}};
 }
-function hitHandle(sx, sy, tolPx){
-  const t = (tolPx||11)/slScale, pts = handlePoints();
-  for(const k in pts){ if(Math.abs(sx-pts[k].x)<=t && Math.abs(sy-pts[k].y)<=t) return k; }
-  const r = gridRect;
-  if(sx>r.x && sx<r.x+r.w && sy>r.y && sy<r.y+r.h) return 'move';
+/* what is under the pointer in grid mode: a corner/edge handle, an interior line, or the rect interior */
+function pickTarget(sx, sy, tolPx){
+  const t = (tolPx||11)/slScale, R = gridRect, pts = handlePoints();
+  for(const k in pts){ if(Math.abs(sx-pts[k].x)<=t && Math.abs(sy-pts[k].y)<=t) return {kind:'handle', h:k}; }
+  const cols = colF.length-1, rows = rowF.length-1;
+  let best = null, bestD = t;
+  if(sy>=R.y-t && sy<=R.y+R.h+t)                                       // interior vertical lines
+    for(let i=1;i<cols;i++){ const d = Math.abs(sx-(R.x+colF[i]*R.w)); if(d<=bestD){ bestD=d; best={kind:'vline', i}; } }
+  if(sx>=R.x-t && sx<=R.x+R.w+t)                                       // interior horizontal lines (vline wins exact ties)
+    for(let j=1;j<rows;j++){ const d = Math.abs(sy-(R.y+rowF[j]*R.h)); if(d<bestD){ bestD=d; best={kind:'hline', j}; } }
+  if(best) return best;
+  if(sx>R.x && sx<R.x+R.w && sy>R.y && sy<R.y+R.h) return {kind:'move'};
   return null;
 }
-function applyDrag(handle, dx, dy, o){
+/* resize/move the grid rectangle (fractions auto-scale with it) */
+function applyHandle(handle, dx, dy, o){
   let {x,y,w,h} = o; const MIN = 8;
   if(handle==='move'){ x = o.x+dx; y = o.y+dy; }
   else {
@@ -1018,6 +1092,20 @@ function applyDrag(handle, dx, dy, o){
   x = Math.max(0, Math.min(x, sheet.w-MIN)); y = Math.max(0, Math.min(y, sheet.h-MIN));
   w = Math.min(w, sheet.w-x); h = Math.min(h, sheet.h-y);
   gridRect = {x,y,w,h};
+}
+/* apply the active drag (handle / interior line / move) to the absolute pointer position */
+function dragTo(sx, sy){
+  const p = pdrag, R = gridRect;
+  if(p.target.kind==='handle'){ applyHandle(p.target.h, sx-p.startX, sy-p.startY, p.orig); }
+  else if(p.target.kind==='move'){ applyHandle('move', sx-p.startX, sy-p.startY, p.orig); }
+  else if(p.target.kind==='vline'){
+    const i = p.target.i, gap = 6/Math.max(1,R.w);
+    colF[i] = Math.max(colF[i-1]+gap, Math.min(colF[i+1]-gap, (sx-R.x)/R.w));
+  } else if(p.target.kind==='hline'){
+    const j = p.target.j, gap = 6/Math.max(1,R.h);
+    rowF[j] = Math.max(rowF[j-1]+gap, Math.min(rowF[j+1]-gap, (sy-R.y)/R.h));
+  }
+  drawSliceGrid();
 }
 
 function drawSliceGrid(){
@@ -1057,17 +1145,17 @@ function drawSliceGrid(){
   ctx.strokeStyle = 'rgba(255,40,40,.95)'; ctx.lineWidth = 2;
   ctx.strokeRect(R.x*scale+1, R.y*scale+1, R.w*scale-2, R.h*scale-2);
   if(sliceMode==='grid'){
-    const pts = handlePoints(), hs = 6;                          // larger handles, white-ringed for touch
-    for(const k in pts){
-      const hx = pts[k].x*scale, hy = pts[k].y*scale;
-      ctx.fillStyle = '#fff'; ctx.fillRect(hx-hs-1, hy-hs-1, (hs+1)*2, (hs+1)*2);
-      ctx.fillStyle = '#ff2d2d'; ctx.fillRect(hx-hs, hy-hs, hs*2, hs*2);
-    }
+    const cols = colF.length-1, rows = rowF.length-1;
+    const tab = (x,y,col) => { ctx.fillStyle='#fff'; ctx.fillRect(x-6,y-6,12,12); ctx.fillStyle=col; ctx.fillRect(x-5,y-5,10,10); };
+    for(let i=1;i<cols;i++) tab((R.x+colF[i]*R.w)*scale, (R.y+R.h/2)*scale, '#ff9e2d');   // vertical-line grabs (orange)
+    for(let j=1;j<rows;j++) tab((R.x+R.w/2)*scale, (R.y+rowF[j]*R.h)*scale, '#ff9e2d');   // horizontal-line grabs
+    const pts = handlePoints();
+    for(const k in pts) tab(pts[k].x*scale, pts[k].y*scale, '#ff2d2d');                   // corner/edge handles (red)
   }
   ctx.lineWidth = 1;
   $('slCount').textContent = slSel.size + ' selected';
   $('slInfo').textContent = (cw>0 && ch>0)
-    ? `${sheet.name} — ${sheet.w}×${sheet.h}px · ${slCells.length} cells (~${Math.round(cw)}×${Math.round(ch)}px)`
+    ? `${sheet.name} — ${sheet.w}×${sheet.h}px · ${slCells.length} cells (min ~${Math.round(cw)}×${Math.round(ch)}px)`
     : 'Grid too dense — reduce columns/rows or spacing.';
 }
 
@@ -1128,23 +1216,24 @@ function addSlices(){
   const skipBlank = $('slSkipBlank').checked;
   const idxs = [...slSel].sort((a,b)=>a-b);
   const custFam = FAMILIES.find(f => f.custom);
+  const setName = ($('sliceSet').value || 'Default').trim() || 'Default';
   const base = sheet.name.replace(/\.[^.]+$/,'');
 
-  if(tgt==='__percell__'){          // one custom icon per cell, named per the list
+  if(tgt==='__percell__'){          // one custom icon per cell, named per the list, grouped into the set
     let made = 0, skipped = 0;
     for(const idx of idxs){
       const cell = slCells.find(c => c.idx===idx); if(!cell) continue;
       const cc = cropCell(cell);
       if(skipBlank && isBlankCanvas(cc.getContext('2d'), cc.width, cc.height)){ skipped++; continue; }
       const nm = cellNames[idx] || `cell ${idx+1}`;
-      const slot = addCustomSlot(custFam, nm);
+      const slot = addCustomSlot(custFam, nm, setName);
       store[slot.uid].push({name:nm, img:cc, w:cc.width, h:cc.height, t:defaultTransform()});
       renderThumbs(slot.uid); made++;
     }
-    toast(`Created ${made} custom icon${made!==1?'s':''}${skipped?` (${skipped} blank skipped)`:''}.`, made?'ok':'warn');
+    toast(`Created ${made} custom icon${made!==1?'s':''} in “${setName}”${skipped?` (${skipped} blank skipped)`:''}.`, made?'ok':'warn');
   } else {                          // all selected cells → one slot, as variants
     let uid;
-    if(newName) uid = addCustomSlot(custFam, newName).uid;
+    if(newName) uid = addCustomSlot(custFam, newName, setName).uid;
     else { uid = tgt; if(!uid || uid==='__new__'){ toast('Pick a target slot, type a new name, or choose “separate custom icons”.', 'warn'); return; } }
     const {fam, slot} = SLOT_REG[uid];
     let added = 0, skipped = 0;
@@ -1181,6 +1270,7 @@ function loadSheet(file){
     cx.imageSmoothingEnabled = false; cx.drawImage(img, 0, 0);
     sheet = {img, cv, ctx:cx, w, h, name:file.name};
     gridRect = {x:0, y:0, w, h};
+    resetLines();
     slSel.clear();
     for(const k in cellNames) delete cellNames[k];
     setMode('select');
@@ -1248,9 +1338,9 @@ $('slDrop').addEventListener('drop', e => { e.preventDefault(); $('slDrop').clas
 $('sheetPicker').addEventListener('change', e => { loadSheet(e.target.files[0]); e.target.value=''; });
 // changing cols/rows remaps cell indices → clear selection + names; spacing only reflows
 ['slCols','slRows'].forEach(id =>
-  $(id).addEventListener('input', () => { slSel.clear(); for(const k in cellNames) delete cellNames[k]; afterSelChange(); }));
+  $(id).addEventListener('input', () => { resetLines(); slSel.clear(); for(const k in cellNames) delete cellNames[k]; afterSelChange(); }));
 $('slSpacing').addEventListener('input', () => drawSliceGrid());
-$('slReset').addEventListener('click', () => { if(!sheet) return; gridRect = {x:0,y:0,w:sheet.w,h:sheet.h}; drawSliceGrid(); });
+$('slReset').addEventListener('click', () => { if(!sheet) return; gridRect = {x:0,y:0,w:sheet.w,h:sheet.h}; resetLines(); drawSliceGrid(); });
 $('slAll').addEventListener('click', () => { slCells.forEach(c => slSel.add(c.idx)); afterSelChange(); });
 $('slNone').addEventListener('click', () => { slSel.clear(); afterSelChange(); });
 $('slInvert').addEventListener('click', () => {
@@ -1284,22 +1374,21 @@ slCv.addEventListener('pointerdown', e => {
   if(sliceMode==='pick'){ sampleColorAt(sx,sy); setMode('select'); return; }
   if(sliceMode==='grid'){
     const tol = e.pointerType==='touch' ? 26 : 11;
-    const hh = hitHandle(sx,sy,tol);
-    if(hh){ pdrag = {handle:hh, startX:sx, startY:sy, orig:{...gridRect}}; slCv.setPointerCapture(e.pointerId); }
+    const tgt = pickTarget(sx,sy,tol);
+    if(tgt){ pdrag = {target:tgt, startX:sx, startY:sy, orig:{...gridRect}}; slCv.setPointerCapture(e.pointerId); }
     return;
   }
-  pdrag = {handle:null, startX:sx, startY:sy};   // select mode → resolved on pointerup
+  pdrag = {target:null, startX:sx, startY:sy};   // select mode → resolved on pointerup
   slCv.setPointerCapture(e.pointerId);
 });
 slCv.addEventListener('pointermove', e => {
-  if(!pdrag || !pdrag.handle || !sheet) return;
+  if(!pdrag || !pdrag.target || !sheet) return;
   e.preventDefault();
   const {sx,sy} = evToSrc(e);
-  applyDrag(pdrag.handle, sx-pdrag.startX, sy-pdrag.startY, pdrag.orig);
-  drawSliceGrid();
+  dragTo(sx, sy);
 });
 function endPointer(e){
-  if(pdrag && !pdrag.handle && sheet){
+  if(pdrag && !pdrag.target && sheet){
     const {sx,sy} = evToSrc(e);
     const cell = slCells.find(c => sx>=c.x && sx<c.x+c.w && sy>=c.y && sy<c.y+c.h);
     if(cell){ if(slSel.has(cell.idx)) slSel.delete(cell.idx); else slSel.add(cell.idx); afterSelChange(); }

@@ -228,16 +228,23 @@ Biome/terrain keys are the suffixes of Cartalith's `--biome-*` / `--terrain-*` C
 
 ### Custom icons (`custom` section)
 
-Beyond the fixed vocabulary, the compiler lets the user define **free-form icon slots** under a `custom` section
-(same shape as `icons` — `key → [paths]`, 256×256 RGBA, center-anchored, 1..N variants, files in `custom/`):
+Beyond the fixed vocabulary, the compiler lets the user define **free-form icon slots**, **grouped into named
+sets** (e.g. a "Naval" set, a "Mining" set), under a `custom` section. It is a **two-level** map
+`set → key → [paths]` (256×256 RGBA, center-anchored, 1..N variants); files live under `custom/<setId>/`:
 
 ```json
-"custom": { "lighthouse": ["custom/lighthouse_01.png", "custom/lighthouse_02.png"], "windmill": ["custom/windmill_01.png"] }
+"custom": {
+  "Naval":  { "lighthouse": ["custom/naval/lighthouse_01.png", "custom/naval/lighthouse_02.png"],
+              "anchor":     ["custom/naval/anchor_01.png"] },
+  "Mining": { "pickaxe":    ["custom/mining/pickaxe_01.png"] }
+}
 ```
 
-Keys are slugified from the user's name (`Wind Mill!!` → `windmill`) and de-duplicated. Like every schema-2
-section, `custom` is invisible to the current elevation-foundation importer; it is carried for the unified app to
-bind to user-authored symbology.
+Set names are the user's labels (the manifest key); the on-disk folder uses the slugified `setId`
+(`Naval` → `naval`). Icon keys are slugified from the user's name (`Wind Mill!!` → `windmill`) and de-duplicated
+**within a set** (two sets may reuse the same key). A pack with no sets simply omits `custom`. Like every
+schema-2 section, `custom` is invisible to the current elevation-foundation importer; it is carried for the unified
+app to bind to user-authored symbology (sets map naturally onto palette groups / a symbol picker).
 
 ### Sprite-sheet slicing (authoring convenience)
 
@@ -247,9 +254,11 @@ external tooling. The canvas has three modes:
 - **Select cells** — click numbered cells to toggle them (select-all / clear / invert; an option skips
   fully-transparent cells).
 - **Adjust grid** — the **columns × rows** grid is bounded by a draggable rectangle projected over the image:
-  drag the interior to move it, drag the 8 corner/edge handles to resize, so the grid lines up with the art
-  regardless of irregular margins (cols/rows and inter-cell **spacing** stay numeric inputs; **Reset grid** snaps
-  back to the full image).
+  drag the interior to move it, drag the 8 corner/edge handles to resize, and drag any **interior line**
+  (orange grab tabs — vertical lines slide horizontally, horizontal lines slide vertically) to make **non-uniform
+  rows/columns** that line up with irregular art. cols/rows and inter-cell **spacing** stay numeric inputs;
+  **Reset grid** snaps back to an even full-image division. (Interior-line positions are stored as fractions of
+  the rectangle, so moving/resizing the whole grid preserves them; changing cols/rows re-evens them.)
 - **💧 Pick bg** — an eyedropper: click the background to sample its colour, which is then **keyed to transparent**
   (Euclidean **colour tolerance** slider, live preview on the canvas). This handles icon sets on a non-white /
   coloured background, not just white.
@@ -259,6 +268,9 @@ Every cell is **numbered**, and each selected cell has a **per-cell name** field
 - a fixed-family slot or a single new custom name → all selected cells go in as **variants** of that one slot;
 - **separate custom icons (one per cell, by name)** → each selected cell becomes its **own** custom icon, named
   from its per-cell name (unnamed cells fall back to `cell_<n>`).
+
+New custom icons created from the slicer land in the **custom set** named in the slicer's set field (default
+`Default`), so a whole sheet can be sliced straight into one set.
 
 Cropping is purely an authoring step: each cell is cut from the native-resolution sheet (crisp), the colour key is
 applied, and the result enters the normal per-item editor + export path — so the output ZIP is identical to

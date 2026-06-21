@@ -76,7 +76,7 @@ The compiler has a **much richer vocab** than the foundation currently reads. Un
 
 ## 3. Proposed expansion — four stages
 
-### Stage 1 — Connect settlement icons to `_settleSeeds` (highest value, small scope)
+### Stage 1 — Connect settlement icons to `_settleSeeds` (deferred to unified tool P3 bridge)
 
 The settlement seeds (`_settleSeeds`) already classify each site by score and resources. Map these to the compiler's settlement/trait slots:
 
@@ -102,7 +102,7 @@ Draw with: procedural fallback glyph (circle + dot, scaled by tier) or pack spri
 
 Style tab addition: **"Settlements"** checkbox + density slider (filters by score threshold).
 
-### Stage 2 — POI icons from terrain analysis (medium scope)
+### ✅ Stage 2 — POI icons from terrain analysis (shipped in v0.138)
 
 Auto-place POI markers at notable terrain features, using existing computed fields:
 
@@ -120,7 +120,7 @@ New pure function: **`placePOIIcons(fld, flow, biome, waterBody, W, H, opts)`** 
 
 Style tab: **"POI markers"** checkbox + per-category mini-toggles (mountain peaks / lakes / caves / etc.).
 
-### Stage 3 — Icon controls in Style tab (UX, small scope)
+### ✅ Stage 3 — Icon controls in Style tab (shipped in v0.138)
 
 Replace the single `icons` checkbox with a proper **"Map symbols"** accordion:
 
@@ -141,7 +141,7 @@ poiTypes:      {mountain_peak:true, lake:true, cave:false, ...}
 
 All default to current behaviour (≡ bit-identical render when no pack loaded).
 
-### Stage 4 — Icons in LOD tiles and PNG bakes (completeness)
+### ✅ Stage 4 — Icons in LOD tiles and PNG bakes (LOD overlay shipped in v0.138; PNG bakes deferred)
 
 `renderBiomeTileRGBA` already has access to `bounds` (coarse-coord rect). Settlement and POI icon placement can be filtered to the tile's bounds, then drawn at full tile resolution. This gives icons in the exported region tiles and atlas PNGs — currently icons only appear in the on-screen overlay.
 
@@ -151,12 +151,12 @@ Implementation: pass `iconLists` (pre-computed from stages 1–2) into `renderBi
 
 ## 4. Recommended build order
 
-| Priority | Stage | Scope | Value |
-|----------|-------|-------|-------|
-| 1 | Stage 1 — settlement icons | ~200 lines | High — closes the compiler↔foundation gap, uses already-computed data |
-| 2 | Stage 3 — Style tab controls | ~80 lines HTML/JS | High — needed alongside Stage 1 to control density |
-| 3 | Stage 2 — POI icons | ~300 lines | Medium — terrain analysis is richer but needs tuning |
-| 4 | Stage 4 — LOD/bake icons | ~100 lines | Low — polish, needed only for export quality |
+| Priority | Stage | Status | Notes |
+|----------|-------|--------|-------|
+| 1 | Stage 1 — settlement icons | Deferred → unified tool P3 | Advisory seeds get "Promote" action at unification |
+| 2 | Stage 3 — Style tab controls | ✅ v0.138 | "Map symbols" accordion with density slider |
+| 3 | Stage 2 — POI icons | ✅ v0.138 | peaks/lakes/caves/shrines/landmarks from terrain analysis |
+| 4 | Stage 4 — LOD icon overlay | ✅ v0.138 (LOD); PNG bakes deferred | `drawIconsInView` wired into `drawLODView` |
 
 Stage 1 + Stage 3 together are the natural first PR (v0.138 of the elevation foundation). Stage 2 follows. Stage 4 is an export-quality follow-up.
 

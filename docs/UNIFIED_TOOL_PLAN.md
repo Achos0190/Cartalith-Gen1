@@ -52,6 +52,16 @@ Non-negotiable: the generator is usable as Cartalith's base map **and** external
 - **External** → `loadImage()` imports a grayscale / 16-bit-packed PNG / `.f32`; a loaded map can also become the world constraint for regional tile-refinement (see `docs/WORLD_REGIONAL_TILING_PLAN.md`).
 Neither path is privileged; the editor consumes whichever produced the heightmap.
 
+## Icon & POI integration
+
+The elevation foundation v0.138 ships Stages 2–4 of the icon expansion (`docs/research/map-icons-expansion.md`):
+
+- **Stage 2** — `placePOIIcons` auto-places five POI categories (peaks/lakes/caves/shrines/landmarks) from terrain analysis; `drawPOIIcons` renders procedural glyphs with asset-pack sprite fallback; `PACK_POI_SLOTS` frozen constant + `parsePackManifest`/`loadAssetPack` extended for POI sprites.
+- **Stage 3** — "Map symbols" Style-tab accordion: `iconsChk` (terrain) + `poiChk` master + five per-type sub-checkboxes + Icon density slider; new `state.viz.{poiIcons,iconDensity,poi_peak,poi_lake,poi_cave,poi_shrine,poi_landmark}` (all default off/1.0 → bit-identical at defaults).
+- **Stage 4** — `drawIconsInView(v)` filters + remaps both terrain and POI icon lists to the LOD world-viewport; wired into `drawLODView`.
+
+**Stage 1 (settlement icons) is deferred to P3** — at unification, the advisory `_settleSeeds` get a "Promote" action that converts them to actual `place[]` entries in v1.914's content layer, and settlement sprites from `PACK_SETTLEMENT_SLOTS` are wired at that point.
+
 ## Related plans
 - `docs/BIOME_AND_VISUALS_PLAN.md` — dual raster+paint-grid biome handoff; hybrid realistic/stylized visuals.
 - `docs/WORLD_REGIONAL_TILING_PLAN.md` — world↔regional, 16k tiling, fflate compression.

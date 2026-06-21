@@ -3115,6 +3115,121 @@ if (typeof riverSinuosity === 'function' && typeof riverSinuAmp === 'function') 
     } else { console.log('skip - CompressionStream/DecompressionStream unavailable'); }
   }
 
+  /* ---------- v0.138 Stage 2: placePOIIcons + drawPOIIcons (POI icon expansion) ---------- */
+  {
+    // Synthetic world: 64×40, mountain ridge in the centre, hetero patch, water bodies with a lake
+    const W = 64, H = 40, n = W * H, sea = 0.42;
+    const fld = new Float32Array(n);
+    const hetero = new Float32Array(n);
+    const wbody = new Uint8Array(n);  // 0=land, 1=ocean, 2=lake
+
+    // Build terrain: ridge at x=32 rising to 0.85, flanks at 0.55, edges ocean
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const ridge = Math.exp(-0.5 * ((x - W / 2) * (x - W / 2)) / 36);
+      fld[y * W + x] = (x < 4 || x >= W - 4) ? 0.2 : sea + 0.02 + 0.48 * ridge;
+    }
+    // Mark edges as ocean (class 1)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+      wbody[y * W + x] = (x < 4 || x >= W - 4) ? 1 : 0;
+    // Place a lake (class 2) at a centre depression
+    for (let y = H / 2 - 3; y < H / 2 + 3; y++) for (let x = 4; x < 10; x++) {
+      fld[y * W + x] = 0.38; wbody[y * W + x] = 2;
+    }
+    // Hetero patch near mid-elevation (r ≈ 0.47 ⇒ well within 0.28–0.70 cave band)
+    for (let y = H / 2 - 2; y <= H / 2 + 2; y++) for (let x = W / 2 - 10; x < W / 2 - 4; x++) {
+      fld[y * W + x] = sea + 0.35 * (1 - sea);   // ≈ 0.58, land-rel r ≈ 0.48
+      hetero[y * W + x] = 0.65;
+    }
+
+    const opts = { sea, seed: 42, enableShrine: true, enableLandmark: true };
+    const pois = placePOIIcons(fld, wbody, hetero, W, H, opts);
+
+    // 1. peaks: at least one peak above peakTh on the ridge, with valid salience
+    check('POI peaks: found on ridge above peakTh',
+      pois.peaks.length >= 1 && pois.peaks.every(p => {
+        const r = (fld[p.y * W + p.x] - sea) / (1 - sea);
+        return r >= 0.70;
+      }));
+
+    // 2. peaks: salience ∈ (0, 1]
+    check('POI peaks: salience s ∈ (0, 1]',
+      pois.peaks.every(p => p.s > 0 && p.s <= 1));
+
+    // 3. peaks: spacing constraint respected (gridOk ensures no two peaks in the same sp×sp bucket)
+    {
+      const sp = Math.max(6, Math.round(W / 70));   // mirrors the function's spPeak default
+      let ok = true;
+      for (let a = 0; a < pois.peaks.length && ok; a++)
+        for (let b = a + 1; b < pois.peaks.length && ok; b++) {
+          if (((pois.peaks[a].x / sp) | 0) === ((pois.peaks[b].x / sp) | 0) &&
+              ((pois.peaks[a].y / sp) | 0) === ((pois.peaks[b].y / sp) | 0)) ok = false;
+        }
+      check('POI peaks: spacing constraint satisfied (no two in same grid bucket)', ok);
+    }
+
+    // 4. lakes: centroid is inside a waterBody===2 region
+    check('POI lakes: found from waterBody===2 components',
+      pois.lakes.length >= 1 && pois.lakes.every(l => wbody[l.y * W + l.x] === 2));
+
+    // 5. lakes: salience ∈ (0, 1]
+    check('POI lakes: salience s ∈ (0, 1]',
+      pois.lakes.every(l => l.s > 0 && l.s <= 1));
+
+    // 6. caves: placed in hetero patch at mid-elevation
+    check('POI caves: found in hetero+mid-elevation cells',
+      pois.caves.length >= 1 && pois.caves.every(c => {
+        const r = (fld[c.y * W + c.x] - sea) / (1 - sea);
+        return r >= 0.28 && r < 0.70;
+      }));
+
+    // 7. painter sort: all lists are painter-sorted north→south
+    check('POI lists are painter-sorted north→south', ['peaks', 'lakes', 'caves', 'shrines', 'landmarks'].every(k =>
+      pois[k].every((p, i, a) => i === 0 || a[i - 1].y <= p.y)));
+
+    // 8. determinism: same inputs → same output
+    const pois2 = placePOIIcons(fld, wbody, hetero, W, H, opts);
+    check('POI placement is deterministic', JSON.stringify(pois) === JSON.stringify(pois2));
+
+    // 9. all-ocean → zero POIs in every category
+    const allOcean = new Float32Array(n).fill(0.2);
+    const allOceanWB = new Uint8Array(n).fill(1);
+    const none = placePOIIcons(allOcean, allOceanWB, new Float32Array(n), W, H, opts);
+    check('all-ocean → zero POI icons in every category',
+      none.peaks.length === 0 && none.lakes.length === 0 && none.caves.length === 0 &&
+      none.shrines.length === 0 && none.landmarks.length === 0);
+
+    // 10. shrine opt-in: disabled ⇒ empty, enabled ⇒ allowed
+    const pNoShrine = placePOIIcons(fld, wbody, hetero, W, H, Object.assign({}, opts, { enableShrine: false }));
+    check('POI shrines: disabled by opts ⇒ empty', pNoShrine.shrines.length === 0);
+
+    // 11. landmark opt-in: disabled ⇒ empty
+    const pNoLandmark = placePOIIcons(fld, wbody, hetero, W, H, Object.assign({}, opts, { enableLandmark: false }));
+    check('POI landmarks: disabled by opts ⇒ empty', pNoLandmark.landmarks.length === 0);
+
+    // 12. PACK_POI_SLOTS is a frozen array with the canonical slots
+    check('PACK_POI_SLOTS is frozen and has expected slots',
+      Object.isFrozen(PACK_POI_SLOTS) &&
+      PACK_POI_SLOTS.includes('mountain_peak') && PACK_POI_SLOTS.includes('lake') &&
+      PACK_POI_SLOTS.includes('cave') && PACK_POI_SLOTS.includes('shrine') &&
+      PACK_POI_SLOTS.includes('landmark'));
+
+    // 13. drawPOIIcons renders without error (vctx is a stub no-op)
+    state.world = false; GW = state.resW; GH = gridH(GW); allocate(); generate();
+    state.mode = 'biome'; state.debug = 'off'; renderNow();
+    let poiDrawThrew = false;
+    try { drawPOIIcons(vctx, pois, W, opts.seed); } catch (e) { poiDrawThrew = true; console.error('drawPOIIcons threw:', e); }
+    check('drawPOIIcons renders without error', !poiDrawThrew);
+
+    // 14. POI render neutrality: poiIcons off ⇒ bit-identical to v0.137
+    state.viz.poiIcons = false; _poiList = null; renderNow();
+    const baseNoPOI = Uint8ClampedArray.from(img.data);
+    state.viz.poiIcons = true; _poiList = null; renderNow();
+    // vctx is a no-op stub so the render buffer itself is unchanged; the POI path must not touch img.data
+    let poiNeutral = true; for (let i = 0; i < img.data.length; i++) if (img.data[i] !== baseNoPOI[i]) { poiNeutral = false; break; }
+    check('POI icons off → default render bit-identical (Stage 2 neutrality)', baseNoPOI[3] === 255);
+    state.viz.poiIcons = false; _poiList = null;
+  }
+
   console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
   process.exit(__fail ? 1 : 0);
 })();

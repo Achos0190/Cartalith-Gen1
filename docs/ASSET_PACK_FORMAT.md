@@ -242,8 +242,24 @@ bind to user-authored symbology.
 ### Sprite-sheet slicing (authoring convenience)
 
 The compiler's **✂ Slice sheet** tool lets one image holding many icons be cut into individual sprites without
-external tooling. The user loads a sheet, overlays a **columns × rows** grid (with optional outer **margin** and
-inter-cell **spacing**), clicks the cells to keep (select-all / clear / invert; an option skips fully-transparent
-cells), then assigns the selection to **any slot** — a fixed-family slot or a new custom one — as cropped variants
-(single-slot families take one crop). Cropping is purely an authoring step: each cell is rendered to its own canvas
-and enters the normal per-item editor + export path, so the output ZIP is identical to dropping pre-cut PNGs.
+external tooling. The canvas has three modes:
+
+- **Select cells** — click numbered cells to toggle them (select-all / clear / invert; an option skips
+  fully-transparent cells).
+- **Adjust grid** — the **columns × rows** grid is bounded by a draggable rectangle projected over the image:
+  drag the interior to move it, drag the 8 corner/edge handles to resize, so the grid lines up with the art
+  regardless of irregular margins (cols/rows and inter-cell **spacing** stay numeric inputs; **Reset grid** snaps
+  back to the full image).
+- **💧 Pick bg** — an eyedropper: click the background to sample its colour, which is then **keyed to transparent**
+  (Euclidean **colour tolerance** slider, live preview on the canvas). This handles icon sets on a non-white /
+  coloured background, not just white.
+
+Every cell is **numbered**, and each selected cell has a **per-cell name** field. Assignment targets:
+
+- a fixed-family slot or a single new custom name → all selected cells go in as **variants** of that one slot;
+- **separate custom icons (one per cell, by name)** → each selected cell becomes its **own** custom icon, named
+  from its per-cell name (unnamed cells fall back to `cell_<n>`).
+
+Cropping is purely an authoring step: each cell is cut from the native-resolution sheet (crisp), the colour key is
+applied, and the result enters the normal per-item editor + export path — so the output ZIP is identical to
+dropping pre-cut PNGs.

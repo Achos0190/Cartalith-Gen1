@@ -233,14 +233,39 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 .slice-canvas-wrap{
   background:conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px;
   border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:64vh;
-  display:flex;align-items:center;justify-content:center;padding:10px}
-#sliceCanvas{cursor:crosshair;display:block;max-width:100%;image-rendering:pixelated}
+  display:flex;align-items:center;justify-content:center;padding:10px;touch-action:none}
+#sliceCanvas{cursor:pointer;display:block;max-width:100%;image-rendering:pixelated;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}
+#sliceCanvas.mode-grid{cursor:move}
+#sliceCanvas.mode-pick{cursor:crosshair}
+.slbg{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--txt-dim)}
+.slbg button{width:24px;height:24px;padding:0;border-radius:5px;border:1px solid var(--line)}
+.slbg button.on{box-shadow:0 0 0 2px var(--accent)}
 .slice-controls{display:flex;flex-direction:column;gap:14px}
 .slice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .slice-sel-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .slice-sel-row .slcount{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--txt-faint)}
 .chk{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--txt-dim);cursor:pointer}
 .chk input{accent-color:var(--accent)}
+/* slicer: mode segmented control, colour sampler, per-cell names */
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;border:0;border-radius:0;background:var(--panel-2);padding:7px 6px;font-size:11.5px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:#fff}
+.seg button:hover:not(.on){background:#2b3346}
+.slice-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.chroma-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.swatch{width:24px;height:24px;border-radius:5px;border:1px solid var(--line);flex:none;
+  background:conic-gradient(#bbb 25%,#888 0 50%,#bbb 0 75%,#888 0) 0 0/10px 10px}
+.swatch i{display:block;width:100%;height:100%;border-radius:4px;background:#fff}
+.cellnames{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow:auto;
+  border:1px solid var(--line);border-radius:7px;padding:8px}
+.cellnames .cn{display:flex;gap:7px;align-items:center}
+.cellnames .cn .n{font-family:var(--mono);font-size:11px;color:var(--txt-faint);min-width:28px;text-align:right}
+.cellnames .cn input{flex:1;background:var(--panel-2);color:var(--txt);border:1px solid var(--line);
+  border-radius:6px;padding:5px 8px;font:inherit;font-size:12px}
+.cellnames .cn input:focus{outline:none;border-color:var(--accent)}
+.cellnames .empty{font-size:11.5px;color:var(--txt-faint)}
 </style>
 </head>
 <body>
@@ -336,29 +361,51 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
         <div class="slice-canvas-wrap" id="slCanvasWrap" style="display:none">
           <canvas id="sliceCanvas"></canvas>
         </div>
+        <div class="slbg" id="slBg" style="display:none">
+          <span>Preview behind transparency:</span>
+          <button data-bg="checker" class="on" title="Checker" style="background:conic-gradient(#bbb 25%,#888 0 50%,#bbb 0 75%,#888 0) 0 0/10px 10px"></button>
+          <button data-bg="#ffffff" title="White" style="background:#ffffff"></button>
+          <button data-bg="#000000" title="Black" style="background:#000000"></button>
+          <button data-bg="#e23b3b" title="Red" style="background:#e23b3b"></button>
+          <button data-bg="#3bbf5a" title="Green" style="background:#3bbf5a"></button>
+          <button data-bg="#3b6fe2" title="Blue" style="background:#3b6fe2"></button>
+        </div>
       </div>
       <div class="slice-controls">
-        <div class="slice-grid">
+        <div class="seg" id="sliceMode">
+          <button data-m="select" class="on">Select cells</button>
+          <button data-m="grid">Adjust grid</button>
+          <button data-m="pick">💧 Pick bg</button>
+        </div>
+        <div class="slice-grid3">
           <div class="field"><label for="slCols">Columns</label>
             <input id="slCols" type="number" min="1" max="128" value="4"></div>
           <div class="field"><label for="slRows">Rows</label>
             <input id="slRows" type="number" min="1" max="128" value="4"></div>
-          <div class="field"><label for="slMargin">Margin px</label>
-            <input id="slMargin" type="number" min="0" value="0"></div>
           <div class="field"><label for="slSpacing">Spacing px</label>
             <input id="slSpacing" type="number" min="0" value="0"></div>
         </div>
+        <button class="ghost tiny" id="slReset">Reset grid to full image</button>
         <div class="slice-sel-row">
           <button class="ghost tiny" id="slAll">Select all</button>
           <button class="ghost tiny" id="slNone">Clear</button>
           <button class="ghost tiny" id="slInvert">Invert</button>
           <span class="slcount" id="slCount">0 selected</span>
         </div>
+        <div class="chroma-row">
+          <label class="chk"><input type="checkbox" id="chEnable"> background → transparent</label>
+          <span class="swatch" id="chSwatch"><i></i></span>
+          <button class="ghost tiny" id="chClear">clear</button>
+        </div>
+        <div class="field"><label for="chTol">Colour tolerance <span class="slcount" id="chTolV" style="margin:0">40</span></label>
+          <input type="range" id="chTol" min="0" max="150" value="40"></div>
         <label class="chk"><input type="checkbox" id="slSkipBlank" checked> skip fully-transparent cells</label>
         <div class="field"><label for="sliceTarget">Add selected cells to…</label>
           <select id="sliceTarget"></select></div>
         <div class="field"><label for="sliceNewName">…or type a new custom-icon name</label>
           <input id="sliceNewName" type="text" placeholder="e.g. windmill" spellcheck="false"></div>
+        <div class="field"><label>Per-cell names <span class="slcount" id="cnHint" style="margin:0"></span></label>
+          <div class="cellnames" id="cellNames"><div class="empty">Select cells to name them — used when the target is “separate custom icons”.</div></div></div>
         <div class="editor-info" id="slInfo">Load a sheet, set the grid, then click cells to select.</div>
         <div class="editor-actions">
           <button class="primary" id="slAdd">Add selected cells →</button>
@@ -899,34 +946,85 @@ function toast(msg, kind){
 }
 
 /* ====================================================================
-   Slice sprite sheet — load one image of many icons, overlay a
-   columns × rows grid, select cells, crop them into any slot.
+   Slice sprite sheet — load one image of many icons, overlay an
+   adjustable columns × rows grid (drag to reshape), key out a sampled
+   background colour, number + name cells, and crop them into slots.
    ==================================================================== */
-let sheet = null;            // {img, w, h, name}
+let sheet = null;            // {img, cv, ctx, w, h, name}  (cv/ctx = native offscreen for sampling + crisp crops)
 let slCells = [];            // current cell rects in SOURCE pixels
 let slScale = 1;             // source→display scale of #sliceCanvas
+let gridRect = null;         // {x,y,w,h} grid bounds in SOURCE px (draggable)
+let sliceMode = 'select';    // 'select' | 'grid' | 'pick'
+let pdrag = null;            // pointer-drag state
 const slSel = new Set();     // selected cell indices
+const cellNames = {};        // idx → user name
+const chroma = {enabled:false, color:[255,255,255], tol:40};   // colour-key (background→transparent)
 
 function clampInt(v, lo, hi){ v = parseInt(v,10); if(!isFinite(v)) v = lo; return Math.max(lo, Math.min(hi, v)); }
+function evToSrc(e){
+  const cv = $('sliceCanvas'), r = cv.getBoundingClientRect();
+  return { sx:(e.clientX-r.left)*(cv.width/r.width)/slScale,
+           sy:(e.clientY-r.top) *(cv.height/r.height)/slScale };
+}
 
 function computeCells(){
   const cols = clampInt($('slCols').value,1,128), rows = clampInt($('slRows').value,1,128);
-  const m = Math.max(0, parseFloat($('slMargin').value)||0);
   const g = Math.max(0, parseFloat($('slSpacing').value)||0);
-  const cw = (sheet.w - 2*m - (cols-1)*g)/cols;
-  const ch = (sheet.h - 2*m - (rows-1)*g)/rows;
+  const R = gridRect;
+  const cw = (R.w - (cols-1)*g)/cols;
+  const ch = (R.h - (rows-1)*g)/rows;
   const cells = [];
   for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
-    cells.push({c, r, idx:r*cols+c, x:m+c*(cw+g), y:m+r*(ch+g), w:cw, h:ch});
+    cells.push({c, r, idx:r*cols+c, x:R.x+c*(cw+g), y:R.y+r*(ch+g), w:cw, h:ch});
   return {cells, cw, ch};
+}
+
+/* knock out the keyed colour (alpha→0 within tolerance), in place */
+function applyChroma(ctx, w, h){
+  const im = ctx.getImageData(0,0,w,h), a = im.data;
+  const [cr,cg,cb] = chroma.color, t2 = chroma.tol*chroma.tol;
+  for(let i=0;i<a.length;i+=4){
+    if(a[i+3]===0) continue;
+    const dr=a[i]-cr, dg=a[i+1]-cg, db=a[i+2]-cb;
+    if(dr*dr+dg*dg+db*db <= t2) a[i+3]=0;
+  }
+  ctx.putImageData(im,0,0);
+}
+
+function handlePoints(){
+  const r = gridRect, mx = r.x+r.w/2, my = r.y+r.h/2;
+  return {nw:{x:r.x,y:r.y}, n:{x:mx,y:r.y}, ne:{x:r.x+r.w,y:r.y},
+          w:{x:r.x,y:my}, e:{x:r.x+r.w,y:my},
+          sw:{x:r.x,y:r.y+r.h}, s:{x:mx,y:r.y+r.h}, se:{x:r.x+r.w,y:r.y+r.h}};
+}
+function hitHandle(sx, sy, tolPx){
+  const t = (tolPx||11)/slScale, pts = handlePoints();
+  for(const k in pts){ if(Math.abs(sx-pts[k].x)<=t && Math.abs(sy-pts[k].y)<=t) return k; }
+  const r = gridRect;
+  if(sx>r.x && sx<r.x+r.w && sy>r.y && sy<r.y+r.h) return 'move';
+  return null;
+}
+function applyDrag(handle, dx, dy, o){
+  let {x,y,w,h} = o; const MIN = 8;
+  if(handle==='move'){ x = o.x+dx; y = o.y+dy; }
+  else {
+    if(handle.indexOf('w')>=0){ x = o.x+dx; w = o.w-dx; }
+    if(handle.indexOf('e')>=0){ w = o.w+dx; }
+    if(handle.indexOf('n')>=0){ y = o.y+dy; h = o.h-dy; }
+    if(handle.indexOf('s')>=0){ h = o.h+dy; }
+  }
+  if(w<MIN){ if(handle.indexOf('w')>=0) x = o.x+o.w-MIN; w = MIN; }
+  if(h<MIN){ if(handle.indexOf('n')>=0) y = o.y+o.h-MIN; h = MIN; }
+  x = Math.max(0, Math.min(x, sheet.w-MIN)); y = Math.max(0, Math.min(y, sheet.h-MIN));
+  w = Math.min(w, sheet.w-x); h = Math.min(h, sheet.h-y);
+  gridRect = {x,y,w,h};
 }
 
 function drawSliceGrid(){
   if(!sheet) return;
   const {cells, cw, ch} = computeCells();
   slCells = cells;
-  if(cw<=0 || ch<=0){ $('slInfo').textContent = 'Grid too dense for this margin/spacing — reduce cols/rows or margins.'; return; }
-  const maxW = 740, maxH = Math.max(240, Math.round(window.innerHeight*0.62));
+  const maxW = 740, maxH = Math.max(240, Math.round(window.innerHeight*0.6));
   let scale = Math.min(maxW/sheet.w, maxH/sheet.h, 8);
   if(!isFinite(scale) || scale<=0) scale = 1;
   slScale = scale;
@@ -936,28 +1034,74 @@ function drawSliceGrid(){
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0,0,cv.width,cv.height);
   ctx.drawImage(sheet.img, 0,0, cv.width, cv.height);
+  if(chroma.enabled) applyChroma(ctx, cv.width, cv.height);     // live transparency preview
   ctx.lineWidth = 1;
-  for(const cell of slCells){
-    const x=cell.x*scale, y=cell.y*scale, w=cell.w*scale, h=cell.h*scale;
-    if(slSel.has(cell.idx)){
-      ctx.fillStyle = 'rgba(91,140,255,.32)'; ctx.fillRect(x,y,w,h);
-      ctx.strokeStyle = 'rgba(140,180,255,.95)';
-    } else { ctx.strokeStyle = 'rgba(255,255,255,.32)'; }
-    ctx.strokeRect(x+.5, y+.5, Math.max(0,w-1), Math.max(0,h-1));
+  if(cw>0 && ch>0){
+    for(const cell of slCells){
+      const x=cell.x*scale, y=cell.y*scale, w=cell.w*scale, h=cell.h*scale;
+      if(slSel.has(cell.idx)){
+        ctx.fillStyle = 'rgba(91,140,255,.32)'; ctx.fillRect(x,y,w,h);
+        ctx.strokeStyle = 'rgba(120,180,255,.95)';            // selected = blue, pops against the red grid
+      } else ctx.strokeStyle = 'rgba(255,55,55,.7)';          // grid lines = red
+      ctx.strokeRect(x+.5, y+.5, Math.max(0,w-1), Math.max(0,h-1));
+      if(w>14 && h>12){                                          // cell number
+        const lbl = String(cell.idx+1), fs = Math.max(9, Math.min(13, h*0.32));
+        ctx.font = `600 ${fs}px ui-monospace,monospace`; ctx.textBaseline = 'top';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(lbl, x+3, y+2);
+        ctx.fillStyle = slSel.has(cell.idx) ? '#dce6ff' : 'rgba(255,255,255,.92)'; ctx.fillText(lbl, x+3, y+2);
+        ctx.lineWidth = 1;
+      }
+    }
   }
+  const R = gridRect;                                            // grid bounds + handles (red)
+  ctx.strokeStyle = 'rgba(255,40,40,.95)'; ctx.lineWidth = 2;
+  ctx.strokeRect(R.x*scale+1, R.y*scale+1, R.w*scale-2, R.h*scale-2);
+  if(sliceMode==='grid'){
+    const pts = handlePoints(), hs = 6;                          // larger handles, white-ringed for touch
+    for(const k in pts){
+      const hx = pts[k].x*scale, hy = pts[k].y*scale;
+      ctx.fillStyle = '#fff'; ctx.fillRect(hx-hs-1, hy-hs-1, (hs+1)*2, (hs+1)*2);
+      ctx.fillStyle = '#ff2d2d'; ctx.fillRect(hx-hs, hy-hs, hs*2, hs*2);
+    }
+  }
+  ctx.lineWidth = 1;
   $('slCount').textContent = slSel.size + ' selected';
-  $('slInfo').textContent = `${sheet.name} — ${sheet.w}×${sheet.h}px · ${slCells.length} cells (~${Math.round(cw)}×${Math.round(ch)}px each)`;
+  $('slInfo').textContent = (cw>0 && ch>0)
+    ? `${sheet.name} — ${sheet.w}×${sheet.h}px · ${slCells.length} cells (~${Math.round(cw)}×${Math.round(ch)}px)`
+    : 'Grid too dense — reduce columns/rows or spacing.';
 }
 
-function sliceCanvasClick(e){
-  if(!sheet) return;
-  const cv = e.currentTarget, rect = cv.getBoundingClientRect();
-  const px = (e.clientX-rect.left) * (cv.width/rect.width) / slScale;
-  const py = (e.clientY-rect.top)  * (cv.height/rect.height) / slScale;
-  const cell = slCells.find(c => px>=c.x && px<c.x+c.w && py>=c.y && py<c.y+c.h);
-  if(!cell) return;
-  if(slSel.has(cell.idx)) slSel.delete(cell.idx); else slSel.add(cell.idx);
-  drawSliceGrid();
+function afterSelChange(){ drawSliceGrid(); renderCellNames(); }
+
+function renderCellNames(){
+  const box = $('cellNames'); if(!box) return;
+  const idxs = [...slSel].sort((a,b)=>a-b);
+  $('cnHint').textContent = idxs.length ? `${idxs.length} cell${idxs.length!==1?'s':''}` : '';
+  if(!idxs.length){ box.innerHTML = '<div class="empty">Select cells to name them — used when the target is “separate custom icons”.</div>'; return; }
+  box.innerHTML = '';
+  for(const idx of idxs){
+    const row = document.createElement('div'); row.className = 'cn';
+    row.innerHTML = `<span class="n">#${idx+1}</span><input type="text" placeholder="name (optional)" spellcheck="false">`;
+    const inp = row.querySelector('input');
+    inp.value = cellNames[idx] || '';
+    inp.addEventListener('input', () => { const v = inp.value.trim(); if(v) cellNames[idx]=v; else delete cellNames[idx]; });
+    box.appendChild(row);
+  }
+}
+
+function sampleColorAt(sx, sy){
+  const x = Math.max(0, Math.min(sheet.w-1, Math.floor(sx)));
+  const y = Math.max(0, Math.min(sheet.h-1, Math.floor(sy)));
+  const p = sheet.ctx.getImageData(x, y, 1, 1).data;
+  chroma.color = [p[0], p[1], p[2]];
+  chroma.enabled = true; $('chEnable').checked = true;
+  updateSwatch(); drawSliceGrid();
+  toast(`Keyed colour rgb(${p[0]},${p[1]},${p[2]}) → transparent.`, 'ok');
+}
+function updateSwatch(){
+  const i = $('chSwatch').querySelector('i');
+  i.style.background = `rgb(${chroma.color[0]},${chroma.color[1]},${chroma.color[2]})`;
+  i.style.opacity = chroma.enabled ? '1' : '.25';
 }
 
 function isBlankCanvas(ctx, w, h){
@@ -965,41 +1109,62 @@ function isBlankCanvas(ctx, w, h){
   for(let i=3;i<d.length;i+=4) if(d[i]>8) return false;
   return true;
 }
+/* crop one cell from the native sheet (crisp) + apply the colour key */
+function cropCell(cell){
+  const sx = Math.max(0, Math.round(cell.x)), sy = Math.max(0, Math.round(cell.y));
+  const sw = Math.max(1, Math.round(cell.w)), sh = Math.max(1, Math.round(cell.h));
+  const cc = document.createElement('canvas'); cc.width = sw; cc.height = sh;
+  const cx = cc.getContext('2d', {willReadFrequently:true});
+  cx.drawImage(sheet.cv, sx, sy, sw, sh, 0, 0, sw, sh);
+  if(chroma.enabled) applyChroma(cx, sw, sh);
+  return cc;
+}
 
 function addSlices(){
   if(!sheet){ toast('Load a sprite sheet first.', 'warn'); return; }
-  if(!slSel.size){ toast('Click at least one cell to select it.', 'warn'); return; }
-  // resolve target: a typed custom name wins; else the dropdown selection
-  let uid = null;
+  if(!slSel.size){ toast('Select at least one cell.', 'warn'); return; }
+  const tgt = $('sliceTarget').value;
   const newName = $('sliceNewName').value.trim();
-  if(newName){
-    uid = addCustomSlot(FAMILIES.find(f => f.custom), newName).uid;
-  } else {
-    uid = $('sliceTarget').value;
-    if(!uid || uid==='__new__'){ toast('Pick a target slot, or type a new custom-icon name.', 'warn'); return; }
-  }
-  const {fam, slot} = SLOT_REG[uid];
   const skipBlank = $('slSkipBlank').checked;
   const idxs = [...slSel].sort((a,b)=>a-b);
-  let added = 0, skipped = 0;
-  for(const idx of idxs){
-    const cell = slCells.find(c => c.idx===idx); if(!cell) continue;
-    const sx = Math.round(cell.x), sy = Math.round(cell.y);
-    const sw = Math.max(1, Math.round(cell.w)), sh = Math.max(1, Math.round(cell.h));
-    const cc = document.createElement('canvas'); cc.width = sw; cc.height = sh;
-    const cx = cc.getContext('2d');
-    cx.drawImage(sheet.img, sx, sy, sw, sh, 0, 0, sw, sh);
-    if(skipBlank && isBlankCanvas(cx, sw, sh)){ skipped++; continue; }
-    const base = sheet.name.replace(/\.[^.]+$/,'');
-    const item = {name:`${base}_r${cell.r+1}c${cell.c+1}`, img:cc, w:sw, h:sh, t:defaultTransform()};
-    if(fam.anchor==='bottom') fitToBottom(item, fam.size);
-    if(fam.multi){ store[uid].push(item); added++; }
-    else { store[uid] = [item]; added++; break; }   // single-slot families take one crop
+  const custFam = FAMILIES.find(f => f.custom);
+  const base = sheet.name.replace(/\.[^.]+$/,'');
+
+  if(tgt==='__percell__'){          // one custom icon per cell, named per the list
+    let made = 0, skipped = 0;
+    for(const idx of idxs){
+      const cell = slCells.find(c => c.idx===idx); if(!cell) continue;
+      const cc = cropCell(cell);
+      if(skipBlank && isBlankCanvas(cc.getContext('2d'), cc.width, cc.height)){ skipped++; continue; }
+      const nm = cellNames[idx] || `cell ${idx+1}`;
+      const slot = addCustomSlot(custFam, nm);
+      store[slot.uid].push({name:nm, img:cc, w:cc.width, h:cc.height, t:defaultTransform()});
+      renderThumbs(slot.uid); made++;
+    }
+    toast(`Created ${made} custom icon${made!==1?'s':''}${skipped?` (${skipped} blank skipped)`:''}.`, made?'ok':'warn');
+  } else {                          // all selected cells → one slot, as variants
+    let uid;
+    if(newName) uid = addCustomSlot(custFam, newName).uid;
+    else { uid = tgt; if(!uid || uid==='__new__'){ toast('Pick a target slot, type a new name, or choose “separate custom icons”.', 'warn'); return; } }
+    const {fam, slot} = SLOT_REG[uid];
+    let added = 0, skipped = 0;
+    for(const idx of idxs){
+      const cell = slCells.find(c => c.idx===idx); if(!cell) continue;
+      const cc = cropCell(cell);
+      if(skipBlank && isBlankCanvas(cc.getContext('2d'), cc.width, cc.height)){ skipped++; continue; }
+      const nm = cellNames[idx] || `${base}_r${cell.r+1}c${cell.c+1}`;
+      const item = {name:nm, img:cc, w:cc.width, h:cc.height, t:defaultTransform()};
+      if(fam.anchor==='bottom') fitToBottom(item, fam.size);
+      if(fam.multi){ store[uid].push(item); added++; }
+      else { store[uid] = [item]; added++; break; }
+    }
+    renderThumbs(uid);
+    toast(`Added ${added} cell${added!==1?'s':''}${skipped?` (${skipped} blank skipped)`:''} → ${slot.name}.`, added?'ok':'warn');
   }
-  renderThumbs(uid);
-  toast(`Added ${added} cell${added!==1?'s':''}${skipped?` (${skipped} blank skipped)`:''} → ${slot.name}.`,
-        added ? 'ok' : 'warn');
-  slSel.clear(); $('sliceNewName').value = ''; drawSliceGrid();
+  slSel.clear();
+  for(const k in cellNames) delete cellNames[k];
+  $('sliceNewName').value = '';
+  afterSelChange();
 }
 
 function loadSheet(file){
@@ -1010,13 +1175,30 @@ function loadSheet(file){
   const url = URL.createObjectURL(file);
   const img = new Image();
   img.onload = () => {
-    sheet = {img, w:img.naturalWidth||1, h:img.naturalHeight||1, name:file.name};
+    const w = img.naturalWidth||1, h = img.naturalHeight||1;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const cx = cv.getContext('2d', {willReadFrequently:true});
+    cx.imageSmoothingEnabled = false; cx.drawImage(img, 0, 0);
+    sheet = {img, cv, ctx:cx, w, h, name:file.name};
+    gridRect = {x:0, y:0, w, h};
     slSel.clear();
+    for(const k in cellNames) delete cellNames[k];
+    setMode('select');
     $('slCanvasWrap').style.display = 'flex';
-    drawSliceGrid();
+    $('slBg').style.display = 'flex';
+    afterSelChange();
   };
   img.onerror = () => { URL.revokeObjectURL(url); toast('Could not decode that image.', 'err'); };
   img.src = url;
+}
+
+function setMode(m){
+  sliceMode = m;
+  [...$('sliceMode').children].forEach(b => b.classList.toggle('on', b.dataset.m===m));
+  const cv = $('sliceCanvas');
+  cv.classList.toggle('mode-grid', m==='grid');
+  cv.classList.toggle('mode-pick', m==='pick');
+  if(sheet) drawSliceGrid();
 }
 
 /* rebuild the slice-target dropdown from every non-empty family */
@@ -1027,6 +1209,9 @@ function refreshTargetOptions(){
   const optNew = document.createElement('option');
   optNew.value = '__new__'; optNew.textContent = '➕ new custom icon (type a name below)';
   sel.appendChild(optNew);
+  const optPC = document.createElement('option');
+  optPC.value = '__percell__'; optPC.textContent = '➕ separate custom icons (one per cell, by name)';
+  sel.appendChild(optPC);
   for(const fam of FAMILIES){
     if(!fam.slots.length) continue;
     const og = document.createElement('optgroup'); og.label = fam.title;
@@ -1061,16 +1246,70 @@ $('slDrop').addEventListener('dragover', e => { e.preventDefault(); $('slDrop').
 $('slDrop').addEventListener('dragleave', () => $('slDrop').classList.remove('over'));
 $('slDrop').addEventListener('drop', e => { e.preventDefault(); $('slDrop').classList.remove('over'); loadSheet(e.dataTransfer.files[0]); });
 $('sheetPicker').addEventListener('change', e => { loadSheet(e.target.files[0]); e.target.value=''; });
-['slCols','slRows','slMargin','slSpacing'].forEach(id =>
-  $(id).addEventListener('input', () => { slSel.clear(); drawSliceGrid(); }));
-$('slAll').addEventListener('click', () => { slCells.forEach(c => slSel.add(c.idx)); drawSliceGrid(); });
-$('slNone').addEventListener('click', () => { slSel.clear(); drawSliceGrid(); });
+// changing cols/rows remaps cell indices → clear selection + names; spacing only reflows
+['slCols','slRows'].forEach(id =>
+  $(id).addEventListener('input', () => { slSel.clear(); for(const k in cellNames) delete cellNames[k]; afterSelChange(); }));
+$('slSpacing').addEventListener('input', () => drawSliceGrid());
+$('slReset').addEventListener('click', () => { if(!sheet) return; gridRect = {x:0,y:0,w:sheet.w,h:sheet.h}; drawSliceGrid(); });
+$('slAll').addEventListener('click', () => { slCells.forEach(c => slSel.add(c.idx)); afterSelChange(); });
+$('slNone').addEventListener('click', () => { slSel.clear(); afterSelChange(); });
 $('slInvert').addEventListener('click', () => {
   const inv = new Set(); slCells.forEach(c => { if(!slSel.has(c.idx)) inv.add(c.idx); });
-  slSel.clear(); inv.forEach(i => slSel.add(i)); drawSliceGrid();
+  slSel.clear(); inv.forEach(i => slSel.add(i)); afterSelChange();
 });
-$('sliceCanvas').addEventListener('click', sliceCanvasClick);
+// mode segmented control
+[...$('sliceMode').children].forEach(b => b.addEventListener('click', () => setMode(b.dataset.m)));
+// colour-key controls
+$('chEnable').addEventListener('change', e => { chroma.enabled = e.target.checked; updateSwatch(); drawSliceGrid(); });
+$('chClear').addEventListener('click', () => { chroma.enabled = false; $('chEnable').checked = false; updateSwatch(); drawSliceGrid(); });
+$('chTol').addEventListener('input', e => { chroma.tol = parseInt(e.target.value,10)||0; $('chTolV').textContent = chroma.tol; if(chroma.enabled) drawSliceGrid(); });
+// background-preview swatches (verify the transparency layer against any colour)
+function setPreviewBg(bg, btn){
+  $('slCanvasWrap').style.background = (bg==='checker')
+    ? 'conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px' : bg;
+  [...$('slBg').querySelectorAll('button')].forEach(b => b.classList.toggle('on', b===btn));
+}
+[...$('slBg').querySelectorAll('button')].forEach(b =>
+  b.addEventListener('click', () => setPreviewBg(b.dataset.bg, b)));
+
+// canvas pointer: drag grid (grid mode), sample colour (pick mode), toggle cell (select mode)
+// pointer events + touch-action:none give a single smooth drag on touchscreens (no page scroll,
+// no long-press copy/callout); pointer capture keeps the gesture even if it leaves the canvas.
+const slCv = $('sliceCanvas');
+slCv.addEventListener('contextmenu', e => e.preventDefault());   // kill long-press menu on touch
+slCv.addEventListener('pointerdown', e => {
+  if(!sheet) return;
+  e.preventDefault();
+  const {sx,sy} = evToSrc(e);
+  if(sliceMode==='pick'){ sampleColorAt(sx,sy); setMode('select'); return; }
+  if(sliceMode==='grid'){
+    const tol = e.pointerType==='touch' ? 26 : 11;
+    const hh = hitHandle(sx,sy,tol);
+    if(hh){ pdrag = {handle:hh, startX:sx, startY:sy, orig:{...gridRect}}; slCv.setPointerCapture(e.pointerId); }
+    return;
+  }
+  pdrag = {handle:null, startX:sx, startY:sy};   // select mode → resolved on pointerup
+  slCv.setPointerCapture(e.pointerId);
+});
+slCv.addEventListener('pointermove', e => {
+  if(!pdrag || !pdrag.handle || !sheet) return;
+  e.preventDefault();
+  const {sx,sy} = evToSrc(e);
+  applyDrag(pdrag.handle, sx-pdrag.startX, sy-pdrag.startY, pdrag.orig);
+  drawSliceGrid();
+});
+function endPointer(e){
+  if(pdrag && !pdrag.handle && sheet){
+    const {sx,sy} = evToSrc(e);
+    const cell = slCells.find(c => sx>=c.x && sx<c.x+c.w && sy>=c.y && sy<c.y+c.h);
+    if(cell){ if(slSel.has(cell.idx)) slSel.delete(cell.idx); else slSel.add(cell.idx); afterSelChange(); }
+  }
+  pdrag = null;
+}
+slCv.addEventListener('pointerup', endPointer);
+slCv.addEventListener('pointercancel', () => { pdrag = null; });
 $('slAdd').addEventListener('click', addSlices);
+updateSwatch();
 refreshTargetOptions();
 </script>
 </body>

@@ -275,3 +275,11 @@ New custom icons created from the slicer land in the **custom set** named in the
 Cropping is purely an authoring step: each cell is cut from the native-resolution sheet (crisp), the colour key is
 applied, and the result enters the normal per-item editor + export path — so the output ZIP is identical to
 dropping pre-cut PNGs.
+
+### Previewing transparency
+
+All icon previews share a **preview backdrop** (a global swatch row: white default / checker / black / red /
+green / blue) so the alpha layer can be sanity-checked — the backdrop is preview-only and never exported (icons
+keep their alpha). The per-item **editor** carries the same swatches plus a **texture background**: any uploaded
+surface texture (splat / biome / terrain slot) can be shown behind the icon with **tone (brightness)** and
+**contrast** sliders, to preview how a symbol reads over real ground. None of this affects the exported PNG.

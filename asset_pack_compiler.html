@@ -15,6 +15,7 @@
   --line:#2a3142; --line-2:#39435c;
   --txt:#e6e9f0; --txt-dim:#9aa3b8; --txt-faint:#69718a;
   --accent:#5b8cff; --accent-2:#3f6ae0; --accent-glow:rgba(91,140,255,.25);
+  --preview-bg:#ffffff;
   --ok:#3ecf8e; --warn:#e7b34a; --danger:#e5604d;
   --tex:#5b8cff; --ico:#c08bff;
   --radius:9px; --radius-sm:6px;
@@ -124,13 +125,7 @@ main{max-width:1180px;margin:0 auto;padding:26px 22px 90px}
 }
 .thumb .canvas-wrap{
   position:relative; width:100%; aspect-ratio:1/1; border-radius:5px; overflow:hidden;
-  background:
-    linear-gradient(45deg,#15171f 25%,transparent 25%),
-    linear-gradient(-45deg,#15171f 25%,transparent 25%),
-    linear-gradient(45deg,transparent 75%,#15171f 75%),
-    linear-gradient(-45deg,transparent 75%,#15171f 75%);
-  background-size:14px 14px; background-position:0 0,0 7px,7px -7px,-7px 0;
-  background-color:#0c0e13;
+  background:var(--preview-bg);
 }
 .thumb canvas{width:100%;height:100%;display:block}
 .thumb .vlabel{font-size:10px;color:var(--txt-faint);font-family:var(--mono);text-align:center;
@@ -158,13 +153,7 @@ main{max-width:1180px;margin:0 auto;padding:26px 22px 90px}
 .modal-body{display:grid;grid-template-columns:1fr 250px;gap:22px;padding:20px}
 .editor-canvas-wrap{
   position:relative; align-self:start; border-radius:8px; overflow:hidden;
-  background:
-    linear-gradient(45deg,#15171f 25%,transparent 25%),
-    linear-gradient(-45deg,#15171f 25%,transparent 25%),
-    linear-gradient(45deg,transparent 75%,#15171f 75%),
-    linear-gradient(-45deg,transparent 75%,#15171f 75%);
-  background-size:20px 20px; background-position:0 0,0 10px,10px -10px,-10px 0;
-  background-color:#0c0e13; border:1px solid var(--line);
+  background:var(--preview-bg); border:1px solid var(--line);
 }
 .editor-canvas-wrap canvas{width:100%;display:block}
 .editor-controls{display:flex;flex-direction:column;gap:16px}
@@ -241,6 +230,12 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 .slbg{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--txt-dim)}
 .slbg button{width:24px;height:24px;padding:0;border-radius:5px;border:1px solid var(--line)}
 .slbg button.on{box-shadow:0 0 0 2px var(--accent)}
+.preview-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:18px}
+.preview-bar .pb-label{font-size:12.5px;font-weight:600}
+.preview-bar .pb-note{font-size:11px;color:var(--txt-faint);flex:1 1 240px;min-width:200px}
+#editBgGroup{display:flex;flex-direction:column;gap:16px;border-top:1px solid var(--line);padding-top:14px}
+#editTexSel{margin-bottom:2px}
 .slice-controls{display:flex;flex-direction:column;gap:14px}
 .slice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .slice-sel-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -274,6 +269,40 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 .fam .add-slot{flex-wrap:wrap}
 .fam .add-slot .set-in{flex:0 0 130px}
 .fam .add-slot .name-in{flex:1 1 160px}
+/* ---------- mobile / smartphone ---------- */
+@media (max-width:640px){
+  body{font-size:13.5px}
+  header{padding:11px 13px;gap:10px}
+  .brand{min-width:0;flex:1 1 100%}
+  .brand h1{font-size:15.5px}
+  .meta{flex:1 1 100%;gap:9px}
+  .field{flex:1 1 130px}
+  .field input,.field.short input{min-width:0;width:100%}
+  header>button{flex:1 1 100%}                 /* Slice + Build stack full-width */
+  main{padding:16px 12px 72px}
+  .preview-bar{padding:10px;margin-bottom:14px}
+  .row{grid-template-columns:1fr;gap:12px;padding:12px}    /* stack id over body */
+  .dropzone{min-width:0;flex:1 1 100%}
+  .thumb{width:calc(50% - 5px)}                /* two thumbs per row */
+  .fam>summary{padding:11px 12px;gap:9px}
+  .fam .grid{padding:0 10px 12px}
+  .fam .add-slot{gap:6px}
+  .fam .add-slot .set-in,.fam .add-slot .name-in{flex:1 1 100%}
+  .group-head{margin:22px 2px 12px}
+  /* modals: near full-screen, single column */
+  .modal-backdrop{padding:6px}
+  .modal{width:100%;max-width:100%;max-height:96vh}
+  .modal.slice{width:100%;max-width:100%}
+  .modal-head{padding:13px 14px}
+  .modal-body,.slice-body{grid-template-columns:1fr;gap:14px;padding:14px}
+  .slice-canvas-wrap{max-height:44vh}
+  .slbg button{width:30px;height:30px}         /* bigger touch targets */
+  .seg button{padding:9px 6px}
+}
+@media (max-width:380px){
+  .thumb{width:100%}                            /* one thumb per row on very small screens */
+  .field{flex:1 1 100%}
+}
 </style>
 </head>
 <body>
@@ -296,6 +325,18 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 </header>
 
 <main>
+  <div class="preview-bar">
+    <span class="pb-label">Icon preview background</span>
+    <div class="slbg" id="globalBg">
+      <button data-bg="#ffffff" class="on" title="White" style="background:#ffffff"></button>
+      <button data-bg="checker" title="Checker (transparency)" style="background:conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/10px 10px"></button>
+      <button data-bg="#000000" title="Black" style="background:#000000"></button>
+      <button data-bg="#e23b3b" title="Red" style="background:#e23b3b"></button>
+      <button data-bg="#3bbf5a" title="Green" style="background:#3bbf5a"></button>
+      <button data-bg="#3b6fe2" title="Blue" style="background:#3b6fe2"></button>
+    </div>
+    <span class="pb-note">Preview only — the backdrop behind an icon (white by default) is <strong>transparent / see-through</strong> in the exported PNG. Switch swatches to check the alpha edges.</span>
+  </div>
   <div class="group-head">Terrain &amp; ground textures</div>
   <div id="texFams"></div>
 
@@ -339,6 +380,27 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
         <div class="ctl">
           <div class="crow"><label>Pan Y</label><span class="val" id="vPanY">0</span></div>
           <input type="range" id="sPanY" min="-256" max="256" step="1" value="0">
+        </div>
+        <div id="editBgGroup">
+          <div class="ctl">
+            <div class="crow"><label>Preview background</label></div>
+            <div class="slbg" id="editBgSw">
+              <button data-bg="#ffffff" title="White" style="background:#ffffff"></button>
+              <button data-bg="checker" title="Checker (transparency)" style="background:conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/10px 10px"></button>
+              <button data-bg="#000000" title="Black" style="background:#000000"></button>
+              <button data-bg="#e23b3b" title="Red" style="background:#e23b3b"></button>
+              <button data-bg="#3bbf5a" title="Green" style="background:#3bbf5a"></button>
+              <button data-bg="#3b6fe2" title="Blue" style="background:#3b6fe2"></button>
+            </div>
+          </div>
+          <div class="ctl">
+            <div class="crow"><label>Texture background</label></div>
+            <select id="editTexSel"></select>
+            <div class="crow"><label>Tone</label><span class="val" id="vTone">100%</span></div>
+            <input type="range" id="sTone" min="40" max="170" step="1" value="100">
+            <div class="crow"><label>Contrast</label><span class="val" id="vContrast">100%</span></div>
+            <input type="range" id="sContrast" min="40" max="170" step="1" value="100">
+          </div>
         </div>
         <div class="editor-info" id="mInfo">--</div>
         <div class="editor-actions">
@@ -584,18 +646,42 @@ const $ = id => document.getElementById(id);
 function defaultTransform(){ return {scale:1, panX:0, panY:0}; }
 
 // Draw one item into ctx at size×size. opaque → flatten on black (textures).
-function renderItem(ctx, item, size, opaque){
-  ctx.clearRect(0,0,size,size);
-  if(opaque){ ctx.fillStyle = '#000000'; ctx.fillRect(0,0,size,size); }
+function drawItemOnly(ctx, item, size){     // the image only — no clear, no opaque flatten
   const {img,w,h,t} = item;
   const baseFit = size / Math.max(w,h);          // scale=1 → whole image fits (contain)
-  const dw = w * baseFit * t.scale;
-  const dh = h * baseFit * t.scale;
-  const x = (size - dw)/2 + t.panX;
-  const y = (size - dh)/2 + t.panY;
+  const dw = w * baseFit * t.scale, dh = h * baseFit * t.scale;
+  const x = (size - dw)/2 + t.panX, y = (size - dh)/2 + t.panY;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, x, y, dw, dh);
+}
+function renderItem(ctx, item, size, opaque){
+  ctx.clearRect(0,0,size,size);
+  if(opaque){ ctx.fillStyle = '#000000'; ctx.fillRect(0,0,size,size); }
+  drawItemOnly(ctx, item, size);
+}
+
+/* shared preview backdrop (thumbnails via --preview-bg; editor draws it in-canvas) */
+const CHECKER_BG = 'conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px';
+let previewBg = '#ffffff';
+const editTex = {uid:null, tone:1, contrast:1};   // editor-only texture background + adjustments
+function applyPreviewBg(){
+  document.documentElement.style.setProperty('--preview-bg', previewBg==='checker' ? CHECKER_BG : previewBg);
+}
+function syncBgSwatches(){
+  ['globalBg','editBgSw'].forEach(id => { const el = document.getElementById(id); if(!el) return;
+    [...el.querySelectorAll('button')].forEach(b => b.classList.toggle('on', b.dataset.bg===previewBg)); });
+}
+function setPreviewBg(val){ previewBg = val; applyPreviewBg(); syncBgSwatches(); if(editRef) drawEditor(); }
+function drawTextureBg(ctx, size){
+  const arr = store[editTex.uid]; if(!arr || !arr.length) return false;
+  const im = arr[0];
+  ctx.save();
+  ctx.filter = `brightness(${editTex.tone}) contrast(${editTex.contrast})`;
+  const s = Math.max(size/im.w, size/im.h), dw = im.w*s, dh = im.h*s;   // cover
+  ctx.drawImage(im.img, (size-dw)/2, (size-dh)/2, dw, dh);
+  ctx.restore();
+  return true;
 }
 function renderToCanvas(item, size, opaque){
   const c = document.createElement('canvas');
@@ -840,6 +926,10 @@ function openEditor(uid, index){
   $('sPanY').min = -fam.size; $('sPanY').max = fam.size;
   $('editCanvas').width = fam.size; $('editCanvas').height = fam.size;
 
+  // preview-background controls are meaningful only for transparent (icon) families
+  $('editBgGroup').style.display = fam.opaque ? 'none' : '';
+  if(!fam.opaque){ buildEditTexOptions(); syncBgSwatches(); }
+
   syncSliders(); drawEditor();
   $('modal').classList.add('show');
 }
@@ -853,8 +943,32 @@ function syncSliders(){
 function drawEditor(){
   const {item, size, opaque, anchor} = editRef;
   const ctx = $('editCanvas').getContext('2d');
-  renderItem(ctx, item, size, opaque);
+  ctx.clearRect(0,0,size,size);
+  if(opaque){ ctx.fillStyle = '#000000'; ctx.fillRect(0,0,size,size); }          // textures: flatten on black
+  else if(editTex.uid && store[editTex.uid] && store[editTex.uid].length){ drawTextureBg(ctx, size); }
+  // else: leave transparent → the wrap's --preview-bg colour shows behind the icon
+  drawItemOnly(ctx, item, size);
   if(anchor) drawAnchor(ctx, size, anchor);
+}
+/* texture-background picker (icons only): texture-kind slots that hold an image */
+function buildEditTexOptions(){
+  const sel = $('editTexSel'); sel.innerHTML = '';
+  const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '(none — solid colour)'; sel.appendChild(o0);
+  for(const fam of FAMILIES){ if(fam.kind!=='texture') continue;
+    const withImg = fam.slots.filter(s => store[s.uid] && store[s.uid].length);
+    if(!withImg.length) continue;
+    const og = document.createElement('optgroup'); og.label = fam.title;
+    for(const slot of withImg){ const o = document.createElement('option'); o.value = slot.uid; o.textContent = `${slot.code} · ${slot.name}`; og.appendChild(o); }
+    sel.appendChild(og);
+  }
+  if(editTex.uid && !(store[editTex.uid] && store[editTex.uid].length)) editTex.uid = null;
+  sel.value = editTex.uid || '';
+  updateTexSliders();
+}
+function updateTexSliders(){
+  $('sTone').value = Math.round(editTex.tone*100);     $('vTone').textContent = Math.round(editTex.tone*100)+'%';
+  $('sContrast').value = Math.round(editTex.contrast*100); $('vContrast').textContent = Math.round(editTex.contrast*100)+'%';
+  const dis = !editTex.uid; $('sTone').disabled = dis; $('sContrast').disabled = dis;
 }
 // anchor crosshair — editor-only, never baked into export
 function drawAnchor(ctx, size, anchor){
@@ -1353,14 +1467,14 @@ $('slInvert').addEventListener('click', () => {
 $('chEnable').addEventListener('change', e => { chroma.enabled = e.target.checked; updateSwatch(); drawSliceGrid(); });
 $('chClear').addEventListener('click', () => { chroma.enabled = false; $('chEnable').checked = false; updateSwatch(); drawSliceGrid(); });
 $('chTol').addEventListener('input', e => { chroma.tol = parseInt(e.target.value,10)||0; $('chTolV').textContent = chroma.tol; if(chroma.enabled) drawSliceGrid(); });
-// background-preview swatches (verify the transparency layer against any colour)
-function setPreviewBg(bg, btn){
+// slice-canvas background swatches (verify the transparency layer against any colour)
+function setSliceBg(bg, btn){
   $('slCanvasWrap').style.background = (bg==='checker')
     ? 'conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px' : bg;
   [...$('slBg').querySelectorAll('button')].forEach(b => b.classList.toggle('on', b===btn));
 }
 [...$('slBg').querySelectorAll('button')].forEach(b =>
-  b.addEventListener('click', () => setPreviewBg(b.dataset.bg, b)));
+  b.addEventListener('click', () => setSliceBg(b.dataset.bg, b)));
 
 // canvas pointer: drag grid (grid mode), sample colour (pick mode), toggle cell (select mode)
 // pointer events + touch-action:none give a single smooth drag on touchscreens (no page scroll,
@@ -1400,6 +1514,16 @@ slCv.addEventListener('pointercancel', () => { pdrag = null; });
 $('slAdd').addEventListener('click', addSlices);
 updateSwatch();
 refreshTargetOptions();
+
+// preview-background: global swatches (thumbnails) + editor swatches + texture bg
+[...$('globalBg').querySelectorAll('button')].forEach(b =>
+  b.addEventListener('click', () => setPreviewBg(b.dataset.bg)));
+[...$('editBgSw').querySelectorAll('button')].forEach(b =>
+  b.addEventListener('click', () => { editTex.uid = null; $('editTexSel').value = ''; updateTexSliders(); setPreviewBg(b.dataset.bg); }));
+$('editTexSel').addEventListener('change', e => { editTex.uid = e.target.value || null; updateTexSliders(); drawEditor(); });
+$('sTone').addEventListener('input', e => { editTex.tone = (parseInt(e.target.value,10)||100)/100; $('vTone').textContent = Math.round(editTex.tone*100)+'%'; drawEditor(); });
+$('sContrast').addEventListener('input', e => { editTex.contrast = (parseInt(e.target.value,10)||100)/100; $('vContrast').textContent = Math.round(editTex.contrast*100)+'%'; drawEditor(); });
+applyPreviewBg();
 </script>
 </body>
 </html>

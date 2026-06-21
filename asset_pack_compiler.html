@@ -269,6 +269,40 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 .fam .add-slot{flex-wrap:wrap}
 .fam .add-slot .set-in{flex:0 0 130px}
 .fam .add-slot .name-in{flex:1 1 160px}
+/* ---------- mobile / smartphone ---------- */
+@media (max-width:640px){
+  body{font-size:13.5px}
+  header{padding:11px 13px;gap:10px}
+  .brand{min-width:0;flex:1 1 100%}
+  .brand h1{font-size:15.5px}
+  .meta{flex:1 1 100%;gap:9px}
+  .field{flex:1 1 130px}
+  .field input,.field.short input{min-width:0;width:100%}
+  header>button{flex:1 1 100%}                 /* Slice + Build stack full-width */
+  main{padding:16px 12px 72px}
+  .preview-bar{padding:10px;margin-bottom:14px}
+  .row{grid-template-columns:1fr;gap:12px;padding:12px}    /* stack id over body */
+  .dropzone{min-width:0;flex:1 1 100%}
+  .thumb{width:calc(50% - 5px)}                /* two thumbs per row */
+  .fam>summary{padding:11px 12px;gap:9px}
+  .fam .grid{padding:0 10px 12px}
+  .fam .add-slot{gap:6px}
+  .fam .add-slot .set-in,.fam .add-slot .name-in{flex:1 1 100%}
+  .group-head{margin:22px 2px 12px}
+  /* modals: near full-screen, single column */
+  .modal-backdrop{padding:6px}
+  .modal{width:100%;max-width:100%;max-height:96vh}
+  .modal.slice{width:100%;max-width:100%}
+  .modal-head{padding:13px 14px}
+  .modal-body,.slice-body{grid-template-columns:1fr;gap:14px;padding:14px}
+  .slice-canvas-wrap{max-height:44vh}
+  .slbg button{width:30px;height:30px}         /* bigger touch targets */
+  .seg button{padding:9px 6px}
+}
+@media (max-width:380px){
+  .thumb{width:100%}                            /* one thumb per row on very small screens */
+  .field{flex:1 1 100%}
+}
 </style>
 </head>
 <body>

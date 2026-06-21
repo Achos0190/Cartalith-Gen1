@@ -1063,6 +1063,18 @@ fieldsFinite('generate(world)');
   const U2 = buildOrogenyField([{ pts, type: BTYPE.collision }], stress, cont, W, H, opts);
   check('buildOrogenyField deterministic', U.every((v, i) => v === U2[i]));
 
+  // v0.144: smoothOrogeny rounds off the steep/sudden creases — cuts the |2nd-difference| kink metric,
+  // keeps the field finite, and preserves most of the peak amplitude (field-path softening, kernel untouched)
+  if (typeof smoothOrogeny === 'function') {
+    const kink = a => { let s = 0; for (let yy = 1; yy < H - 1; yy++) for (let xx = 1; xx < W - 1; xx++) { const i = yy * W + xx; s += Math.abs(a[i - 1] - 2 * a[i] + a[i + 1]) + Math.abs(a[i - W] - 2 * a[i] + a[i + W]); } return s; };
+    const pk = a => { let m = 0; for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i])); return m; };
+    const Us = smoothOrogeny(U, W, H, 18, false);
+    check('smoothOrogeny: finite + reduces the kink metric', allFinite(Us) && kink(Us) < kink(U));
+    check('smoothOrogeny: preserves most of peak amplitude', pk(Us) > pk(U) * 0.85);
+    const Us2 = smoothOrogeny(U, W, H, 18, false);
+    check('smoothOrogeny: deterministic', Us.every((v, i) => v === Us2[i]));
+  }
+
   // T3 subduction: ocean on the RIGHT (x>60) → trench below sea on ocean side, arc above on land side
   const argRow = (fld, y) => { let lo = Infinity, hi = -Infinity, xl = 0, xh = 0;
     for (let x = 0; x < W; x++){ const v = fld[y * W + x]; if (v < lo){ lo = v; xl = x; } if (v > hi){ hi = v; xh = x; } } return { lo, hi, xl, xh }; };

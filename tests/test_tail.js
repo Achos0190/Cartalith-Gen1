@@ -3046,6 +3046,45 @@ if (typeof buildRiverNetwork === 'function') {
   }
 }
 
+/* ---------- v0.143: wildlife layer (per-ecoregion fauna) ---------- */
+if (typeof buildNPP === 'function') {
+  const npp = buildNPP(tempField, rainField, field, GW, GH, state.seaLevel, { maxRainMm: 3000 });
+  check('buildNPP: length + finite', npp.length === GW * GH && npp.every(Number.isFinite));
+  let oceanZero = true; for (let i = 0; i < npp.length; i++) if (field[i] < state.seaLevel && npp[i] !== 0) { oceanZero = false; break; }
+  check('buildNPP: ocean cells = 0', oceanZero);
+  const warmWet = Math.min(3000 / (1 + Math.exp(1.315 - 0.119 * 25)), 3000 * (1 - Math.exp(-0.000664 * 2500)));
+  const coldDry = Math.min(3000 / (1 + Math.exp(1.315 - 0.119 * 0)), 3000 * (1 - Math.exp(-0.000664 * 100)));
+  check('buildNPP: warm-wet NPP > cold-dry (Miami min)', warmWet > coldDry);
+  const npp2 = buildNPP(tempField, rainField, field, GW, GH, state.seaLevel, { maxRainMm: 3000 });
+  check('buildNPP: deterministic', npp.every((v, i) => v === npp2[i]));
+
+  const tri = buildTRI(field, GW, GH, { wrap: !!state.world });
+  check('buildTRI: length + finite + non-negative', tri.length === GW * GH && tri.every(v => Number.isFinite(v) && v >= 0));
+  const tri2 = buildTRI(field, GW, GH, { wrap: !!state.world });
+  check('buildTRI: deterministic', tri.every((v, i) => v === tri2[i]));
+
+  const eco = buildEcoregions(currentCartBiome(), field, npp, tri, currentWaterAccess(), currentCarryingCapacity(), GW, GH, state.seaLevel, { wrap: !!state.world, latOf: latAt });
+  check('buildEcoregions: regions found', eco.regions.length > 0);
+  let idOk = true; for (let i = 0; i < eco.regionId.length; i++) { const r = eco.regionId[i]; if (r < -1 || r >= eco.regions.length) { idOk = false; break; } }
+  check('buildEcoregions: regionId in [-1, n)', idOk);
+  const cb = currentCartBiome(); let biomeOk = true; for (let i = 0; i < eco.regionId.length; i++) { const r = eco.regionId[i]; if (r >= 0 && cb[i] !== eco.regions[r].biome) { biomeOk = false; break; } }
+  check('buildEcoregions: cells match their region biome', biomeOk);
+  const minA = Math.max(12, (GW * GH / 3000) | 0);
+  check('buildEcoregions: kept regions ≥ minArea', eco.regions.every(r => r.cells >= minA));
+
+  const wa = assignWildlife({ biome: 5, cells: 2000, nppn: 0.6, tri: 0.04, water: 0.5, K: 0.6, latAbs: 35, ridgeFrac: 0.05, coastal: false }, { cellKm: 3, cellKm2: 9 });
+  check('assignWildlife: richness in [0, roster]', wa.richness >= 0 && wa.richness <= WILD_ROSTERS[5].length);
+  check('assignWildlife: guilds present, species pops finite ≥ 1', wa.guilds.length > 0 && wa.guilds.every(g => g.species.every(s => Number.isFinite(s.populationEst) && s.populationEst >= 1)));
+  // ridge-gated species (Ibex / Snow leopard) only appear when the region is rugged
+  const flatMtn = assignWildlife({ biome: 8, cells: 2000, nppn: 0.4, tri: 0.06, water: 0.4, K: 0.4, latAbs: 45, ridgeFrac: 0.0, coastal: false }, { cellKm: 3, cellKm2: 9 });
+  const ruggedMtn = assignWildlife({ biome: 8, cells: 2000, nppn: 0.4, tri: 0.09, water: 0.4, K: 0.4, latAbs: 45, ridgeFrac: 0.5, coastal: false }, { cellKm: 3, cellKm2: 9 });
+  const hasRidge = w => w.guilds.some(g => g.species.some(s => s.name === 'Ibex' || s.name === 'Snow leopard'));
+  check('assignWildlife: ridge-gated species need ruggedness', !hasRidge(flatMtn) && hasRidge(ruggedMtn));
+
+  _wildlife = null; const w1 = currentWildlife(); _wildlife = null; const w2 = currentWildlife(); _wildlife = null;
+  check('currentWildlife: deterministic', w1.regions.length === w2.regions.length && (!w1.regions[0] || w1.regions[0].richness === w2.regions[0].richness));
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

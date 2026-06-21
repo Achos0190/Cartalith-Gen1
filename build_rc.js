@@ -57,6 +57,16 @@ for (const m of ["<!--SRC_GENERATE-->", "<!--SRC_CARTOGRAPH-->", "<!--SRC_ASSETS
   if (shell.includes(m)) { console.error("FATAL: unfilled marker " + m); process.exit(1); }
 }
 
+// Critical guard: the browser ends a <script> at the first literal </script (it does NOT understand JS
+// comments/strings). Embedded apps are escaped (<\/script), so the ONLY real </script tokens must be the
+// 3 carrier closes + 1 parent-shell close. Any extra => a rogue </script in the shell closes a script early.
+const closes = (shell.match(/<\/script/gi) || []).length;
+if (closes !== 4) {
+  console.error("FATAL: expected exactly 4 </script tokens (3 carriers + parent shell), found " + closes +
+    ".\n  A literal '</script' in the parent shell's JS strings/comments will close <script> early and dump code as text.");
+  process.exit(1);
+}
+
 fs.writeFileSync(OUT, shell);
 
 console.log("Assembled: " + OUT);

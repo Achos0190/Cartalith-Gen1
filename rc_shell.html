@@ -310,7 +310,7 @@ function zipRead(buf){
 }
 
 /* ---------- frame lifecycle ---------- */
-function unesc(s){ return s.replace(/<\\\/(script)/gi, "</$1"); }   /* inverse of the assembler's </script escape */
+function unesc(s){ return s.replace(/<\\\/(script)/gi, "</$1"); }   /* inverse of the assembler's script-tag escape */
 function createFrame(tool){
   if(frames[tool]) return frames[tool];
   const host=$("pane-"+tool);

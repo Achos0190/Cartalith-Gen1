@@ -2384,7 +2384,7 @@ if (typeof landColorCore === 'function') {
       px === undefined ? 100 : px, py === undefined ? 100 : py, 1, 1, gx || 0, gy || 0);
   };
   const savedViz = JSON.parse(JSON.stringify(state.viz));
-  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0, cel: 0, crosshatch: 0, stipple: 0, blueprint: 0, sepia: 0, risograph: 0, pointillism: 0 };
+  const off = { contours: 0, ink: 0, hachure: 0, watercolor: 0, cel: 0, crosshatch: 0, stipple: 0, sepia: 0, risograph: 0, pointillism: 0 };
   Object.assign(state.viz, off);
   const base = callLC();
   check('NPR: all-off baseline finite RGB', base.every(Number.isFinite));
@@ -2443,12 +2443,7 @@ if (typeof landColorCore === 'function') {
   { Object.assign(state.viz, off); state.viz.stipple = 0.9;
     check('NPR stipple: stays finite when on', [98, 100, 102, 104].every(p => finiteRGB(lcDark(p, 100))));
     Object.assign(state.viz, off); check('NPR stipple: off ⇒ bit-identical', sameAsBase(callLC())); }
-  // v0.131 new styles: blueprint, sepia, risograph, pointillism
-  { Object.assign(state.viz, off); const b0 = callLC(undefined, 60, 80, 0, 0);
-    state.viz.blueprint = 0.9; const bOn = callLC(undefined, 60, 80, 0, 0);
-    check('NPR blueprint: shifts colour toward navy-blue (blue channel rises or colour changes)', bOn.some((v, i) => v !== b0[i]) && finiteRGB(bOn));
-    check('NPR blueprint: blue channel ≥ its proportion in base (duotone leans blue)', bOn[2] >= b0[2] * 0.7);
-    Object.assign(state.viz, off); check('NPR blueprint: off ⇒ bit-identical', sameAsBase(callLC())); }
+  // v0.131 new styles: sepia, risograph, pointillism (blueprint removed v0.141)
   { Object.assign(state.viz, off); const s0 = callLC(undefined, 70, 90, 0, 0);
     state.viz.sepia = 0.9; const sOn = callLC(undefined, 70, 90, 0, 0);
     check('NPR sepia: shifts colour toward warm brown & stays finite', sOn.some((v, i) => v !== s0[i]) && finiteRGB(sOn));
@@ -2465,9 +2460,9 @@ if (typeof landColorCore === 'function') {
     check('NPR pointillism: stays finite', finiteRGB(callLC(undefined, 77, 83)));
     Object.assign(state.viz, off); check('NPR pointillism: off ⇒ bit-identical', sameAsBase(callLC())); }
   // water/below-sea (r<=0) is never touched by any NPR style
-  { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1, blueprint: 1, sepia: 1, risograph: 1, pointillism: 1 });
+  { Object.assign(state.viz, { contours: 1, ink: 1, hachure: 1, watercolor: 1, sepia: 1, risograph: 1, pointillism: 1 });
     const wOff = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
-    state.viz.contours = state.viz.ink = state.viz.hachure = state.viz.watercolor = state.viz.blueprint = state.viz.sepia = state.viz.risograph = state.viz.pointillism = 0;
+    state.viz.contours = state.viz.ink = state.viz.hachure = state.viz.watercolor = state.viz.sepia = state.viz.risograph = state.viz.pointillism = 0;
     const wOn = landColorCore(15, 0.5, 0.05, 0, .5, .5, .5, .7, .7, 5, 0, .5, state.bioBlend, 1, 100, 100, 1, 1, 1, 1);
     check('NPR: r<=0 (at/below sea) untouched by all styles', wOff.every((v, i) => v === wOn[i]));
   }
@@ -2983,6 +2978,72 @@ if (typeof riverSinuosity === 'function' && typeof riverSinuAmp === 'function') 
   check('riverSinuAmp: rises with Strahler order', riverSinuAmp(5, 0.1) > riverSinuAmp(1, 0.1));
   check('riverSinuAmp: falls with slope', riverSinuAmp(4, 2) < riverSinuAmp(4, 0));
   check('riverSinuAmp: positive & finite', riverSinuAmp(3, 0.5) > 0 && Number.isFinite(riverSinuAmp(1, 0)));
+}
+
+/* ---------- v0.138: Cartalith RLE bridge (encodeBiomeRLE round-trip, manifest, cart-grid export) ---------- */
+if (typeof encodeBiomeRLE === 'function' && typeof decodeBiomeRLE === 'function') {
+  // basic round-trip incl. zeros + multi-value runs
+  const a = new Uint8Array([0, 0, 0, 5, 5, 1, 1, 1, 1, 0]);
+  const rt = decodeBiomeRLE(encodeBiomeRLE(a), a.length);
+  check('encodeBiomeRLE: round-trips a small grid exactly', rt.length === a.length && a.every((v, i) => v === rt[i]));
+  // 3-byte-per-run wire format (value, lo, hi)
+  const enc = encodeBiomeRLE(new Uint8Array([7, 7, 7]));
+  check('encodeBiomeRLE: 3-byte run format (value,lo,hi)', enc.length === 3 && enc[0] === 7 && enc[1] === 3 && enc[2] === 0);
+  // runs > 65535 split into multiple chunks but still decode whole
+  const big = new Uint8Array(70000).fill(3);
+  const rtBig = decodeBiomeRLE(encodeBiomeRLE(big), big.length);
+  check('encodeBiomeRLE: splits runs > 65535 and decodes whole', rtBig.length === 70000 && rtBig.every(v => v === 3));
+  // empty input
+  check('encodeBiomeRLE: empty input → empty output', encodeBiomeRLE(new Uint8Array(0)).length === 0);
+
+  // payoff: a generated Cartalith paint grid survives the editor's RLE codec byte-for-byte
+  if (typeof buildCartBiome === 'function') {
+    const grid = buildCartBiome();
+    const back = decodeBiomeRLE(encodeBiomeRLE(grid), grid.length);
+    check('buildCartBiome → RLE → decode is bit-identical (editor-loadable)', back.length === grid.length && grid.every((v, i) => v === back[i]));
+    check('buildCartBiome: indices within 0..15 (CART_BIOMES 1-based + 0 unpainted)', grid.every(v => v <= 15));
+  }
+  if (typeof buildCartTerrain === 'function') {
+    const tg = buildCartTerrain();
+    const tback = decodeBiomeRLE(encodeBiomeRLE(tg), tg.length);
+    check('buildCartTerrain → RLE → decode is bit-identical', tg.every((v, i) => v === tback[i]));
+    check('buildCartTerrain: indices within 0..13 (CART_TERRAINS 1-based + 0)', tg.every(v => v <= 13));
+  }
+}
+if (typeof cartalithGridManifest === 'function') {
+  const m = cartalithGridManifest();
+  check('cartalithGridManifest: kind + rle encoding', m.kind === 'cartalith-paint-grid' && m.encoding === 'rle-u8-3byte');
+  check('cartalithGridManifest: dims match the working grid', m.widthCells === GW && m.heightCells === GH);
+  check('cartalithGridManifest: 15 biome + 13 terrain indices, 1-based', m.biome.indices.length === 15 && m.terrain.indices.length === 13 && m.biome.indices[0].index === 1 && m.biome.indices[14].name === 'Ocean / Deep Water');
+}
+
+/* ---------- v0.139: river-network omax (biome-overlay min-order filter) ---------- */
+if (typeof buildRiverNetwork === 'function') {
+  const net = buildRiverNetwork(field, computeFlow(true), GW, GH, state.seaLevel, { world: state.world });
+  check('buildRiverNetwork: returns an omax field (order of widest contributing channel)', !!net.omax && net.omax.length === GW * GH);
+  if (net.omax) {
+    let okPair = true, maxOrder = 0;
+    for (let i = 0; i < net.order.length; i++) if (net.order[i] > maxOrder) maxOrder = net.order[i];
+    for (let i = 0; i < net.omax.length; i++) {
+      // omax is nonzero exactly where the overlay paints (intensity>0), and never exceeds the network's max Strahler order
+      if ((net.intensity[i] > 0) !== (net.omax[i] > 0)) { okPair = false; break; }
+      if (net.omax[i] > maxOrder) { okPair = false; break; }
+    }
+    check('buildRiverNetwork: omax nonzero ⇔ intensity>0, bounded by max order', okPair);
+    // higher min-order keeps fewer overlay cells (monotone thinning) — the filter the biome overlay applies
+    const cnt = k => { let c = 0; for (let i = 0; i < net.omax.length; i++) if (net.intensity[i] > 0 && (k <= 1 || net.omax[i] >= k)) c++; return c; };
+    check('buildRiverNetwork: omax min-order filter thins monotonically', cnt(1) >= cnt(2) && cnt(2) >= cnt(3));
+  }
+  // R3b (v0.140) — receiver tree must be strictly descending (no cycles, valid Strahler base) whatever the routing
+  if (net.recv) {
+    let descending = true;
+    for (let i = 0; i < net.recv.length; i++) { const r = net.recv[i]; if (r >= 0 && !(field[r] <= field[i])) { descending = false; break; } }
+    check('buildRiverNetwork: receiver tree is strictly descending (no cycles)', descending);
+    // determinism: same inputs → identical receivers
+    const net2 = buildRiverNetwork(field, computeFlow(true), GW, GH, state.seaLevel, { world: state.world });
+    let same = net2.recv.length === net.recv.length; for (let i = 0; same && i < net.recv.length; i++) if (net.recv[i] !== net2.recv[i]) same = false;
+    check('buildRiverNetwork: routing is deterministic', same);
+  }
 }
 
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */

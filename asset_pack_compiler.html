@@ -233,10 +233,14 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 .slice-canvas-wrap{
   background:conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px;
   border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:64vh;
-  display:flex;align-items:center;justify-content:center;padding:10px}
-#sliceCanvas{cursor:pointer;display:block;max-width:100%;image-rendering:pixelated}
+  display:flex;align-items:center;justify-content:center;padding:10px;touch-action:none}
+#sliceCanvas{cursor:pointer;display:block;max-width:100%;image-rendering:pixelated;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none}
 #sliceCanvas.mode-grid{cursor:move}
 #sliceCanvas.mode-pick{cursor:crosshair}
+.slbg{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:11.5px;color:var(--txt-dim)}
+.slbg button{width:24px;height:24px;padding:0;border-radius:5px;border:1px solid var(--line)}
+.slbg button.on{box-shadow:0 0 0 2px var(--accent)}
 .slice-controls{display:flex;flex-direction:column;gap:14px}
 .slice-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .slice-sel-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -356,6 +360,15 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
         </div>
         <div class="slice-canvas-wrap" id="slCanvasWrap" style="display:none">
           <canvas id="sliceCanvas"></canvas>
+        </div>
+        <div class="slbg" id="slBg" style="display:none">
+          <span>Preview behind transparency:</span>
+          <button data-bg="checker" class="on" title="Checker" style="background:conic-gradient(#bbb 25%,#888 0 50%,#bbb 0 75%,#888 0) 0 0/10px 10px"></button>
+          <button data-bg="#ffffff" title="White" style="background:#ffffff"></button>
+          <button data-bg="#000000" title="Black" style="background:#000000"></button>
+          <button data-bg="#e23b3b" title="Red" style="background:#e23b3b"></button>
+          <button data-bg="#3bbf5a" title="Green" style="background:#3bbf5a"></button>
+          <button data-bg="#3b6fe2" title="Blue" style="background:#3b6fe2"></button>
         </div>
       </div>
       <div class="slice-controls">
@@ -984,8 +997,8 @@ function handlePoints(){
           w:{x:r.x,y:my}, e:{x:r.x+r.w,y:my},
           sw:{x:r.x,y:r.y+r.h}, s:{x:mx,y:r.y+r.h}, se:{x:r.x+r.w,y:r.y+r.h}};
 }
-function hitHandle(sx, sy){
-  const t = 9/slScale, pts = handlePoints();
+function hitHandle(sx, sy, tolPx){
+  const t = (tolPx||11)/slScale, pts = handlePoints();
   for(const k in pts){ if(Math.abs(sx-pts[k].x)<=t && Math.abs(sy-pts[k].y)<=t) return k; }
   const r = gridRect;
   if(sx>r.x && sx<r.x+r.w && sy>r.y && sy<r.y+r.h) return 'move';
@@ -1028,8 +1041,8 @@ function drawSliceGrid(){
       const x=cell.x*scale, y=cell.y*scale, w=cell.w*scale, h=cell.h*scale;
       if(slSel.has(cell.idx)){
         ctx.fillStyle = 'rgba(91,140,255,.32)'; ctx.fillRect(x,y,w,h);
-        ctx.strokeStyle = 'rgba(140,180,255,.95)';
-      } else ctx.strokeStyle = 'rgba(255,255,255,.32)';
+        ctx.strokeStyle = 'rgba(120,180,255,.95)';            // selected = blue, pops against the red grid
+      } else ctx.strokeStyle = 'rgba(255,55,55,.7)';          // grid lines = red
       ctx.strokeRect(x+.5, y+.5, Math.max(0,w-1), Math.max(0,h-1));
       if(w>14 && h>12){                                          // cell number
         const lbl = String(cell.idx+1), fs = Math.max(9, Math.min(13, h*0.32));
@@ -1040,13 +1053,16 @@ function drawSliceGrid(){
       }
     }
   }
-  const R = gridRect;                                            // grid bounds + handles
-  ctx.strokeStyle = 'rgba(255,210,80,.9)'; ctx.lineWidth = 1.5;
-  ctx.strokeRect(R.x*scale+.5, R.y*scale+.5, R.w*scale-1, R.h*scale-1);
+  const R = gridRect;                                            // grid bounds + handles (red)
+  ctx.strokeStyle = 'rgba(255,40,40,.95)'; ctx.lineWidth = 2;
+  ctx.strokeRect(R.x*scale+1, R.y*scale+1, R.w*scale-2, R.h*scale-2);
   if(sliceMode==='grid'){
-    ctx.fillStyle = '#ffd24f';
-    const pts = handlePoints();
-    for(const k in pts) ctx.fillRect(pts[k].x*scale-4, pts[k].y*scale-4, 8, 8);
+    const pts = handlePoints(), hs = 6;                          // larger handles, white-ringed for touch
+    for(const k in pts){
+      const hx = pts[k].x*scale, hy = pts[k].y*scale;
+      ctx.fillStyle = '#fff'; ctx.fillRect(hx-hs-1, hy-hs-1, (hs+1)*2, (hs+1)*2);
+      ctx.fillStyle = '#ff2d2d'; ctx.fillRect(hx-hs, hy-hs, hs*2, hs*2);
+    }
   }
   ctx.lineWidth = 1;
   $('slCount').textContent = slSel.size + ' selected';
@@ -1169,6 +1185,7 @@ function loadSheet(file){
     for(const k in cellNames) delete cellNames[k];
     setMode('select');
     $('slCanvasWrap').style.display = 'flex';
+    $('slBg').style.display = 'flex';
     afterSelChange();
   };
   img.onerror = () => { URL.revokeObjectURL(url); toast('Could not decode that image.', 'err'); };
@@ -1246,33 +1263,51 @@ $('slInvert').addEventListener('click', () => {
 $('chEnable').addEventListener('change', e => { chroma.enabled = e.target.checked; updateSwatch(); drawSliceGrid(); });
 $('chClear').addEventListener('click', () => { chroma.enabled = false; $('chEnable').checked = false; updateSwatch(); drawSliceGrid(); });
 $('chTol').addEventListener('input', e => { chroma.tol = parseInt(e.target.value,10)||0; $('chTolV').textContent = chroma.tol; if(chroma.enabled) drawSliceGrid(); });
+// background-preview swatches (verify the transparency layer against any colour)
+function setPreviewBg(bg, btn){
+  $('slCanvasWrap').style.background = (bg==='checker')
+    ? 'conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px' : bg;
+  [...$('slBg').querySelectorAll('button')].forEach(b => b.classList.toggle('on', b===btn));
+}
+[...$('slBg').querySelectorAll('button')].forEach(b =>
+  b.addEventListener('click', () => setPreviewBg(b.dataset.bg, b)));
+
 // canvas pointer: drag grid (grid mode), sample colour (pick mode), toggle cell (select mode)
+// pointer events + touch-action:none give a single smooth drag on touchscreens (no page scroll,
+// no long-press copy/callout); pointer capture keeps the gesture even if it leaves the canvas.
 const slCv = $('sliceCanvas');
+slCv.addEventListener('contextmenu', e => e.preventDefault());   // kill long-press menu on touch
 slCv.addEventListener('pointerdown', e => {
   if(!sheet) return;
+  e.preventDefault();
   const {sx,sy} = evToSrc(e);
   if(sliceMode==='pick'){ sampleColorAt(sx,sy); setMode('select'); return; }
   if(sliceMode==='grid'){
-    const hh = hitHandle(sx,sy);
+    const tol = e.pointerType==='touch' ? 26 : 11;
+    const hh = hitHandle(sx,sy,tol);
     if(hh){ pdrag = {handle:hh, startX:sx, startY:sy, orig:{...gridRect}}; slCv.setPointerCapture(e.pointerId); }
     return;
   }
   pdrag = {handle:null, startX:sx, startY:sy};   // select mode → resolved on pointerup
+  slCv.setPointerCapture(e.pointerId);
 });
 slCv.addEventListener('pointermove', e => {
   if(!pdrag || !pdrag.handle || !sheet) return;
+  e.preventDefault();
   const {sx,sy} = evToSrc(e);
   applyDrag(pdrag.handle, sx-pdrag.startX, sy-pdrag.startY, pdrag.orig);
   drawSliceGrid();
 });
-slCv.addEventListener('pointerup', e => {
+function endPointer(e){
   if(pdrag && !pdrag.handle && sheet){
     const {sx,sy} = evToSrc(e);
     const cell = slCells.find(c => sx>=c.x && sx<c.x+c.w && sy>=c.y && sy<c.y+c.h);
     if(cell){ if(slSel.has(cell.idx)) slSel.delete(cell.idx); else slSel.add(cell.idx); afterSelChange(); }
   }
   pdrag = null;
-});
+}
+slCv.addEventListener('pointerup', endPointer);
+slCv.addEventListener('pointercancel', () => { pdrag = null; });
 $('slAdd').addEventListener('click', addSlices);
 updateSwatch();
 refreshTargetOptions();

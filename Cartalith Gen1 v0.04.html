@@ -246,7 +246,7 @@
 </main>
 
 <div id="toast"></div>
-<input type="file" id="openInput" accept=".cartalith,.zip" class="hidden">
+<input type="file" id="openInput" accept=".cartalith,.zip" class="hidden" aria-label="Open project file">
 
 <!-- inert source carriers; each tool's parts (css/body/lib/app), closing script tags backslash-escaped, mounted into per-tool Shadow DOM by the harness below -->
 <script type="text/cartalith-css" data-tool="generate">:host{
@@ -255,6 +255,14 @@
     --accent:#d9a45b; --accent2:#5f9bd1; --warn:#cf6a6a;
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
     --sans:ui-sans-serif,-apple-system,"Segoe UI",sans-serif;
+  }:host([data-theme="amoled"]){
+    --bg:#000; --panel:#0a0a0a; --panel2:#111; --line:#1c1c1c;
+    --ink:#e0e4ec; --dim:#8b93a3; --faint:#5c6473;
+    --accent:#d9a45b; --accent2:#5f9bd1; --warn:#cf6a6a;
+  }:host([data-theme="light"]){
+    --bg:#f4ede0; --panel:#fbf5e9; --panel2:#ede4d2; --line:#c9bfa9;
+    --ink:#2a1f10; --dim:#7a6b50; --faint:#9a8a6a;
+    --accent:#8a6a35; --accent2:#3b6ba5; --warn:#9a4a4a;
   }*{box-sizing:border-box}:host{margin:0;height:100%}:host{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13px;display:flex;flex-direction:column;overflow:hidden}header{display:flex;align-items:baseline;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel)}header h1{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin:0}header .ver{font-family:var(--mono);font-size:11px;color:var(--accent);border:1px solid var(--line);border-radius:999px;padding:1px 8px}header .tag{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.04em}.stage{flex:1;display:flex;min-height:0}.canvas-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(0deg,#0c0e13 0 24px,#0d0f15 24px 48px);overflow:hidden;padding:18px;touch-action:none}canvas#view{max-width:100%;max-height:100%;background:#000;border:1px solid var(--line);image-rendering:auto;cursor:crosshair;box-shadow:0 0 0 1px #000}.legend{position:absolute;left:24px;bottom:20px;font-family:var(--mono);font-size:10px;color:var(--dim);background:rgba(10,12,17,.74);border:1px solid var(--line);border-radius:6px;padding:8px 10px;line-height:1.7;pointer-events:none}.legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}.busy{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(10,12,17,.60);font-family:var(--mono);letter-spacing:.06em;-webkit-user-select:none;user-select:none}.busy-wit{font-size:13px;color:var(--accent);text-align:center;padding:0 24px;max-width:360px;line-height:1.5}.busy-label{font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}#resOverlay{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:10px;color:rgba(200,169,110,.6);background:rgba(10,12,17,.55);border:1px solid rgba(200,169,110,.18);border-radius:5px;padding:6px 8px;line-height:1.8;pointer-events:none;display:none}/* v0.110: clickable settlement-seed "why" popup */
   .settle-info{position:fixed;z-index:60;width:220px;max-width:78vw;font-size:11px;line-height:1.5;color:#e8dcc4;background:rgba(14,17,23,.96);border:1px solid rgba(200,169,110,.4);border-radius:7px;padding:9px 11px 10px;box-shadow:0 6px 24px rgba(0,0,0,.5)}.settle-info .si-close{position:absolute;top:4px;right:6px;background:none;border:none;color:#b08d54;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px}.settle-info .si-h{font-weight:600;color:#d8b97a;margin-right:14px}.settle-info .si-score{font-family:var(--mono);font-size:10px;color:#e0c98a;margin:1px 0 4px}.settle-info .si-sum{margin-bottom:6px}.settle-info .si-grid{display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr;gap:2px 6px;font-size:10px;font-family:var(--mono);margin-bottom:4px;opacity:.85}.settle-info .si-grid b{color:#fff;font-weight:600}.settle-info .si-meta{font-size:10px;opacity:.7;margin-bottom:6px}.settle-info .si-h2{font-weight:600;color:#d8b97a;border-top:1px solid rgba(200,169,110,.2);padding-top:5px;margin-bottom:3px}.settle-info .si-res{display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono)}.settle-info .si-res b{color:#fff;font-weight:600}#resOverlay.visible{display:block}aside{width:324px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}.sec{padding:14px 16px;border-bottom:1px solid var(--line)}.sec h2{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin:0 0 12px}.row{display:flex;align-items:center;gap:8px;margin:9px 0}.row label{flex:0 0 90px;color:var(--dim);font-size:12px}
   /* v0.144: on touch screens a long-press on a slider raised the native selection/callout ("share") menu,
@@ -268,14 +276,11 @@
 #zoomOverlay{position:absolute;bottom:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:20}#scaleBar{position:absolute;bottom:10px;right:64px;z-index:15;font-size:10px;color:#cfd4dc;background:rgba(10,12,16,.55);padding:3px 8px 5px;border-radius:6px;pointer-events:none;line-height:1.3}#scaleBar .bar{height:4px;border:1px solid #cfd4dc;border-top:none;margin-top:2px}#packGrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#packGrid figure{margin:0;width:44px;text-align:center}#packGrid canvas{width:40px;height:40px;border:1px solid var(--line);border-radius:4px;background:#0c0e12;display:block;margin:0 auto;image-rendering:auto}#packGrid figcaption{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.15;word-break:break-word}.zbtn{width:42px;height:42px;font-size:22px;font-weight:700;background:rgba(10,10,10,.72);color:#e0e0e0;border:1px solid rgba(255,255,255,.18);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}/* ---- undo memory hint accent ---- */
 .undo-warn{color:var(--accent)!important}/* ---- header import dropdown ---- */
 .dropdown-wrap{position:relative;display:inline-block}.menubtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:var(--sans)}.menubtn:hover{border-color:var(--faint)}.dropdown{display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.55)}.dropdown.open{display:block}.dropdown button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:5px;padding:9px 10px;font-size:12px;color:var(--ink);cursor:pointer}.dropdown button:hover{background:var(--panel)}.dropdown .dsep{height:1px;background:var(--line);margin:4px 6px}/* ---- collapsible accordions (erosion sub-ops,debug overlay) ---- */
-details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-top:0}details.acc>summary{cursor:pointer;list-style:none;color:var(--dim);font-size:12px;font-weight:600;padding:9px 0 5px;user-select:none}details.acc>summary::-webkit-details-marker{display:none}details.acc>summary::before{content:'▸  ';color:var(--faint)}details.acc[open]>summary::before{content:'▾  '}details.acc[open]>summary{color:var(--accent)}.sublabel-grp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:16px 0 7px;font-weight:600}.estimate{font-family:var(--mono);font-size:11px;color:var(--accent2);margin:6px 0 2px}
+details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-top:0}details.acc>summary{cursor:pointer;list-style:none;color:var(--dim);font-size:12px;font-weight:600;padding:9px 0 5px;-webkit-user-select:none;user-select:none}details.acc>summary::-webkit-details-marker{display:none}details.acc>summary::before{content:'▸  ';color:var(--faint)}details.acc[open]>summary::before{content:'▾  '}details.acc[open]>summary{color:var(--accent)}.sublabel-grp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:16px 0 7px;font-weight:600}.estimate{font-family:var(--mono);font-size:11px;color:var(--accent2);margin:6px 0 2px}
 </script>
 <script type="text/cartalith-body" data-tool="generate">
 <header>
   <button id="panelToggle" class="panel-toggle" aria-label="Toggle controls">☰</button>
-  <h1>Elevation Foundation</h1>
-  <span class="ver" id="verTag">v0.104</span>
-  <span class="tag">tectonics · warp · volcanism · erosion · climate · biomes — Cartalith prototype</span>
   <div class="dropdown-wrap" id="importWrap" style="margin-left:auto">
     <button class="menubtn" id="importMenuBtn">Import ▾</button>
     <div class="dropdown" id="importMenu">
@@ -288,10 +293,10 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
     </div>
   </div>
   <!-- hidden file inputs (triggered programmatically; centralized here from their former sections) -->
-  <input type="file" id="file" class="file" accept="image/*">
-  <input type="file" id="zipFile" class="file" accept=".zip,application/zip">
-  <input type="file" id="packFile" class="file" accept=".zip,application/zip">
-  <input type="file" id="atlasFile" class="file" accept=".zip,application/zip">
+  <input type="file" id="file" class="file" accept="image/*" aria-label="Load heightmap file">
+  <input type="file" id="zipFile" class="file" accept=".zip,application/zip" aria-label="Load project zip">
+  <input type="file" id="packFile" class="file" accept=".zip,application/zip" aria-label="Import asset pack">
+  <input type="file" id="atlasFile" class="file" accept=".zip,application/zip" aria-label="Import atlas zip">
 </header>
 
 <div class="stage">
@@ -347,15 +352,15 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
 
     <div class="sec">
       <h2>Planet</h2>
-      <div class="row"><label>Gravity</label><input type="range" id="pg" min="30" max="250" step="5" value="100"><span class="val" id="pgV">1.00 g</span></div>
-      <div class="row"><label>Day length</label><input type="range" id="prot" min="6" max="96" step="1" value="24"><span class="val" id="protV">24 h</span></div>
-      <div class="row"><label>Axial tilt</label><input type="range" id="ptilt" min="0" max="45" step="0.5" value="23.4"><span class="val" id="ptiltV">23.4&deg;</span></div>
+      <div class="row"><label for="pg">Gravity</label><input type="range" id="pg" min="30" max="250" step="5" value="100"><span class="val" id="pgV">1.00 g</span></div>
+      <div class="row"><label for="prot">Day length</label><input type="range" id="prot" min="6" max="96" step="1" value="24"><span class="val" id="protV">24 h</span></div>
+      <div class="row"><label for="ptilt">Axial tilt</label><input type="range" id="ptilt" min="0" max="45" step="0.5" value="23.4"><span class="val" id="ptiltV">23.4&deg;</span></div>
       <label class="chk"><input type="checkbox" id="geoidChk"> Geoid sea level (rotation bulge + mantle)</label>
-      <div class="row"><label>Geoid range</label><input type="range" id="geoidAmp" min="1" max="50" step="1" value="15"><span class="val" id="geoidAmpV">0.015</span></div>
+      <div class="row"><label for="geoidAmp">Geoid range</label><input type="range" id="geoidAmp" min="1" max="50" step="1" value="15"><span class="val" id="geoidAmpV">0.015</span></div>
       <label class="chk"><input type="checkbox" id="tidesChk"> Tides &amp; intertidal zones (moons)</label>
-      <div class="row"><label>Moon mass</label><input type="range" id="tideMass" min="0" max="300" step="5" value="100"><span class="val" id="tideMassV">1.00×</span></div>
-      <div class="row"><label>Moon distance</label><input type="range" id="tideDist" min="30" max="300" step="5" value="100"><span class="val" id="tideDistV">1.00×</span></div>
-      <div class="row"><label>Tidal response k₂</label><input type="range" id="tideK2" min="0" max="200" step="5" value="100"><span class="val" id="tideK2V">1.00</span></div>
+      <div class="row"><label for="tideMass">Moon mass</label><input type="range" id="tideMass" min="0" max="300" step="5" value="100"><span class="val" id="tideMassV">1.00×</span></div>
+      <div class="row"><label for="tideDist">Moon distance</label><input type="range" id="tideDist" min="30" max="300" step="5" value="100"><span class="val" id="tideDistV">1.00×</span></div>
+      <div class="row"><label for="tideK2">Tidal response k₂</label><input type="range" id="tideK2" min="0" max="200" step="5" value="100"><span class="val" id="tideK2V">1.00</span></div>
       <div class="hint"><b>Tides</b>: the moons' gravitational pull (∝ mass ÷ distance³, ÷ g) sets the open-ocean tidal range; it amplifies in shallow shelf seas and funnels at coasts into a <b>spring tidal-range field</b> — wide intertidal flats and "wandering flood zones" hugging gentle coasts (coastal hazard for settlements/routes; exported as <code>tidal_range.f32</code>). Preview in the <b>Tides</b> debug view.</div>
       <div class="hint">Surface gravity scales fluvial &amp; glacial erosion (&times;g), temperature lapse (&times;g), crater size (&times;g<sup>&minus;0.22</sup>), wave energy (&times;1/g) and rescales peak altitude (~1/g). Talus angle stays fixed: friction-dominated, gravity-independent. <b>Geoid</b> makes sea level a field, not a number: a fast-spinning planet's seas bulge at the equator (J2 &prop; &Omega;&sup2;R/g) on top of lumpy-mass harmonics and mantle noise &mdash; coastlines, climate ocean masks and biomes all follow the <i>local</i> sea level. Preview it in the <b>Geoid</b> debug view before enabling. Day length and tilt also drive the weather model (circulation cells, seasons).</div>
     </div>
@@ -363,10 +368,10 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
     <div class="sec">
       <h2>Scale &amp; calibration</h2>
       <div class="sublabel-grp">Vertical</div>
-      <div class="row"><label>Sea level</label><input type="range" id="sea" min="0" max="100" step="1" value="42"><span class="val" id="seaV">42%</span></div>
-      <div class="row"><label>Peak altitude</label><input type="number" id="peak" value="4000" min="1" step="50"><span class="pill">m</span></div>
+      <div class="row"><label for="sea">Sea level</label><input type="range" id="sea" min="0" max="100" step="1" value="42"><span class="val" id="seaV">42%</span></div>
+      <div class="row"><label for="peak">Peak altitude</label><input type="number" id="peak" value="4000" min="1" step="50"><span class="pill">m</span></div>
       <div class="sublabel-grp">Horizontal</div>
-      <div class="row"><label>Map width</label><input type="number" id="mapw" value="800" min="1" step="10"><span class="pill">km</span></div>
+      <div class="row"><label for="mapw">Map width</label><input type="number" id="mapw" value="800" min="1" step="10"><span class="pill">km</span></div>
       <div class="hint">Sea level = which height is 0&nbsp;m (below is sea). Peak = metres of the highest point. Map width is independent; combined with the vertical scale it yields true <b>grade</b>.</div>
     </div>
 
@@ -382,76 +387,76 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
           <button data-arc="rift">Rift</button>
           <button data-arc="custom">Custom</button>
         </div>
-        <div class="row"><label>Continentality</label><input type="range" id="wsCont" min="1" max="90" step="1" value="30"><span class="val" id="wsContV">0.30</span></div>
-        <div class="row"><label>Fragmentation</label><input type="range" id="wsFrag" min="0" max="100" step="1" value="50"><span class="val" id="wsFragV">0.50</span></div>
-        <div class="row"><label>Tectonic energy</label><input type="range" id="wsTect" min="0" max="100" step="1" value="60"><span class="val" id="wsTectV">0.60</span></div>
-        <div class="row"><label>Ocean depth</label><input type="range" id="wsOcean" min="0" max="100" step="1" value="60"><span class="val" id="wsOceanV">0.60</span></div>
-        <div class="row"><label>Hotspot density</label><input type="range" id="wsHot" min="0" max="100" step="1" value="20"><span class="val" id="wsHotV">0.20</span></div>
+        <div class="row"><label for="wsCont">Continentality</label><input type="range" id="wsCont" min="1" max="90" step="1" value="30"><span class="val" id="wsContV">0.30</span></div>
+        <div class="row"><label for="wsFrag">Fragmentation</label><input type="range" id="wsFrag" min="0" max="100" step="1" value="50"><span class="val" id="wsFragV">0.50</span></div>
+        <div class="row"><label for="wsTect">Tectonic energy</label><input type="range" id="wsTect" min="0" max="100" step="1" value="60"><span class="val" id="wsTectV">0.60</span></div>
+        <div class="row"><label for="wsOcean">Ocean depth</label><input type="range" id="wsOcean" min="0" max="100" step="1" value="60"><span class="val" id="wsOceanV">0.60</span></div>
+        <div class="row"><label for="wsHot">Hotspot density</label><input type="range" id="wsHot" min="0" max="100" step="1" value="20"><span class="val" id="wsHotV">0.20</span></div>
       </div>
       <div class="hint">When enabled a Continentality field is generated first: continental plates settle in high-field zones, oceanic in low, and a large-scale elevation bias anchors the land/sea split. Continental interiors become drier. <b>Disabled (default):</b> existing random plate generation — identical to current behaviour. All tectonic sliders below remain editable as fine-tuning on top of whichever archetype is active.</div>
     </div>
 
     <div class="sec">
       <h2>Tectonics</h2>
-      <div class="row"><label>Plates</label><input type="range" id="plates" min="4" max="40" step="1" value="14"><span class="val" id="platesV">14</span></div>
-      <div class="row"><label>Drift</label><input type="range" id="vel" min="0" max="100" step="1" value="50"><span class="val" id="velV">×1.00</span></div>
-      <div class="row"><label>Warp</label><input type="range" id="warp" min="0" max="100" step="1" value="45"><span class="val" id="warpV">0.45</span></div>
-      <div class="row"><label>Uplift spread</label><input type="range" id="sigma" min="0" max="100" step="1" value="40"><span class="val" id="sigmaV">18px</span></div>
-      <div class="row"><label>Tectonic α</label><input type="range" id="alpha" min="0" max="100" step="1" value="71"><span class="val" id="alphaV">0.85</span></div>
-      <div class="row"><label>Noise β</label><input type="range" id="beta" min="0" max="100" step="1" value="37"><span class="val" id="betaV">0.22</span></div>
-      <div class="row"><label>Erosion / age</label><input type="range" id="age" min="0" max="100" step="1" value="60"><span class="val" id="ageV">0.60</span></div>
+      <div class="row"><label for="plates">Plates</label><input type="range" id="plates" min="4" max="40" step="1" value="14"><span class="val" id="platesV">14</span></div>
+      <div class="row"><label for="vel">Drift</label><input type="range" id="vel" min="0" max="100" step="1" value="50"><span class="val" id="velV">×1.00</span></div>
+      <div class="row"><label for="warp">Warp</label><input type="range" id="warp" min="0" max="100" step="1" value="45"><span class="val" id="warpV">0.45</span></div>
+      <div class="row"><label for="sigma">Uplift spread</label><input type="range" id="sigma" min="0" max="100" step="1" value="40"><span class="val" id="sigmaV">18px</span></div>
+      <div class="row"><label for="alpha">Tectonic α</label><input type="range" id="alpha" min="0" max="100" step="1" value="71"><span class="val" id="alphaV">0.85</span></div>
+      <div class="row"><label for="beta">Noise β</label><input type="range" id="beta" min="0" max="100" step="1" value="37"><span class="val" id="betaV">0.22</span></div>
+      <div class="row"><label for="age">Erosion / age</label><input type="range" id="age" min="0" max="100" step="1" value="60"><span class="val" id="ageV">0.60</span></div>
       <div class="sublabel">Physical coupling fields</div>
-      <div class="row"><label>Flexure F</label><input type="range" id="flexure" min="0" max="60" step="1" value="20"><span class="val" id="flexureV">0.20</span></div>
-      <div class="row"><label>Heterogeneity C</label><input type="range" id="hetero" min="0" max="40" step="1" value="8"><span class="val" id="heteroV">0.08</span></div>
-      <div class="row"><label>Rock resistance</label><input type="range" id="resist" min="0" max="100" step="1" value="50"><span class="val" id="resistV">0.50</span></div>
+      <div class="row"><label for="flexure">Flexure F</label><input type="range" id="flexure" min="0" max="60" step="1" value="20"><span class="val" id="flexureV">0.20</span></div>
+      <div class="row"><label for="hetero">Heterogeneity C</label><input type="range" id="hetero" min="0" max="40" step="1" value="8"><span class="val" id="heteroV">0.08</span></div>
+      <div class="row"><label for="resist">Rock resistance</label><input type="range" id="resist" min="0" max="100" step="1" value="50"><span class="val" id="resistV">0.50</span></div>
       <div class="hint"><b>Flexure</b> adds broad isostatic arches around mountain ranges and subsidence in rift basins — the main driver of continental shelves. <b>Heterogeneity</b> applies low-frequency crustal diversity inside old stable plates (cratons, sedimentary basins). <b>Rock resistance</b> scales erodibility in stream-power erosion: old shields resist incision, young volcanic arcs erode rapidly.</div>
       <label class="chk"><input type="checkbox" id="ridged" checked> Ridged mountain detail</label>
       <label class="chk"><input type="checkbox" id="tectGraph"> Structured orogeny (graph-driven ranges)</label>
       <div class="hint">Replaces blurred-stress uplift blobs with type-specific landforms grown along each plate margin: collision fold belts + foreland basins, subduction trenches + volcanic arcs, rift grabens, and transform fault valleys with offset pressure ridges. Preview in the <b>Orog</b> debug view.</div>
-      <div class="row"><label>Fold intensity</label><input type="range" id="foldI" min="0" max="300" step="1" value="100"><span class="val" id="foldIV">1.00</span></div>
-      <div class="row"><label>Trench depth</label><input type="range" id="trenchD" min="0" max="250" step="1" value="100"><span class="val" id="trenchDV">1.00</span></div>
-      <div class="row"><label>Fault blocks</label><input type="range" id="faultB" min="0" max="200" step="1" value="60"><span class="val" id="faultBV">0.60</span></div>
-      <div class="row"><label>Seed</label><input type="number" id="seedN" value="0" step="1"></div>
+      <div class="row"><label for="foldI">Fold intensity</label><input type="range" id="foldI" min="0" max="300" step="1" value="100"><span class="val" id="foldIV">1.00</span></div>
+      <div class="row"><label for="trenchD">Trench depth</label><input type="range" id="trenchD" min="0" max="250" step="1" value="100"><span class="val" id="trenchDV">1.00</span></div>
+      <div class="row"><label for="faultB">Fault blocks</label><input type="range" id="faultB" min="0" max="200" step="1" value="60"><span class="val" id="faultBV">0.60</span></div>
+      <div class="row"><label for="seedN">Seed</label><input type="number" id="seedN" value="0" step="1"></div>
       <div class="hint"><b>Warp</b> bends the straight plate boundaries into organic coastlines and ranges.</div>
     </div>
 
     <div class="sec">
       <h2>Volcanism &amp; impacts</h2>
-      <div class="row"><label>Volcanoes</label><input type="range" id="volc" min="0" max="100" step="1" value="20"><span class="val" id="volcV">20</span></div>
-      <div class="row"><label>Volcano age</label><input type="range" id="volca" min="0" max="100" step="1" value="40"><span class="val" id="volcaV">0.40</span></div>
+      <div class="row"><label for="volc">Volcanoes</label><input type="range" id="volc" min="0" max="100" step="1" value="20"><span class="val" id="volcV">20</span></div>
+      <div class="row"><label for="volca">Volcano age</label><input type="range" id="volca" min="0" max="100" step="1" value="40"><span class="val" id="volcaV">0.40</span></div>
       <label class="chk"><input type="checkbox" id="volcProv" checked> Provinces &amp; arc/rift placement</label>
-      <div class="row"><label>Craters</label><input type="range" id="crat" min="0" max="100" step="1" value="50"><span class="val" id="cratV">100</span></div>
-      <div class="row"><label>Crater age</label><input type="range" id="crata" min="0" max="100" step="1" value="50"><span class="val" id="crataV">0.50</span></div>
+      <div class="row"><label for="crat">Craters</label><input type="range" id="crat" min="0" max="100" step="1" value="50"><span class="val" id="cratV">100</span></div>
+      <div class="row"><label for="crata">Crater age</label><input type="range" id="crata" min="0" max="100" step="1" value="50"><span class="val" id="crataV">0.50</span></div>
       <div class="hint">Built into the world after mountain-building. Volcanoes cluster on plate boundaries (arcs &amp; rifts) with power-law sizes; impacts scatter by Poisson with D⁻² sizes. Both degrade with age. Re-erode to weather them.</div>
     </div>
 
     <div class="sec">
       <h2>Climate &amp; biomes</h2>
       <div class="sublabel">Latitude band this map spans (Region mode — see Map extent in Source)</div>
-      <div class="row"><label>North edge</label><input type="range" id="latN" min="-90" max="90" step="1" value="55"><span class="val" id="latNV">55°</span></div>
-      <div class="row"><label>South edge</label><input type="range" id="latS" min="-90" max="90" step="1" value="5"><span class="val" id="latSV">5°</span></div>
+      <div class="row"><label for="latN">North edge</label><input type="range" id="latN" min="-90" max="90" step="1" value="55"><span class="val" id="latNV">55°</span></div>
+      <div class="row"><label for="latS">South edge</label><input type="range" id="latS" min="-90" max="90" step="1" value="5"><span class="val" id="latSV">5°</span></div>
       <div class="sublabel">Temperature</div>
-      <div class="row"><label>Equator °C</label><input type="range" id="teq" min="0" max="45" step="1" value="30"><span class="val" id="teqV">30°C</span></div>
-      <div class="row"><label>Pole °C</label><input type="range" id="tpo" min="-50" max="10" step="1" value="-25"><span class="val" id="tpoV">−25°C</span></div>
-      <div class="row"><label>Lapse rate</label><input type="range" id="lapse" min="0" max="120" step="1" value="65"><span class="val" id="lapseV">6.5°C/km</span></div>
+      <div class="row"><label for="teq">Equator °C</label><input type="range" id="teq" min="0" max="45" step="1" value="30"><span class="val" id="teqV">30°C</span></div>
+      <div class="row"><label for="tpo">Pole °C</label><input type="range" id="tpo" min="-50" max="10" step="1" value="-25"><span class="val" id="tpoV">−25°C</span></div>
+      <div class="row"><label for="lapse">Lapse rate</label><input type="range" id="lapse" min="0" max="120" step="1" value="65"><span class="val" id="lapseV">6.5°C/km</span></div>
       <label class="chk"><input type="checkbox" id="seasons"> Seasons &amp; Köppen climate</label>
       <label class="chk"><input type="checkbox" id="currents"> Ocean currents</label>
-      <div class="row"><label>Ice albedo</label><input type="range" id="albedo" min="0" max="100" step="1" value="0"><span class="val" id="albedoV">off</span></div>
+      <div class="row"><label for="albedo">Ice albedo</label><input type="range" id="albedo" min="0" max="100" step="1" value="0"><span class="val" id="albedoV">off</span></div>
       <div class="hint">Temperature falls with latitude (insolation) and altitude (lapse rate). In <b>Whole world</b> mode the map spans pole-to-pole; in <b>Region</b> mode you set the latitude band. <b>Seasons</b> runs summer/winter passes (thermal equator shifts by the planet's axial tilt) and classifies every land cell into a Köppen–Geiger climate (see the Köppen debug view). <b>Ice albedo</b> adds the cryosphere feedback — ice/snow reflects sunlight and cools further, so polar caps and high massifs grow colder and broaden (0 = off).</div>
     </div>
 
     <div class="sec">
       <h2>Weather · rainfall sim</h2>
       <div class="btnrow"><button class="accent" id="weatherBtn">Simulate weather</button></div>
-      <div class="row"><label>Iterations</label><input type="range" id="wIters" min="20" max="200" step="5" value="70"><span class="val" id="wItersV">70</span></div>
-      <div class="row"><label>Orographic</label><input type="range" id="rainK" min="0" max="200" step="1" value="100"><span class="val" id="rainKV">×1.00</span></div>
-      <div class="row"><label>Evaporation</label><input type="range" id="evap" min="0" max="100" step="1" value="40"><span class="val" id="evapV">0.12</span></div>
-      <div class="row"><label>Dryness</label><input type="range" id="rainDep" min="0" max="100" step="1" value="35"><span class="val" id="rainDepV">0.35</span></div>
-      <div class="row"><label>Ocean supply</label><input type="range" id="ocean" min="0" max="200" step="1" value="100"><span class="val" id="oceanV">×1.00</span></div>
+      <div class="row"><label for="wIters">Iterations</label><input type="range" id="wIters" min="20" max="200" step="5" value="70"><span class="val" id="wItersV">70</span></div>
+      <div class="row"><label for="rainK">Orographic</label><input type="range" id="rainK" min="0" max="200" step="1" value="100"><span class="val" id="rainKV">×1.00</span></div>
+      <div class="row"><label for="evap">Evaporation</label><input type="range" id="evap" min="0" max="100" step="1" value="40"><span class="val" id="evapV">0.12</span></div>
+      <div class="row"><label for="rainDep">Dryness</label><input type="range" id="rainDep" min="0" max="100" step="1" value="35"><span class="val" id="rainDepV">0.35</span></div>
+      <div class="row"><label for="ocean">Ocean supply</label><input type="range" id="ocean" min="0" max="200" step="1" value="100"><span class="val" id="oceanV">×1.00</span></div>
       <div class="row"><label>Wind model</label><div class="seg sm" id="windModeSeg"><button data-wm="auto" class="on">Planetary</button><button data-wm="manual">Manual</button></div></div>
-      <div class="row"><label>Pressure infl.</label><input type="range" id="pressK" min="0" max="150" step="5" value="60"><span class="val" id="pressKV">0.60</span></div>
-      <div class="row"><label>Zonal belts</label><input type="range" id="zonalK" min="0" max="150" step="5" value="50"><span class="val" id="zonalKV">0.50</span></div>
-      <div class="row"><label>Wind →</label><input type="range" id="windDir" min="0" max="360" step="5" value="0"><span class="val" id="windDirV">0°</span></div>
+      <div class="row"><label for="pressK">Pressure infl.</label><input type="range" id="pressK" min="0" max="150" step="5" value="60"><span class="val" id="pressKV">0.60</span></div>
+      <div class="row"><label for="zonalK">Zonal belts</label><input type="range" id="zonalK" min="0" max="150" step="5" value="50"><span class="val" id="zonalKV">0.50</span></div>
+      <div class="row"><label for="windDir">Wind →</label><input type="range" id="windDir" min="0" max="360" step="5" value="0"><span class="val" id="windDirV">0°</span></div>
       <div class="hint">Moisture evaporates off the seas (more from warm water), rides the wind, and rains where air climbs terrain or saturates — windward coasts wet, lee interiors dry. <b>Planetary</b> wind = latitude belts (trades / westerlies / polar easterlies; belt count follows day length) bent by thermal lows and highs (pressure influence, Coriolis-deflected) — monsoon-style sea→land flow emerges where summer land runs hot. <b>Manual</b> = one fixed direction (Wind →, region only). Runs on click; more iterations push moisture deeper inland.</div>
     </div>
 
@@ -460,40 +465,40 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
       <details class="acc" open>
         <summary>Droplet hydraulic</summary>
         <div class="btnrow" style="margin-top:8px"><button class="accent" id="erodeBtn">Erode (droplet)</button><button id="resetBtn">Reset</button></div>
-        <div class="row"><label>Droplets</label><input type="range" id="drops" min="0" max="100" step="1" value="40"><span class="val" id="dropsV">60k</span></div>
-        <div class="row"><label>Strength</label><input type="range" id="estr" min="0" max="100" step="1" value="35"><span class="val" id="estrV">0.35</span></div>
-        <div class="row"><label>Deposition</label><input type="range" id="edep" min="0" max="100" step="1" value="30"><span class="val" id="edepV">0.30</span></div>
-        <div class="row"><label>Thermal</label><input type="range" id="ethr" min="0" max="30" step="1" value="8"><span class="val" id="ethrV">8</span></div>
-        <div class="row"><label>Slope limit</label><input type="range" id="etal" min="1" max="40" step="1" value="12"><span class="val" id="etalV">0.012</span></div>
+        <div class="row"><label for="drops">Droplets</label><input type="range" id="drops" min="0" max="100" step="1" value="40"><span class="val" id="dropsV">60k</span></div>
+        <div class="row"><label for="estr">Strength</label><input type="range" id="estr" min="0" max="100" step="1" value="35"><span class="val" id="estrV">0.35</span></div>
+        <div class="row"><label for="edep">Deposition</label><input type="range" id="edep" min="0" max="100" step="1" value="30"><span class="val" id="edepV">0.30</span></div>
+        <div class="row"><label for="ethr">Thermal</label><input type="range" id="ethr" min="0" max="30" step="1" value="8"><span class="val" id="ethrV">8</span></div>
+        <div class="row"><label for="etal">Slope limit</label><input type="range" id="etal" min="1" max="40" step="1" value="12"><span class="val" id="etalV">0.012</span></div>
       </details>
       <details class="acc">
         <summary>Hillslope diffuse</summary>
         <div class="btnrow" style="margin-top:8px"><button class="accent" id="diffuseBtn">Hillslope diffuse</button></div>
-        <div class="row"><label>Diffusivity D</label><input type="range" id="edD" min="1" max="100" step="1" value="75"><span class="val" id="edDV">0.15</span></div>
-        <div class="row"><label>Passes</label><input type="range" id="edPas" min="1" max="40" step="1" value="6"><span class="val" id="edPasV">6</span></div>
+        <div class="row"><label for="edD">Diffusivity D</label><input type="range" id="edD" min="1" max="100" step="1" value="75"><span class="val" id="edDV">0.15</span></div>
+        <div class="row"><label for="edPas">Passes</label><input type="range" id="edPas" min="1" max="40" step="1" value="6"><span class="val" id="edPasV">6</span></div>
         <div class="hint">Smooths slopes by linear diffusion (∂z/∂t = D∇²z) — softens cliffs and fills hollows between fluvial passes.</div>
       </details>
       <details class="acc">
         <summary>Stream-power carve</summary>
         <div class="btnrow" style="margin-top:8px"><button class="accent" id="streamBtn">Stream-power carve</button></div>
-        <div class="row"><label>Uplift</label><input type="range" id="sUp" min="0" max="100" step="1" value="0"><span class="val" id="sUpV">0.00</span></div>
-        <div class="row"><label>Channeling</label><input type="range" id="sK" min="0" max="100" step="1" value="40"><span class="val" id="sKV">0.012</span></div>
-        <div class="row"><label>Iterations</label><input type="range" id="sIt" min="4" max="40" step="1" value="15"><span class="val" id="sItV">15</span></div>
-        <div class="row"><label>Deposition</label><input type="range" id="sDep" min="0" max="100" step="1" value="30"><span class="val" id="sDepV">0.30</span></div>
-        <div class="row"><label>Rain → erosion</label><input type="range" id="sClim" min="0" max="100" step="1" value="50"><span class="val" id="sClimV">0.50</span></div>
+        <div class="row"><label for="sUp">Uplift</label><input type="range" id="sUp" min="0" max="100" step="1" value="0"><span class="val" id="sUpV">0.00</span></div>
+        <div class="row"><label for="sK">Channeling</label><input type="range" id="sK" min="0" max="100" step="1" value="40"><span class="val" id="sKV">0.012</span></div>
+        <div class="row"><label for="sIt">Iterations</label><input type="range" id="sIt" min="4" max="40" step="1" value="15"><span class="val" id="sItV">15</span></div>
+        <div class="row"><label for="sDep">Deposition</label><input type="range" id="sDep" min="0" max="100" step="1" value="30"><span class="val" id="sDepV">0.30</span></div>
+        <div class="row"><label for="sClim">Rain → erosion</label><input type="range" id="sClim" min="0" max="100" step="1" value="50"><span class="val" id="sClimV">0.50</span></div>
         <div class="hint">Carves dendritic river valleys by fluvial incision (implicit stream-power, Braun &amp; Willett 2013) with multiple-flow-direction drainage. <b>Uplift</b> is <b>off by default</b> — raise it only to grow mountains that compete with incision; at 0 it purely carves existing relief. <b>Channeling</b> sets incision aggressiveness; <b>Deposition</b> refills valleys/builds deltas but never raises a channel above the land; <b>Rain → erosion</b> makes wet regions carve faster. See the <b>Flow</b> view.</div>
       </details>
       <details class="acc">
         <summary>Velocity (momentum)</summary>
         <div class="btnrow" style="margin-top:8px"><button class="accent" id="veloBtn">Velocity erode</button></div>
-        <div class="row"><label>Iterations</label><input type="range" id="vIt" min="10" max="160" step="1" value="60"><span class="val" id="vItV">60</span></div>
-        <div class="row"><label>Strength</label><input type="range" id="vStr" min="0" max="100" step="1" value="50"><span class="val" id="vStrV">0.50</span></div>
-        <div class="row"><label>Meander</label><input type="range" id="vMnd" min="0" max="100" step="1" value="60"><span class="val" id="vMndV">0.60</span></div>
+        <div class="row"><label for="vIt">Iterations</label><input type="range" id="vIt" min="10" max="160" step="1" value="60"><span class="val" id="vItV">60</span></div>
+        <div class="row"><label for="vStr">Strength</label><input type="range" id="vStr" min="0" max="100" step="1" value="50"><span class="val" id="vStrV">0.50</span></div>
+        <div class="row"><label for="vMnd">Meander</label><input type="range" id="vMnd" min="0" max="100" step="1" value="60"><span class="val" id="vMndV">0.60</span></div>
         <div class="hint">Pillar 2 — full <b>velocity-field</b> hydraulic erosion (virtual-pipe shallow water, Mei et al. 2007 / LanLou123): water carries <b>momentum</b> (semi-Lagrangian advection), so it overshoots bends and presses the <b>outer bank</b> (erosion) while dropping sediment on the inner bank — meanders &amp; oxbows. Closed basins <b>pool</b> into lakes until they spill the lowest sill. Gravity (Planet → g) scales the flux. See the <b>Velocity</b> debug view. A new op — it doesn't touch the droplet/stream/glacial passes.</div>
       </details>
       <details class="acc">
         <summary>Evolve &amp; sediment</summary>
-        <div class="row" style="margin-top:8px"><label>Evolve cycles</label><input type="range" id="evoCyc" min="2" max="12" step="1" value="5"><span class="val" id="evoCycV">5</span></div>
+        <div class="row" style="margin-top:8px"><label for="evoCyc">Evolve cycles</label><input type="range" id="evoCyc" min="2" max="12" step="1" value="5"><span class="val" id="evoCycV">5</span></div>
         <div class="btnrow"><button id="evolveBtn">Evolve climate ↔ terrain</button><button id="sedimentBtn">Sediment fill</button></div>
         <div class="btnrow"><button id="tidalFlatsBtn">Tidal flats (G4)</button></div>
         <label class="chk"><input type="checkbox" id="dynLithChk"> Dynamic lithology (exhumation hardens rock)</label>
@@ -504,20 +509,20 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
     <div class="sec">
       <h2>Glacial erosion</h2>
       <div class="btnrow"><button class="accent" id="glacBtn">Glacial carve</button><button id="fjordBtn">Carve fjords</button></div>
-      <div class="row"><label>Snowline</label><input type="range" id="gSnow" min="0" max="100" step="1" value="65"><span class="val" id="gSnowV">0.65</span></div>
-      <div class="row"><label>Intensity</label><input type="range" id="gKg" min="1" max="100" step="1" value="15"><span class="val" id="gKgV">0.15</span></div>
-      <div class="row"><label>U-width</label><input type="range" id="gUF" min="0" max="100" step="1" value="60"><span class="val" id="gUFV">0.60</span></div>
-      <div class="row"><label>Passes</label><input type="range" id="gPas" min="1" max="30" step="1" value="8"><span class="val" id="gPasV">8</span></div>
+      <div class="row"><label for="gSnow">Snowline</label><input type="range" id="gSnow" min="0" max="100" step="1" value="65"><span class="val" id="gSnowV">0.65</span></div>
+      <div class="row"><label for="gKg">Intensity</label><input type="range" id="gKg" min="1" max="100" step="1" value="15"><span class="val" id="gKgV">0.15</span></div>
+      <div class="row"><label for="gUF">U-width</label><input type="range" id="gUF" min="0" max="100" step="1" value="60"><span class="val" id="gUFV">0.60</span></div>
+      <div class="row"><label for="gPas">Passes</label><input type="range" id="gPas" min="1" max="30" step="1" value="8"><span class="val" id="gPasV">8</span></div>
       <div class="hint">Carves high, cold terrain (above the snowline) into U-shaped valleys. Ice follows the drainage network and widens valleys laterally instead of just cutting down. Glacier heads scoop into cirque bowls. Lower the snowline to glaciate more of the landscape; raise it to restrict ice to the peaks. Run after erosion for best results — erode first, then glaciate. <b>Carve fjords</b> overdeepens valleys below sea level <i>only</i> on cold, steep, hard-rock (granite/gneiss/basalt) coasts — drowned glacial troughs (Norway/Patagonia-style), never on tropical or weak-rock shores. See the <b>Fjord</b> debug view for the probability mask.</div>
     </div>
 
     <div class="sec">
       <h2>Coastal</h2>
       <div class="btnrow"><button class="accent" id="coastBtn">Apply coastal</button></div>
-      <div class="row"><label>Wave strength</label><input type="range" id="cWave" min="0" max="100" step="1" value="50"><span class="val" id="cWaveV">0.50</span></div>
-      <div class="row"><label>Estuary depth</label><input type="range" id="cEst" min="0" max="100" step="1" value="40"><span class="val" id="cEstV">0.08</span></div>
-      <div class="row"><label>Marsh band</label><input type="range" id="cMar" min="0" max="100" step="1" value="30"><span class="val" id="cMarV">0.03</span></div>
-      <div class="row"><label>Passes</label><input type="range" id="cPas" min="1" max="15" step="1" value="4"><span class="val" id="cPasV">4</span></div>
+      <div class="row"><label for="cWave">Wave strength</label><input type="range" id="cWave" min="0" max="100" step="1" value="50"><span class="val" id="cWaveV">0.50</span></div>
+      <div class="row"><label for="cEst">Estuary depth</label><input type="range" id="cEst" min="0" max="100" step="1" value="40"><span class="val" id="cEstV">0.08</span></div>
+      <div class="row"><label for="cMar">Marsh band</label><input type="range" id="cMar" min="0" max="100" step="1" value="30"><span class="val" id="cMarV">0.03</span></div>
+      <div class="row"><label for="cPas">Passes</label><input type="range" id="cPas" min="1" max="15" step="1" value="4"><span class="val" id="cPasV">4</span></div>
       <div class="hint">Three coastal processes in one pass. <b>Sea cliffs</b>: wave energy erodes exposed coastal cells and leaves steep cliff faces (run multiple times to carve retreating cliffs). <b>Estuaries</b>: high-flow river mouths near sea level are widened with an exponential taper — funnel-shaped inlets emerge where major rivers meet the coast. <b>Tidal marsh</b>: the narrow, flat intertidal band is roughened with organic micro-relief. Run after stream-power carve so river mouths are established.</div>
     </div>
 
@@ -536,9 +541,9 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
         <button data-mode="gray">Height</button>
         <button data-mode="shade">Shade</button>
       </div>
-      <div class="row" style="margin-top:12px"><label>Relief ↔ biome</label><input type="range" id="bioBlend" min="0" max="100" step="1" value="90"><span class="val" id="bioBlendV">0.90</span></div>
-      <div class="row"><label>Relief</label><input type="range" id="exag" min="0" max="100" step="1" value="42"><span class="val" id="exagV">×3.4</span></div>
-      <div class="row"><label>Sun</label><input type="range" id="sun" min="0" max="360" step="5" value="315"><span class="val" id="sunV">315°</span></div>
+      <div class="row" style="margin-top:12px"><label for="bioBlend">Relief ↔ biome</label><input type="range" id="bioBlend" min="0" max="100" step="1" value="90"><span class="val" id="bioBlendV">0.90</span></div>
+      <div class="row"><label for="exag">Relief</label><input type="range" id="exag" min="0" max="100" step="1" value="42"><span class="val" id="exagV">×3.4</span></div>
+      <div class="row"><label for="sun">Sun</label><input type="range" id="sun" min="0" max="360" step="5" value="315"><span class="val" id="sunV">315°</span></div>
       <label class="chk"><input type="checkbox" id="shadeOnHypso" checked> Hillshade the tinted map</label>
       <details class="acc">
       <summary>Debug overlay</summary>
@@ -569,7 +574,7 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
         <button data-d="flood">Flood</button>
         <button data-d="wildlife">Wildlife</button>
       </div>
-      <div class="row" style="margin-top:8px"><label>Layer opacity</label><input type="range" id="dbgOpacity" min="0" max="100" step="1" value="100"><span class="val" id="dbgOpacityV">100%</span></div>
+      <div class="row" style="margin-top:8px"><label for="dbgOpacity">Layer opacity</label><input type="range" id="dbgOpacity" min="0" max="100" step="1" value="100"><span class="val" id="dbgOpacityV">100%</span></div>
       <div class="hint" style="margin-top:4px">Blends the active debug layer over the base map — drop it to see terrain underneath. In the <b>Settlement</b> view, click a gold dot for a "why here" summary (resource availability + soil/water/carry).</div>
       </details>
       <div class="hint">Map-styling controls (parchment, stylized icons, coastal waves, asset packs) live in the <b>Style</b> tab.</div>
@@ -581,7 +586,7 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
       <div class="sublabel-grp">Live preview</div>
       <label class="chk"><input type="checkbox" id="lodAutoChk"> Auto-detail on zoom (enter LOD when you zoom in)</label>
       <label class="chk"><input type="checkbox" id="lodChk"> Tiled LOD view (zoom into amplified detail)</label>
-      <div class="row"><label>Zoom detail</label><input type="range" id="zoomDetailR" min="0" max="300" step="5" value="100"><span class="val" id="zoomDetailV">1.00×</span></div>
+      <div class="row"><label for="zoomDetailR">Zoom detail</label><input type="range" id="zoomDetailR" min="0" max="300" step="5" value="100"><span class="val" id="zoomDetailV">1.00×</span></div>
       <div class="row"><label>Tile size</label>
         <div class="seg sm" id="lodTileSeg" style="flex:1">
           <button data-ts="512">512</button><button data-ts="1024" class="on">1K</button><button data-ts="2048">2K</button><button data-ts="4096">4K</button>
@@ -649,8 +654,8 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
           <button data-feat="canyon">Canyon</button>
           <button data-feat="escarpment">Scarp</button>
         </div>
-        <div class="row"><label>Width (radius)</label><input type="range" id="featRad" min="4" max="120" step="1" value="28"><span class="val" id="featRadV">28</span></div>
-        <div class="row"><label>Strength</label><input type="range" id="featStr" min="1" max="100" step="1" value="45"><span class="val" id="featStrV">0.45</span></div>
+        <div class="row"><label for="featRad">Width (radius)</label><input type="range" id="featRad" min="4" max="120" step="1" value="28"><span class="val" id="featRadV">28</span></div>
+        <div class="row"><label for="featStr">Strength</label><input type="range" id="featStr" min="1" max="100" step="1" value="45"><span class="val" id="featStrV">0.45</span></div>
         <div class="btnrow">
           <button class="accent" id="guideBtn">Draw guide</button>
           <button id="featApplyBtn" disabled>Apply</button>
@@ -674,8 +679,8 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
           <button data-brush="volcano">Volc.</button>
           <button data-brush="water">Water</button>
         </div>
-        <div class="row" style="margin-top:12px"><label>Radius</label><input type="range" id="brad" min="2" max="80" step="1" value="22"><span class="val" id="bradV">22</span></div>
-        <div class="row"><label>Strength</label><input type="range" id="bstr" min="1" max="100" step="1" value="35"><span class="val" id="bstrV">35%</span></div>
+        <div class="row" style="margin-top:12px"><label for="brad">Radius</label><input type="range" id="brad" min="2" max="80" step="1" value="22"><span class="val" id="bradV">22</span></div>
+        <div class="row"><label for="bstr">Strength</label><input type="range" id="bstr" min="1" max="100" step="1" value="35"><span class="val" id="bstrV">35%</span></div>
         <label class="chk"><input type="checkbox" id="lodEditChk"> Edit LOD tiles (sculpt the refined detail)</label>
         <div class="hint">Drag to edit — <b>only while this Sculpt tab is open</b> (in the Terrain/Style tabs the canvas drag never sculpts; pan with middle-drag, space-drag or the wheel). Disabled in debug views. <b>Cliff / Ridge / Canyon</b> follow drag direction. <b>Mesa / Volc.</b> stamp once on tap. <b>Water</b> deposits a lake filled to the clicked height (over the circle shown at the cursor) without raising sea level — drag to extend; cleared on Generate. With <b>Edit LOD tiles</b> on, the same brush sculpts the refined Tiled-LOD detail (turn on Tiled LOD + Refine in the Terrain tab first); edits persist per tile, Ctrl-Z undoes.</div>
       </div>
@@ -691,37 +696,37 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
       <div class="sec">
         <h2>Map style</h2>
         <div class="sublabel-grp">Rendering</div>
-        <div class="row"><label>Parchment</label><input type="range" id="parch" min="0" max="100" step="1" value="0"><span class="val" id="parchV">off</span></div>
-        <div class="row"><label>Ambient occlusion</label><input type="range" id="aoR" min="0" max="100" step="1" value="0"><span class="val" id="aoV">off</span></div>
-        <div class="row"><label>Ridge crests</label><input type="range" id="crestR" min="0" max="100" step="1" value="0"><span class="val" id="crestV">off</span></div>
-        <div class="row"><label>Slope rock</label><input type="range" id="rockR" min="0" max="100" step="1" value="0"><span class="val" id="rockV">off</span></div>
-        <div class="row"><label>Surface texture</label><input type="range" id="texR" min="0" max="100" step="1" value="0"><span class="val" id="texV">off</span></div>
-        <div class="row"><label>Minor channels</label><input type="range" id="minorR" min="0" max="100" step="1" value="0"><span class="val" id="minorV">off</span></div>
-        <div class="row"><label>Ridged relief</label><input type="range" id="ridgeR" min="0" max="100" step="1" value="0"><span class="val" id="ridgeV">off</span></div>
-        <div class="row"><label>SDF coastlines</label><input type="range" id="sdfCoastR" min="0" max="100" step="1" value="0"><span class="val" id="sdfCoastV">off</span></div>
-        <div class="row"><label>SDF river bands</label><input type="range" id="sdfRiversR" min="0" max="100" step="1" value="0"><span class="val" id="sdfRiversV">off</span></div>
-        <div class="row"><label>SDF biome blend</label><input type="range" id="sdfBiomesR" min="0" max="100" step="1" value="0"><span class="val" id="sdfBiomesV">off</span></div>
+        <div class="row"><label for="parch">Parchment</label><input type="range" id="parch" min="0" max="100" step="1" value="0"><span class="val" id="parchV">off</span></div>
+        <div class="row"><label for="aoR">Ambient occlusion</label><input type="range" id="aoR" min="0" max="100" step="1" value="0"><span class="val" id="aoV">off</span></div>
+        <div class="row"><label for="crestR">Ridge crests</label><input type="range" id="crestR" min="0" max="100" step="1" value="0"><span class="val" id="crestV">off</span></div>
+        <div class="row"><label for="rockR">Slope rock</label><input type="range" id="rockR" min="0" max="100" step="1" value="0"><span class="val" id="rockV">off</span></div>
+        <div class="row"><label for="texR">Surface texture</label><input type="range" id="texR" min="0" max="100" step="1" value="0"><span class="val" id="texV">off</span></div>
+        <div class="row"><label for="minorR">Minor channels</label><input type="range" id="minorR" min="0" max="100" step="1" value="0"><span class="val" id="minorV">off</span></div>
+        <div class="row"><label for="ridgeR">Ridged relief</label><input type="range" id="ridgeR" min="0" max="100" step="1" value="0"><span class="val" id="ridgeV">off</span></div>
+        <div class="row"><label for="sdfCoastR">SDF coastlines</label><input type="range" id="sdfCoastR" min="0" max="100" step="1" value="0"><span class="val" id="sdfCoastV">off</span></div>
+        <div class="row"><label for="sdfRiversR">SDF river bands</label><input type="range" id="sdfRiversR" min="0" max="100" step="1" value="0"><span class="val" id="sdfRiversV">off</span></div>
+        <div class="row"><label for="sdfBiomesR">SDF biome blend</label><input type="range" id="sdfBiomesR" min="0" max="100" step="1" value="0"><span class="val" id="sdfBiomesV">off</span></div>
         <div class="hint">The <b>SDF</b> (signed-distance) layers treat coast, rivers and biome edges as continuous geometry: <b>coastlines</b> add resolution-independent beach &rarr; coastal-plain bands; <b>river bands</b> draw bank/wetland/floodplain margins from the drainage SDF; <b>biome blend</b> widens ecotones near biome boundaries. Render-only (screen overlays, like the river/minor-channel layers); all default off.</div>
         <div class="sublabel-grp">Painter (NPR)</div>
-        <div class="row"><label>Contour veins</label><input type="range" id="contoursR" min="0" max="100" step="1" value="0"><span class="val" id="contoursV">off</span></div>
-        <div class="row"><label>Ink linework</label><input type="range" id="inkR" min="0" max="100" step="1" value="0"><span class="val" id="inkV">off</span></div>
-        <div class="row"><label>Hachure</label><input type="range" id="hachureR" min="0" max="100" step="1" value="0"><span class="val" id="hachureV">off</span></div>
-        <div class="row"><label>Watercolor</label><input type="range" id="watercolorR" min="0" max="100" step="1" value="0"><span class="val" id="watercolorV">off</span></div>
-        <div class="row"><label>Cel / toon</label><input type="range" id="celR" min="0" max="100" step="1" value="0"><span class="val" id="celV">off</span></div>
-        <div class="row"><label>Engraving (cross-hatch)</label><input type="range" id="crosshatchR" min="0" max="100" step="1" value="0"><span class="val" id="crosshatchV">off</span></div>
-        <div class="row"><label>Stipple (pen)</label><input type="range" id="stippleR" min="0" max="100" step="1" value="0"><span class="val" id="stippleV">off</span></div>
-        <div class="row"><label>Sepia / antique</label><input type="range" id="sepiaR" min="0" max="100" step="1" value="0"><span class="val" id="sepiaV">off</span></div>
-        <div class="row"><label>Risograph (duotone)</label><input type="range" id="risographR" min="0" max="100" step="1" value="0"><span class="val" id="risographV">off</span></div>
-        <div class="row"><label>Pointillism</label><input type="range" id="pointillismR" min="0" max="100" step="1" value="0"><span class="val" id="pointillismV">off</span></div>
+        <div class="row"><label for="contoursR">Contour veins</label><input type="range" id="contoursR" min="0" max="100" step="1" value="0"><span class="val" id="contoursV">off</span></div>
+        <div class="row"><label for="inkR">Ink linework</label><input type="range" id="inkR" min="0" max="100" step="1" value="0"><span class="val" id="inkV">off</span></div>
+        <div class="row"><label for="hachureR">Hachure</label><input type="range" id="hachureR" min="0" max="100" step="1" value="0"><span class="val" id="hachureV">off</span></div>
+        <div class="row"><label for="watercolorR">Watercolor</label><input type="range" id="watercolorR" min="0" max="100" step="1" value="0"><span class="val" id="watercolorV">off</span></div>
+        <div class="row"><label for="celR">Cel / toon</label><input type="range" id="celR" min="0" max="100" step="1" value="0"><span class="val" id="celV">off</span></div>
+        <div class="row"><label for="crosshatchR">Engraving (cross-hatch)</label><input type="range" id="crosshatchR" min="0" max="100" step="1" value="0"><span class="val" id="crosshatchV">off</span></div>
+        <div class="row"><label for="stippleR">Stipple (pen)</label><input type="range" id="stippleR" min="0" max="100" step="1" value="0"><span class="val" id="stippleV">off</span></div>
+        <div class="row"><label for="sepiaR">Sepia / antique</label><input type="range" id="sepiaR" min="0" max="100" step="1" value="0"><span class="val" id="sepiaV">off</span></div>
+        <div class="row"><label for="risographR">Risograph (duotone)</label><input type="range" id="risographR" min="0" max="100" step="1" value="0"><span class="val" id="risographV">off</span></div>
+        <div class="row"><label for="pointillismR">Pointillism</label><input type="range" id="pointillismR" min="0" max="100" step="1" value="0"><span class="val" id="pointillismV">off</span></div>
         <div class="hint">Hand-drawn "Painter" styles, each its own intensity: <b>contour veins</b> = constant-width elevation isolines; <b>ink</b> = pen outlines on landform edges; <b>hachure</b> = downslope hatching denser on steep ground; <b>watercolor</b> = pigment pooling + paper granulation; <b>cel/toon</b> = posterized flat colour bands; <b>engraving</b> = antique cross-hatch; <b>stipple</b> = pen dot-density shading; <b>sepia</b> = antique warm brown toning; <b>risograph</b> = indigo→amber duotone screen-print with halftone dots; <b>pointillism</b> = Seurat coloured-dot field. Land-only, seamless across tiles/bakes; all default off — stack them freely.</div>
         <div class="sublabel-grp">Overlays</div>
         <label class="chk"><input type="checkbox" id="iconsChk"> Stylized icons (mountains &middot; hills &middot; forest)</label>
         <label class="chk"><input type="checkbox" id="wavesChk"> Coastal wave lines</label>
-        <div class="row"><label>Wave reach</label><input type="range" id="waveDistR" min="25" max="300" step="5" value="100"><span class="val" id="waveDistV">1.00×</span></div>
+        <div class="row"><label for="waveDistR">Wave reach</label><input type="range" id="waveDistR" min="25" max="300" step="5" value="100"><span class="val" id="waveDistV">1.00×</span></div>
         <label class="chk"><input type="checkbox" id="waterAnimChk"> Animate water (flow map) — runs at ≤~1K working res</label>
         <label class="chk"><input type="checkbox" id="scaleBarChk" checked> Scale bar</label>
-        <div class="row"><label>River density</label><input type="range" id="riverDensR" min="30" max="300" step="5" value="100"><span class="val" id="riverDensV">1.00×</span></div>
-        <div class="row"><label>Min stream order</label><input type="range" id="minOrderR" min="1" max="8" step="1" value="1"><span class="val" id="minOrderV">all</span></div>
+        <div class="row"><label for="riverDensR">River density</label><input type="range" id="riverDensR" min="30" max="300" step="5" value="100"><span class="val" id="riverDensV">1.00×</span></div>
+        <div class="row"><label for="minOrderR">Min stream order</label><input type="range" id="minOrderR" min="1" max="8" step="1" value="1"><span class="val" id="minOrderV">all</span></div>
         <label class="chk"><input type="checkbox" id="showRivers" checked> Show rivers in biome view</label>
         <label class="chk"><input type="checkbox" id="sharpBiomes" checked> Sharper biome detail (finer ecotones)</label>
         <label class="chk"><input type="checkbox" id="showLakes" checked> Show lakes as water (inland seas + deposited water)</label>
@@ -731,7 +736,7 @@ details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-to
       <div class="sec">
         <h2>Asset pack</h2>
         <div class="btnrow"><button id="packClearBtn">Clear pack</button></div>
-        <div class="row"><label>Texture strength</label><input type="range" id="splat" min="0" max="100" step="1" value="70"><span class="val" id="splatV">0.70</span></div>
+        <div class="row"><label for="splat">Texture strength</label><input type="range" id="splat" min="0" max="100" step="1" value="70"><span class="val" id="splatV">0.70</span></div>
         <div class="hint" id="packInfo">No pack loaded &mdash; mountains, trees and ground use built-in procedural art. <b>Import → Import asset pack</b> (header) loads a ZIP (<code>pack.json</code> or <code>pack.csv</code> + <code>textures/</code> &amp; <code>icons/</code> PNGs) to swap in your own. Empty slots stay procedural. See <code>docs/ASSET_PACK_FORMAT.md</code>.</div>
         <div id="packGrid"></div>
       </div>
@@ -7985,11 +7990,6 @@ button.settings-group-title{ width:100%; display:flex; align-items:center; justi
 <div class="menubar">
     <button type="button" class="menubar-burger" id="sidebarToggle"
             aria-label="Toggle panel" title="Show/hide panel">☰</button>
-    <div class="menubar-brand">
-        <span class="menubar-logo">▲</span>
-        <span class="menubar-name">Cartalith</span>
-        <span class="menubar-ver">V1.915</span>
-    </div>
     <nav class="menubar-nav">
         <button type="button" class="menubar-item active" data-workspace="routes">Routes</button>
         <button type="button" class="menubar-item" data-workspace="planner">Planner</button>
@@ -22188,6 +22188,18 @@ try{__X.loadFromZip=loadFromZip;}catch(e){}
   --radius:9px; --radius-sm:6px;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}:host([data-theme="amoled"]){
+  --bg:#000; --panel:#0a0a0a; --panel-2:#111; --panel-3:#131313;
+  --line:#1c1c1c; --line-2:#222;
+  --txt:#e6e9f0; --txt-dim:#9aa3b8; --txt-faint:#69718a;
+  --accent:#5b8cff; --accent-2:#3f6ae0; --accent-glow:rgba(91,140,255,.25);
+}:host([data-theme="light"]){
+  --bg:#f4ede0; --panel:#fbf5e9; --panel-2:#ede4d2; --panel-3:#e8dfc8;
+  --line:#c9bfa9; --line-2:#b5a98c;
+  --txt:#2a1f10; --txt-dim:#7a6b50; --txt-faint:#9a8a6a;
+  --accent:#3b6ba5; --accent-2:#2a5a8a; --accent-glow:rgba(59,107,165,.15);
+  --ok:#4f7a5c; --warn:#9a7a30; --danger:#9a4040;
+  --tex:#3b6ba5; --ico:#8a4fb0;
 }*{box-sizing:border-box}:host{margin:0;height:100%;overflow-y:auto}:host{
   background:var(--bg); color:var(--txt); font-family:var(--sans);
   font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
@@ -22292,10 +22304,6 @@ select{background:var(--panel-2);color:var(--txt);border:1px solid var(--line);b
 <script type="text/cartalith-body" data-tool="assets">
 
 <header>
-  <div class="brand">
-    <h1>Cartalith Asset Pack Compiler</h1>
-    <div class="sub">drag · crop · export → pack.json + STORED .zip</div>
-  </div>
   <div class="meta">
     <div class="field"><label for="packName">Pack name</label>
       <input id="packName" type="text" value="Custom Asset Pack" spellcheck="false"></div>
@@ -23752,8 +23760,7 @@ function mountTool(tool) {
  * explicit data-theme (default "dark") and never remove it, so Cartalith never falls back to its
  * `@media (prefers-color-scheme: light)` auto-flip — that fallback is what made the theme read as
  * "not global" (Cartalith light while the dark-only generate/assets stayed dark) on a light OS.
- * "dark" is the unified baseline (generate + assets are dark-only by design); "light" themes the
- * shell chrome + Cartalith. */
+ * All three tools support dark/amoled/light via :host([data-theme="..."]) rules in their shadow CSS. */
 function currentTheme() { return document.documentElement.getAttribute("data-theme") || "dark"; }
 function syncHostTheme(host) { host.setAttribute("data-theme", currentTheme()); }
 function syncAllHostThemes() { document.querySelectorAll(".tool-host").forEach(syncHostTheme); }

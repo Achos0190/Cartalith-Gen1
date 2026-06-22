@@ -6188,6 +6188,7 @@ async function bakeVisibleTiles(){
 async function bakeAllLandTiles(maxZ, onProgress){
   maxZ=Math.max(1, Math.min(8, (maxZ|0)||4));
   _splatK=(state.mode==='biome'&&assetPack&&assetPack.texAny)?(state.viz.splat||0):0;   // bake the splat into the stored biome PNG consistently
+  if(state.showRivers && !_riverNet) _riverNet=buildRiverNetwork(field,flowField,GW,GH,state.seaLevel,{world:state.world,riverDensity:(state.viz&&state.viz.riverDensity)||1});   // v0.04: ensure rivers bake into tiles
   let total=0; for(let z=1;z<=maxZ;z++){ const {cols,rows}=pyramidDims(z); for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) if(tileHasLand(z,c,r)) total++; }
   const opts=lodTileOpts(); let done=0, n=0;
   for(let z=1;z<=maxZ;z++){ const {cols,rows}=pyramidDims(z);
@@ -6484,8 +6485,19 @@ function refineVisibleTiles(){
   }
   return v;
 }
+/* v0.04: keep the LOD canvas matched to the viewport at full resolution. It was sized once in the lodChk
+   handler, so if the canvas-wrap was mis-measured at toggle time (or the window resized), the canvas stayed
+   stuck at GW×GH and zooming only stretched that low-res bitmap ("viewport stays at the initial resolution").
+   Re-measuring per draw (resizing only on change) makes deeper zoom render at full screen resolution. */
+function ensureLodCanvasSize(){
+  const cw=document.querySelector('.canvas-wrap'); if(!cw) return;
+  const r=cw.getBoundingClientRect(); if(!(r.width>0)||!(r.height>0)) return;
+  const w=Math.max(GW,Math.round(r.width)), h=Math.max(GH,Math.round(r.height));
+  if(view.width!==w || view.height!==h){ view.width=w; view.height=h; const oc=document.getElementById('polyOverlay'); if(oc){ oc.width=w; oc.height=h; } }
+}
 function drawLODView(){
   try{
+    ensureLodCanvasSize();   /* v0.04: full-resolution viewport canvas (fixes "stuck at initial resolution") */
     /* VW×VH = the actual canvas pixel dimensions (may be larger than GW×GH when LOD expands to viewport) */
     const VW=view.width, VH=view.height;
     const v=lodViewRect();
@@ -6703,6 +6715,18 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
       /* B5 coast + B3 river bands via the shared helper — tile-px SDFs scaled to coarse cells (×cx) so the
          band widths read identically to the main map (din=-coastv/(GW/256) ≡ the old -coastB·cx·256/GW). */
       applyCoastRiverSDFv(c, coastB?coastB[i]*cx:null, riverB?riverB[i]*cx:null);
+      /* v0.04: default river overlay (Strahler/Rosgen widths + Beer–Lambert depth water) — mirrors
+         surfaceColor so rivers don't vanish in LOD/atlas tiles or the baked Cartographer detail. Samples
+         the coarse _riverNet (nearest) at the pixel's world coords. */
+      if(state.showRivers && _riverNet){
+        const rix=Math.min(GW-1,Math.max(0,Math.round(wx))), riy=Math.min(GH-1,Math.max(0,Math.round(wy))), rci=riy*GW+rix;
+        const minOb=(state.viz&&state.viz.minRiverOrder>1)?state.viz.minRiverOrder:1;
+        const sR=(minOb<=1||(_riverNet.omax&&_riverNet.omax[rci]>=minOb))?_riverNet.intensity[rci]:0;
+        if(sR>0){ const d=_riverNet.depth[rci], sed=Math.min(1,0.18+0.5*d), ws=waterShade(c,d,sed,RIVER_KD), aR=sR*0.85;
+          c[0]=c[0]*(1-aR)+ws[0]*aR; c[1]=c[1]*(1-aR)+ws[1]*aR; c[2]=c[2]*(1-aR)+ws[2]*aR; } }
+      const msK=state.viz&&state.viz.minorStreams>0?state.viz.minorStreams:0;
+      if(msK>0){ const fl=sampleArr(flowField,wx,wy), hi=GW*GH*0.0004, lo=hi*0.05;
+        if(fl>lo && fl<hi){ const s2=clamp01((fl-lo)/(hi-lo))*0.30*msK; c[0]=c[0]*(1-s2)+95*s2; c[1]=c[1]*(1-s2)+120*s2; c[2]=c[2]*(1-s2)+148*s2; } }
       out[p]=c[0]; out[p+1]=c[1]; out[p+2]=c[2]; out[p+3]=255;
     }
   }
@@ -7620,9 +7644,12 @@ document.getElementById('panBtn').addEventListener('click',()=>{ panMode=!panMod
 function updateScaleBar(){
   const el=document.getElementById('scaleBar'); if(!el) return;
   if(state.viz && state.viz.scaleBar===false){ el.style.display='none'; return; }
-  const r=view.getBoundingClientRect();                       // post-transform rect: already includes zoom
+  const r=view.getBoundingClientRect();                       // post-transform rect: already includes the CSS-transform zoom (non-LOD)
   if(!r.width||!(state.mapWidthKm>0)){ el.style.display='none'; return; }
-  const kmPerPx=state.mapWidthKm/r.width;
+  /* v0.04: in LOD mode the CSS transform is identity (LOD does its own in-canvas zoom), so the rect doesn't
+     include _lodZoom — the view shows 1/_lodZoom of the map width. Scale the visible km accordingly. */
+  const visKm = _lodOn ? state.mapWidthKm/Math.max(1,_lodZoom) : state.mapWidthKm;
+  const kmPerPx=visKm/r.width;
   const target=kmPerPx*80;                                     // aim for an ~80px bar
   const pow=Math.pow(10,Math.floor(Math.log10(target)));
   const m=target/pow, nice=(m>=5?5:m>=2?2:1)*pow;              // round to 1/2/5×10ⁿ

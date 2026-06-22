@@ -7655,6 +7655,7 @@ try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e)
     --pin-settlement:#d4a76a;
     --pin-poi:#8a9eb0;
     --pin-snap:#ffd070;
+    --pin-suggested:#c8a040;
     --select-glow:#ff7070;
 
     --biome-coastal:#5a93b8;
@@ -7690,7 +7691,7 @@ try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e)
     --accent-hover:#c89a64; --accent-border:rgba(176,141,84,.25);
     --button-bg:#1a1a1a; --button-hover:#262626;
     --ok:#6a9e7a; --warn:#c9a45a; --err:#b86060;
-    --pin-settlement:#d4a76a; --pin-poi:#8a9eb0; --pin-snap:#ffd070; --select-glow:#ff7070;
+    --pin-settlement:#d4a76a; --pin-poi:#8a9eb0; --pin-snap:#ffd070; --pin-suggested:#c8a040; --select-glow:#ff7070;
     --biome-coastal:#5a93b8; --biome-temperate-forest:#3a7a4a; --biome-mediterranean:#a8a35a;
     --biome-wetlands:#4a7878; --biome-steppe:#9e9560; --biome-jungle:#2a6a3a;
     --biome-boreal:#3a6a5a; --biome-mountain:#7a7a8a; --biome-cold-desert:#9a8a6a;
@@ -7719,7 +7720,7 @@ try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e)
     --ok:#3d7a3d; --warn:#a07028; --err:#9a3030;
     --route-1:#8a6a35; --route-2:#3d7a3d; --route-3:#365c7a; --route-4:#a07028;
     --route-5:#704a70; --route-6:#6a4528; --route-7:#3a6868; --route-8:#9a3030;
-    --pin-settlement:#8a6a35; --pin-poi:#4a6680; --pin-snap:#a07028; --select-glow:#c33030;
+    --pin-settlement:#8a6a35; --pin-poi:#4a6680; --pin-snap:#a07028; --pin-suggested:#a07828; --select-glow:#c33030;
     --biome-coastal:#5a93b8; --biome-temperate-forest:#3a7a4a; --biome-mediterranean:#a8a35a;
     --biome-wetlands:#4a7878; --biome-steppe:#9e9560; --biome-jungle:#2a6a3a;
     --biome-boreal:#3a6a5a; --biome-mountain:#7a7a8a; --biome-cold-desert:#9a8a6a;
@@ -7745,7 +7746,7 @@ try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e)
         --ok:#3d7a3d; --warn:#a07028; --err:#9a3030;
         --route-1:#8a6a35; --route-2:#3d7a3d; --route-3:#365c7a; --route-4:#a07028;
         --route-5:#704a70; --route-6:#6a4528; --route-7:#3a6868; --route-8:#9a3030;
-        --pin-settlement:#8a6a35; --pin-poi:#4a6680; --pin-snap:#a07028; --select-glow:#c33030;
+        --pin-settlement:#8a6a35; --pin-poi:#4a6680; --pin-snap:#a07028; --pin-suggested:#a07828; --select-glow:#c33030;
         --biome-coastal:#5a93b8; --biome-temperate-forest:#3a7a4a; --biome-mediterranean:#a8a35a;
         --biome-wetlands:#4a7878; --biome-steppe:#9e9560; --biome-jungle:#2a6a3a;
         --biome-boreal:#3a6a5a; --biome-mountain:#7a7a8a; --biome-cold-desert:#9a8a6a;
@@ -7910,7 +7911,7 @@ button.settings-group-title{ width:100%; display:flex; align-items:center; justi
     background:color-mix(in srgb, var(--panel) 72%, transparent); color:var(--text);
     border:1px solid var(--border); -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
     box-shadow:0 4px 18px rgba(0,0,0,.3); touch-action:none;
-}#workspace-map .touch-undo:active{ background:var(--accent-dim); border-color:var(--accent); }#workspace-map .touch-undo:disabled{ opacity:.4; }#workspace-map .touch-undo.hidden{ display:none; }.place-card:hover{ border-color:var(--accent-border); }.place-glyph{ width:14px; height:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }/* settlement authoring: trait chips + economics sliders. */
+}#workspace-map .touch-undo:active{ background:var(--accent-dim); border-color:var(--accent); }#workspace-map .touch-undo:disabled{ opacity:.4; }#workspace-map .touch-undo.hidden{ display:none; }.place-card:hover{ border-color:var(--accent-border); }.place-card-suggested{ border-style:dashed; border-color:var(--pin-suggested,#c8a040); opacity:.92; }.place-glyph{ width:14px; height:14px; flex-shrink:0; display:flex; align-items:center; justify-content:center; }/* settlement authoring: trait chips + economics sliders. */
 .trait-grid{ display:grid; grid-template-columns:1fr 1fr; gap:4px; }.trait-chip{ display:flex; align-items:center; gap:5px; padding:5px 7px; font-size:.78rem; background:var(--panel2); border:1px solid var(--border); border-radius:6px; cursor:pointer; color:var(--muted); user-select:none; }.trait-chip .trait-glyph{ font-size:.95rem; line-height:1; color:var(--text); width:14px; text-align:center; }.trait-chip.on{ background:var(--accent-dim); border-color:var(--accent); color:var(--text); }.trait-chip.on .trait-glyph{ color:var(--accent); }.econ-row{ display:flex; align-items:center; gap:8px; margin-top:5px; }/* allegiance-over-time keyframe rows in the settlement editor. */
 .se-change-row{ display:flex; align-items:center; gap:6px; margin-bottom:5px; }.se-change-row .se-ch-year{ width:64px; flex-shrink:0; }.se-change-row .se-ch-polity{ flex:1; min-width:0; }.se-change-row .se-ch-status{ width:104px; flex-shrink:0; }.se-change-row .se-ch-del{ width:30px; flex-shrink:0; padding:0; }.econ-label{ width:62px; flex-shrink:0; font-size:.78rem; color:var(--muted); }.econ-row input[type=range]{ flex:1; }.econ-val{ width:64px; flex-shrink:0; font-size:.76rem; color:var(--text); text-align:right; font-variant-numeric:tabular-nums; }.econ-preview{ margin-top:7px; font-size:.74rem; color:var(--muted); line-height:1.4; }.econ-reset{ width:auto; float:right; font-size:.66rem; padding:2px 7px; background:var(--button-bg); color:var(--muted); border:1px solid var(--border); border-radius:5px; text-transform:none; letter-spacing:0; }.econ-reset:hover{ color:var(--accent); border-color:var(--accent); background:var(--button-hover); }.place-info{ flex:1; min-width:0; cursor:pointer; }.place-name{ font-size:.85rem; font-weight:500; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.place-meta{ font-size:.7rem; color:var(--muted); }.place-card-actions{ display:flex; gap:4px; flex-shrink:0; }.place-card-actions button{ width:auto; min-width:34px; min-height:34px; padding:6px 10px; font-size:.78rem; background:var(--panel3); }.place-card-actions button.danger{ color:var(--err); }.place-card-actions button.danger:hover{ border-color:var(--err); background:rgba(184,96,96,.12); }.slider-row{
     display:grid; grid-template-columns:auto 1fr auto;
@@ -18102,6 +18103,7 @@ function drawPlaces(){
     const rf = state.routeFilters;
     const visible = p => {
         if(!filtering) return true;
+        if(p.category === "suggested") return true; /* always show suggested */
         if(p.category === "settlement"){
             return rf.settlements && !rf.hiddenClasses.has(p.klass);
         }
@@ -18110,10 +18112,13 @@ function drawPlaces(){
     const settlementColor = getCSSVar("--pin-settlement");
     const poiColor        = getCSSVar("--pin-poi");
     const snapColor       = getCSSVar("--pin-snap");
+    const suggestedColor  = getCSSVar("--pin-suggested") || "#c8a040";
     for(const p of state.places){
         if(!visible(p)) continue;
         const isSnapTarget = p.id === state.hoverPlaceId;
-        if(p.category === "settlement"){
+        if(p.category === "suggested"){
+            drawSuggestedPin(p, isSnapTarget ? snapColor : suggestedColor, isSnapTarget);
+        }else if(p.category === "settlement"){
             /* resolve allegiance/condition at the viewed year. */
             const st = settlementStateAtYear(p, state.politics.activeYear);
             let col = settlementColor;
@@ -18243,6 +18248,32 @@ function drawPoiPin(place, color, highlight){
     }
 }
 
+function drawSuggestedPin(place, color, highlight){
+    /* Dashed circle with a "?" glyph — visually distinct from confirmed settlements. */
+    const r = 10 / state.camera.zoom;
+    const glyphPx = r * 2;
+    ctx.save();
+    ctx.setLineDash([3 / state.camera.zoom, 3 / state.camera.zoom]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5 / state.camera.zoom;
+    ctx.globalAlpha = highlight ? 1.0 : 0.85;
+    ctx.beginPath();
+    ctx.arc(place.x, place.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    /* "?" glyph in the centre */
+    ctx.font = `${glyphPx}px "Barlow Condensed","Arial Narrow",sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = Math.max(1.5, glyphPx * 0.14);
+    ctx.strokeStyle = "rgba(0,0,0,.8)";
+    ctx.strokeText("?", place.x, place.y);
+    ctx.fillStyle = color;
+    ctx.fillText("?", place.x, place.y);
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+}
+
 function drawPlaceLabel(place, highlight){
     if(!place.name) return;
     const fontSize = 12 / state.camera.zoom;
@@ -18255,16 +18286,20 @@ function drawPlaceLabel(place, highlight){
         const c = SETTLEMENT_CLASSES.find(k => k.key === place.klass);
         const classPx = (c ? c.size : 6) * 2.4;
         offset = (classPx * 0.62) / state.camera.zoom + 5 / state.camera.zoom;
+    }else if(place.category === "suggested"){
+        offset = (10 / state.camera.zoom) + 4 / state.camera.zoom;
     }
+    const label = place.category === "suggested" ? place.name + " (?)" : place.name;
     const x = place.x + offset;
     const y = place.y;
-    const metrics = ctx.measureText(place.name);
+    const metrics = ctx.measureText(label);
     const padX = 4 / state.camera.zoom;
     const padY = 2 / state.camera.zoom;
     ctx.fillStyle = "rgba(0,0,0,.7)";
     ctx.fillRect(x - padX, y - fontSize/2 - padY, metrics.width + padX*2, fontSize + padY*2);
-    ctx.fillStyle = highlight ? getCSSVar("--pin-snap") : "#ffffff";
-    ctx.fillText(place.name, x, y);
+    const sugCol = getCSSVar("--pin-suggested") || "#c8a040";
+    ctx.fillStyle = highlight ? getCSSVar("--pin-snap") : (place.category === "suggested" ? sugCol : "#ffffff");
+    ctx.fillText(label, x, y);
 }
 
 function drawCalibration(){
@@ -18772,7 +18807,9 @@ function handleCanvasTap(clientX, clientY, altKey, shiftKey){
         const hitR = IS_TOUCH ? 22 : 16;
         const hit = findPlaceAtScreen(screenX, screenY, hitR);
         if(hit){
-            if(hit.category === "settlement"){
+            if(hit.category === "suggested"){
+                openSuggestedPlaceDialog(hit.id);
+            }else if(hit.category === "settlement"){
                 openSettlementEditor(hit.id);
             }else{
                 setStatus(hit.name + " — edit POIs from the Places list");
@@ -18911,6 +18948,22 @@ document.addEventListener("pointerdown", (e) => {
 });
 
 function showPlaceContextPopover(place, clientX, clientY){
+    if(place.category === "suggested"){
+        const scoreStr = place.score != null ? " · suitability " + Number(place.score).toFixed(2) : "";
+        showPopover(clientX, clientY, `
+            <div class="context-popover-title">${escapeHtml(place.name)} — Suggested site${escapeHtml(scoreStr)}</div>
+            <button data-action="accept-suggested" data-id="${place.id}">✓ Accept as village</button>
+            <button data-action="discard-suggested" data-id="${place.id}" class="danger">× Discard</button>
+        `);
+        popoverEl.querySelectorAll("button").forEach(b => {
+            b.addEventListener("click", () => {
+                if(b.dataset.action === "accept-suggested") acceptSuggestedPlace(b.dataset.id);
+                else discardSuggestedPlace(b.dataset.id);
+                hideContextPopover();
+            });
+        });
+        return;
+    }
     const typeLabel = place.category === "settlement"
         ? settlementDescriptor(place)
         : (POI_TYPES.find(t => t.key === place.type)?.label || place.type);
@@ -18989,6 +19042,44 @@ function handlePlaceAction(action, placeId){
         return;
     }
     if(action === "delete-place") deletePlaceById(placeId);
+}
+
+/* ── Suggested places — accept converts to a real settlement, discard removes ── */
+function openSuggestedPlaceDialog(placeId){
+    const place = findPlaceById(placeId);
+    if(!place || place.category !== "suggested") return;
+    const score = place.score != null ? (" (suitability: " + Number(place.score).toFixed(2) + ")") : "";
+    const choice = confirm(
+        place.name + score + "\n\n" +
+        "This is a suggested settlement site from the terrain generator.\n\n" +
+        "OK → Accept as a village\nCancel → Discard this suggestion"
+    );
+    if(choice){
+        acceptSuggestedPlace(placeId);
+    }else{
+        discardSuggestedPlace(placeId);
+    }
+}
+function acceptSuggestedPlace(placeId){
+    const place = findPlaceById(placeId);
+    if(!place) return;
+    place.category = "settlement";
+    place.klass    = "village";
+    place.traits   = [];
+    place.econ     = {};
+    place.polityId = "";
+    place.polityStatus = "own";
+    delete place.score;
+    renderPlaces(); render();
+    setStatus("Accepted " + place.name + " as a village — open the Places list to edit.");
+    syncPlannerIfLive();
+}
+function discardSuggestedPlace(placeId){
+    const place = findPlaceById(placeId);
+    if(!place) return;
+    state.places = state.places.filter(p => p.id !== placeId);
+    renderPlaces(); render();
+    setStatus("Discarded suggested site: " + place.name);
 }
 
 function deletePlaceById(placeId){
@@ -21239,17 +21330,35 @@ function renderPlaces(){
     }
     container.innerHTML = "";
     state.places.forEach(p => {
-        let typeLabel, glyph;
-        if(p.category === "settlement"){
+        let typeLabel, glyph, actions;
+        if(p.category === "suggested"){
+            const scoreStr = p.score != null ? " · " + Number(p.score).toFixed(2) : "";
+            typeLabel = "Suggested site" + scoreStr;
+            const sugCol = getCSSVar("--pin-suggested") || "#c8a040";
+            glyph = `<span style="font-size:14px;line-height:1;color:${sugCol};opacity:.9;">?</span>`;
+            actions = `
+                <button data-action="zoom-place" data-id="${p.id}" title="Center on map">⊕</button>
+                <button data-action="accept-suggested" data-id="${p.id}" title="Accept as settlement" style="color:var(--ok,#6a9e7a);">✓</button>
+                <button data-action="discard-suggested" data-id="${p.id}" class="danger" title="Discard suggestion">×</button>
+            `;
+        }else if(p.category === "settlement"){
             typeLabel = settlementDescriptor(p);
             glyph = `<span style="font-size:14px;line-height:1;color:${getCSSVar("--pin-settlement")};">${settlementGlyphString(p)}</span>`;
+            actions = `
+                <button data-action="zoom-place" data-id="${p.id}" title="Center on map">⊕</button>
+                <button data-action="delete-place" data-id="${p.id}" class="danger" title="Delete">×</button>
+            `;
         }else{
             const typeDef = POI_TYPES.find(t => t.key === p.type);
             typeLabel = typeDef ? typeDef.label : p.type;
             glyph = typeDef && typeDef.glyph ? `<span style="color:${getCSSVar("--pin-poi")};">${typeDef.glyph}</span>` : `<span style="display:inline-block;width:12px;height:12px;background:${getCSSVar("--pin-poi")};transform:rotate(45deg);border:1px solid rgba(0,0,0,.4);"></span>`;
+            actions = `
+                <button data-action="zoom-place" data-id="${p.id}" title="Center on map">⊕</button>
+                <button data-action="delete-place" data-id="${p.id}" class="danger" title="Delete">×</button>
+            `;
         }
         const el = document.createElement("div");
-        el.className = "place-card";
+        el.className = "place-card" + (p.category === "suggested" ? " place-card-suggested" : "");
         el.dataset.placeId = p.id;
         el.innerHTML = `
             <span class="place-glyph">${glyph}</span>
@@ -21257,10 +21366,7 @@ function renderPlaces(){
                 <div class="place-name">${escapeHtml(p.name)}</div>
                 <div class="place-meta">${escapeHtml(typeLabel)}</div>
             </div>
-            <div class="place-card-actions">
-                <button data-action="zoom-place" data-id="${p.id}" title="Center on map">⊕</button>
-                <button data-action="delete-place" data-id="${p.id}" class="danger" title="Delete">×</button>
-            </div>
+            <div class="place-card-actions">${actions}</div>
         `;
         container.appendChild(el);
     });
@@ -21270,10 +21376,13 @@ function renderPlaces(){
             const action = el.dataset.action;
             const id = el.dataset.id;
             if(action === "delete-place") deletePlaceById(id);
+            if(action === "accept-suggested") acceptSuggestedPlace(id);
+            if(action === "discard-suggested") discardSuggestedPlace(id);
             if(action === "edit-place"){
                 const pl = findPlaceById(id);
                 if(pl){
-                    if(pl.category === "settlement") openSettlementEditor(id);
+                    if(pl.category === "suggested") openSuggestedPlaceDialog(id);
+                    else if(pl.category === "settlement") openSettlementEditor(id);
                     else handlePlaceAction("rename-place", id);
                 }
             }
@@ -21852,6 +21961,9 @@ function applyLoadedState(data, rawGridData, isBaked){
                 /* political allegiance (absent in older saves). */
                 base.polityId     = p.polityId || "";
                 base.polityStatus = p.polityStatus || "own";
+            }else if(base.category === "suggested"){
+                /* Generated settlement seed — awaiting user acceptance or dismissal. */
+                base.score = (p.score != null && isFinite(p.score)) ? Number(p.score) : null;
             }else{
                 base.type = p.type || "other";
             }
@@ -23924,16 +24036,14 @@ function extractWorld() {
 }
 function buildCartographProject(parts) {
   const gw = parts.gw || 0, gh = parts.gh || 0, km = parts.mapWidthKm || 800;
-  /* Convert Generate settlement seeds → Cartalith places (settlement POIs at grid coords) */
+  /* Convert Generate settlement seeds → Cartalith suggested places (accept/discard in Cartograph) */
   const places = (parts.seeds || []).map((s, i) => ({
     id: "p_gen_" + i,
-    name: "Settlement " + (i + 1),
-    category: "settlement",
-    klass: "village",
+    name: "Site " + (i + 1),
+    category: "suggested",
     x: s.x, y: s.y,
+    score: s.score != null ? s.score : null,
     description: "Suitability: " + (s.score != null ? s.score.toFixed(2) : "?"),
-    traits: [],
-    econ: {},
     createdAt: new Date().toISOString()
   }));
   const proj = {

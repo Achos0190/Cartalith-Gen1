@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>Cartalith — Gen1 v0.04</title>
 <style>
   :root{
@@ -12,6 +13,14 @@
     --ok:#6a9e7a; --warn:#c9a45a; --err:#b86060;
     --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
     --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  /* Light variant — the shell harness always sets an explicit data-theme (dark default),
+     so the chrome flips deterministically and never inherits the OS prefers-color-scheme. */
+  :root[data-theme="light"]{
+    --bg:#f4ede0; --panel:#fbf5e9; --panel2:#ede4d2; --panel3:#f7f0df; --deepest:#e8dfca;
+    --border:#c9bfa9; --text:#2a1f10; --muted:#7a6b50; --faint:#9a8a6a;
+    --accent:#8a6a35; --accent-hover:#9c7a40; --accent-text:#fbf5e9; --accent-dim:rgba(138,106,53,.12);
+    --ok:#4f7a5c; --warn:#9a7a30; --err:#9a4a4a;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -50,8 +59,7 @@
   main.stage{position:relative;flex:1 1 auto;min-height:0;background:var(--deepest)}
   .pane{position:absolute;inset:0;display:none}
   .pane.on{display:block}
-  .pane iframe{width:100%;height:100%;border:0;display:block;background:var(--deepest)}
-  .pane .tool-host{position:absolute;inset:0;display:block;overflow:hidden}
+  .pane .tool-host{position:absolute;inset:0;display:block;overflow:hidden;background:var(--deepest)}
   .pane .booting{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--faint);font-family:var(--mono);font-size:12px;letter-spacing:.05em}
 
   /* ---- information pane ---- */
@@ -94,7 +102,7 @@
     <button data-tab="info">Information</button>
   </nav>
   <div class="spacer"></div>
-  <button class="mbtn" id="themeBtn" style="margin-right:8px">◑ Light</button>
+  <button class="mbtn" id="themeBtn" style="margin-right:8px">◐ Dark</button>
   <div class="menu" id="projMenu">
     <button class="mbtn" id="projBtn">Project ▾</button>
     <div class="drop">
@@ -253,7 +261,7 @@
 #tabBar{display:flex;gap:2px;margin-bottom:10px;flex-shrink:0}.tab{flex:1;padding:6px 4px;background:var(--bg2);color:var(--fg);border:1px solid var(--border);cursor:pointer;font:inherit;font-size:11px;letter-spacing:.04em;text-transform:uppercase;transition:background .15s}.tab.on{background:var(--accent);color:#18191a;border-color:var(--accent);font-weight:700}/* ---- polyline overlay canvas ---- */
 .canvas-stack{position:relative;line-height:0;flex-shrink:0}/* tight wrapper — overlay aligns to canvas,not to padded wrap */
 #polyOverlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}/* ---- zoom buttons (mobile) ---- */
-#zoomOverlay{position:absolute;bottom:10px;right:10px;display:none;flex-direction:column;gap:6px;z-index:20}#scaleBar{position:absolute;bottom:10px;right:64px;z-index:15;font-size:10px;color:#cfd4dc;background:rgba(10,12,16,.55);padding:3px 8px 5px;border-radius:6px;pointer-events:none;line-height:1.3}#scaleBar .bar{height:4px;border:1px solid #cfd4dc;border-top:none;margin-top:2px}#packGrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#packGrid figure{margin:0;width:44px;text-align:center}#packGrid canvas{width:40px;height:40px;border:1px solid var(--line);border-radius:4px;background:#0c0e12;display:block;margin:0 auto;image-rendering:auto}#packGrid figcaption{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.15;word-break:break-word}.zbtn{width:42px;height:42px;font-size:22px;font-weight:700;background:rgba(10,10,10,.72);color:#e0e0e0;border:1px solid rgba(255,255,255,.18);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}/* ---- undo memory hint accent ---- */
+#zoomOverlay{position:absolute;bottom:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:20}#scaleBar{position:absolute;bottom:10px;right:64px;z-index:15;font-size:10px;color:#cfd4dc;background:rgba(10,12,16,.55);padding:3px 8px 5px;border-radius:6px;pointer-events:none;line-height:1.3}#scaleBar .bar{height:4px;border:1px solid #cfd4dc;border-top:none;margin-top:2px}#packGrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}#packGrid figure{margin:0;width:44px;text-align:center}#packGrid canvas{width:40px;height:40px;border:1px solid var(--line);border-radius:4px;background:#0c0e12;display:block;margin:0 auto;image-rendering:auto}#packGrid figcaption{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.15;word-break:break-word}.zbtn{width:42px;height:42px;font-size:22px;font-weight:700;background:rgba(10,10,10,.72);color:#e0e0e0;border:1px solid rgba(255,255,255,.18);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}/* ---- undo memory hint accent ---- */
 .undo-warn{color:var(--accent)!important}/* ---- header import dropdown ---- */
 .dropdown-wrap{position:relative;display:inline-block}.menubtn{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 11px;font-size:12px;cursor:pointer;font-family:var(--sans)}.menubtn:hover{border-color:var(--faint)}.dropdown{display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.55)}.dropdown.open{display:block}.dropdown button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:5px;padding:9px 10px;font-size:12px;color:var(--ink);cursor:pointer}.dropdown button:hover{background:var(--panel)}.dropdown .dsep{height:1px;background:var(--line);margin:4px 6px}/* ---- collapsible accordions (erosion sub-ops,debug overlay) ---- */
 details.acc{border-top:1px solid var(--line)}details.acc:first-of-type{border-top:0}details.acc>summary{cursor:pointer;list-style:none;color:var(--dim);font-size:12px;font-weight:600;padding:9px 0 5px;user-select:none}details.acc>summary::-webkit-details-marker{display:none}details.acc>summary::before{content:'▸  ';color:var(--faint)}details.acc[open]>summary::before{content:'▾  '}details.acc[open]>summary{color:var(--accent)}.sublabel-grp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:16px 0 7px;font-weight:600}.estimate{font-family:var(--mono);font-size:11px;color:var(--accent2);margin:6px 0 2px}
@@ -7659,7 +7667,7 @@ try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e)
     --way-branch:#ffd070;
     /* planner engine vars (settlement/economy + export table) */
     --cargo:#4a7a9b; --err-bg:#241818; --err-border:#4a2f2f; --err-text:#b07070; --table-hover:rgba(255,255,255,.03);
-}[data-theme="amoled"]{
+}:host([data-theme="amoled"]){
     --bg:#000000; --panel:#080808; --panel2:#121212; --panel3:#040404;
     --panel-darker:#080808; --panel-darker-hover:#141414; --panel-deepest:#000000;
     --border:#1f1f1f; --text:#c8c8c8; --muted:#666666;
@@ -7686,7 +7694,7 @@ try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e)
     /* route accents — same palette as the dark base (AMOLED is its black variant) */
     --route-1:#b08d54; --route-2:#6a9e7a; --route-3:#4a7a9b; --route-4:#c9a45a;
     --route-5:#a06ba0; --route-6:#8a5a3a; --route-7:#5a8a8a; --route-8:#b86060;
-}[data-theme="light"]{
+}:host([data-theme="light"]){
     --bg:#f4ede0; --panel:#fbf5e9; --panel2:#ede4d2; --panel3:#f7f0df;
     --panel-darker:#e8dfca; --panel-darker-hover:#dccfae; --panel-deepest:#ede4d2;
     --border:#c9bfa9; --text:#2a1f10; --muted:#7a6b50;
@@ -7862,7 +7870,6 @@ button.settings-group-title{ width:100%; display:flex; align-items:center; justi
     background:color-mix(in srgb, var(--panel2) 80%, transparent); color:var(--text);
     border:1px solid var(--border); flex-shrink:0;
 }.navpad-zoom-btn:active{ background:var(--accent-dim); border-color:var(--accent); }.navpad-zoom-slider{
-    -webkit-appearance:slider-vertical; appearance:slider-vertical;
     writing-mode:vertical-lr; direction:rtl;
     width:24px; height:120px; padding:0; margin:0; background:transparent; border:none;
 }.navpad-stick{
@@ -7931,7 +7938,7 @@ button.settings-group-title{ width:100%; display:flex; align-items:center; justi
     padding:8px 12px; border-radius:8px;
     border:1px solid var(--border); font-size:.8rem;
     z-index:20; pointer-events:none; max-width:60%;
-}[data-theme="light"] .status{ background:rgba(42,31,16,.92); color:#f4ede0; }.topbar{ position:absolute; top:10px; left:10px; display:flex; gap:8px; z-index:20; }/* v1.906 — floating map layers/filter button (top-right) + its drop-down. */
+}:host([data-theme="light"]) .status{ background:rgba(42,31,16,.92); color:#f4ede0; }.topbar{ position:absolute; top:10px; left:10px; display:flex; gap:8px; z-index:20; }/* v1.906 — floating map layers/filter button (top-right) + its drop-down. */
 .map-layers-fab{ position:absolute; top:10px; right:10px; z-index:20; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }.map-funnel-btn{ width:38px; min-width:38px; height:38px; padding:0; background:var(--panel); border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.35); }.map-layers-popover{ margin:0; min-width:190px; max-width:240px; max-height:62vh; overflow-y:auto; box-shadow:0 6px 20px rgba(0,0,0,.45); }.map-layers-popover .filter-types{ flex-direction:column; flex-wrap:nowrap; gap:4px; }.topbar button{ width:auto; padding:8px 14px; font-size:.85rem; background:var(--panel); border:1px solid var(--border); min-height:38px; min-width:38px; }.calibrated-pill{
     display:inline-block; padding:2px 8px; border-radius:10px;
     background:var(--accent-dim); color:var(--accent);
@@ -23715,6 +23722,8 @@ function mountTool(tool) {
   // CSS (already transformed :root/html/body -> :host by the build)
   const css = readCarrier("css", tool);
   if (css) { const st = document.createElement("style"); st.textContent = css; root.appendChild(st); }
+  // cross-tool harmonization layer (after the tool CSS so it wins for the shared chrome it styles)
+  { const hz = document.createElement("style"); hz.textContent = HARMONIZE_CSS; root.appendChild(hz); }
   syncHostTheme(host);
 
   // body markup -> shadow tree
@@ -23745,22 +23754,36 @@ function mountTool(tool) {
   return exportsObj;
 }
 
-/* ---------- theme ---------- */
-function currentTheme() { return document.documentElement.getAttribute("data-theme"); }
-function syncHostTheme(host) {
-  const dt = currentTheme();
-  if (dt == null) host.removeAttribute("data-theme"); else host.setAttribute("data-theme", dt);
-}
+/* ---------- theme ----------
+ * One deterministic theme drives the shell chrome AND every tool's shadow host. We ALWAYS set an
+ * explicit data-theme (default "dark") and never remove it, so Cartalith never falls back to its
+ * `@media (prefers-color-scheme: light)` auto-flip — that fallback is what made the theme read as
+ * "not global" (Cartalith light while the dark-only generate/assets stayed dark) on a light OS.
+ * "dark" is the unified baseline (generate + assets are dark-only by design); "light" themes the
+ * shell chrome + Cartalith. */
+function currentTheme() { return document.documentElement.getAttribute("data-theme") || "dark"; }
+function syncHostTheme(host) { host.setAttribute("data-theme", currentTheme()); }
 function syncAllHostThemes() { document.querySelectorAll(".tool-host").forEach(syncHostTheme); }
 function applyTheme(theme) {
-  // theme: 'dark' (attribute present) | null/'auto' (attribute absent => the tools' default/light cascade)
-  if (theme == null || theme === "auto") document.documentElement.removeAttribute("data-theme");
-  else document.documentElement.setAttribute("data-theme", theme);
-  try { localStorage.setItem("maptool_theme", theme || "auto"); } catch (e) {}
+  const t = (theme === "light") ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("maptool_theme", t); } catch (e) {}
   syncAllHostThemes();
-  const btn = $("themeBtn"); if (btn) btn.textContent = (currentTheme() ? "◐ Dark" : "◑ Light");
+  const btn = $("themeBtn"); if (btn) btn.textContent = (t === "light") ? "◑ Light" : "◐ Dark";
 }
-function toggleTheme() { applyTheme(currentTheme() ? "auto" : "dark"); }
+function toggleTheme() { applyTheme(currentTheme() === "light" ? "dark" : "light"); }
+
+/* Palette-neutral cross-tool harmonization injected into every shadow host AFTER the tool's own CSS,
+ * so the three engines share scrollbars, text-selection, focus feel and font smoothing — a unified
+ * "one app" surface without recolouring each tool (its own palette is untouched; we use --gen1-*). */
+const HARMONIZE_CSS =
+  ":host{--gen1-accent:#b08d54;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}" +
+  ':host([data-theme="light"]){--gen1-accent:#8a6a35}' +
+  ":host ::selection{background:var(--gen1-accent);color:#fff}" +
+  ":host ::-webkit-scrollbar{width:11px;height:11px}" +
+  ":host ::-webkit-scrollbar-track{background:transparent}" +
+  ":host ::-webkit-scrollbar-thumb{background:var(--gen1-accent);background-clip:content-box;border:3px solid transparent;border-radius:8px}" +
+  ":host{scrollbar-width:thin;scrollbar-color:var(--gen1-accent) transparent}";
 
 /* ---------- tabs ---------- */
 function switchTab(tab) {
@@ -23796,12 +23819,21 @@ function captureDownload(trigger) {
     const proto = HTMLAnchorElement.prototype;
     const orig = proto.click;
     proto.click = function () {
-      try { if (this.download && this.href && /^blob:/.test(this.href)) { captured = { url: this.href, name: this.download }; return; } } catch (e) {}
+      try {
+        if (this.download) {
+          // Capture blob downloads; swallow any other download-marked click so a relative/empty
+          // href can never navigate the top frame to its own file:// URL (Chrome blocks that as
+          // "Unsafe attempt to load URL ...").
+          if (this.href && /^blob:/.test(this.href)) { captured = { url: this.href, name: this.download }; }
+          return;
+        }
+      } catch (e) {}
       return orig.apply(this, arguments);
     };
     const finish = () => {
       proto.click = orig;
       if (!captured) { resolve(null); return; }
+      if (!/^blob:/.test(captured.url)) { console.warn("captureDownload: skipped non-blob URL", captured.url); resolve(null); return; }
       fetch(captured.url).then((r) => r.arrayBuffer()).then((ab) => resolve({ name: captured.name, bytes: new Uint8Array(ab) })).catch(() => resolve(null));
     };
     let r;
@@ -23969,8 +24001,8 @@ async function openProject(file) {
 
 /* ---------- wiring ---------- */
 function boot() {
-  // theme from storage
-  let saved = "auto"; try { saved = localStorage.getItem("maptool_theme") || "auto"; } catch (e) {}
+  // theme from storage (dark is the unified default; only "light" is the alternate)
+  let saved = "dark"; try { saved = localStorage.getItem("maptool_theme") || "dark"; } catch (e) {}
   applyTheme(saved);
 
   $("tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) switchTab(b.dataset.tab); });

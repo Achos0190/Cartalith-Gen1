@@ -98,6 +98,8 @@ function mountTool(tool) {
   // CSS (already transformed :root/html/body -> :host by the build)
   const css = readCarrier("css", tool);
   if (css) { const st = document.createElement("style"); st.textContent = css; root.appendChild(st); }
+  // cross-tool harmonization layer (after the tool CSS so it wins for the shared chrome it styles)
+  { const hz = document.createElement("style"); hz.textContent = HARMONIZE_CSS; root.appendChild(hz); }
   syncHostTheme(host);
 
   // body markup -> shadow tree
@@ -128,22 +130,36 @@ function mountTool(tool) {
   return exportsObj;
 }
 
-/* ---------- theme ---------- */
-function currentTheme() { return document.documentElement.getAttribute("data-theme"); }
-function syncHostTheme(host) {
-  const dt = currentTheme();
-  if (dt == null) host.removeAttribute("data-theme"); else host.setAttribute("data-theme", dt);
-}
+/* ---------- theme ----------
+ * One deterministic theme drives the shell chrome AND every tool's shadow host. We ALWAYS set an
+ * explicit data-theme (default "dark") and never remove it, so Cartalith never falls back to its
+ * `@media (prefers-color-scheme: light)` auto-flip — that fallback is what made the theme read as
+ * "not global" (Cartalith light while the dark-only generate/assets stayed dark) on a light OS.
+ * "dark" is the unified baseline (generate + assets are dark-only by design); "light" themes the
+ * shell chrome + Cartalith. */
+function currentTheme() { return document.documentElement.getAttribute("data-theme") || "dark"; }
+function syncHostTheme(host) { host.setAttribute("data-theme", currentTheme()); }
 function syncAllHostThemes() { document.querySelectorAll(".tool-host").forEach(syncHostTheme); }
 function applyTheme(theme) {
-  // theme: 'dark' (attribute present) | null/'auto' (attribute absent => the tools' default/light cascade)
-  if (theme == null || theme === "auto") document.documentElement.removeAttribute("data-theme");
-  else document.documentElement.setAttribute("data-theme", theme);
-  try { localStorage.setItem("maptool_theme", theme || "auto"); } catch (e) {}
+  const t = (theme === "light") ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem("maptool_theme", t); } catch (e) {}
   syncAllHostThemes();
-  const btn = $("themeBtn"); if (btn) btn.textContent = (currentTheme() ? "◐ Dark" : "◑ Light");
+  const btn = $("themeBtn"); if (btn) btn.textContent = (t === "light") ? "◑ Light" : "◐ Dark";
 }
-function toggleTheme() { applyTheme(currentTheme() ? "auto" : "dark"); }
+function toggleTheme() { applyTheme(currentTheme() === "light" ? "dark" : "light"); }
+
+/* Palette-neutral cross-tool harmonization injected into every shadow host AFTER the tool's own CSS,
+ * so the three engines share scrollbars, text-selection, focus feel and font smoothing — a unified
+ * "one app" surface without recolouring each tool (its own palette is untouched; we use --gen1-*). */
+const HARMONIZE_CSS =
+  ":host{--gen1-accent:#b08d54;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}" +
+  ':host([data-theme="light"]){--gen1-accent:#8a6a35}' +
+  ":host ::selection{background:var(--gen1-accent);color:#fff}" +
+  ":host ::-webkit-scrollbar{width:11px;height:11px}" +
+  ":host ::-webkit-scrollbar-track{background:transparent}" +
+  ":host ::-webkit-scrollbar-thumb{background:var(--gen1-accent);background-clip:content-box;border:3px solid transparent;border-radius:8px}" +
+  ":host{scrollbar-width:thin;scrollbar-color:var(--gen1-accent) transparent}";
 
 /* ---------- tabs ---------- */
 function switchTab(tab) {
@@ -179,12 +195,21 @@ function captureDownload(trigger) {
     const proto = HTMLAnchorElement.prototype;
     const orig = proto.click;
     proto.click = function () {
-      try { if (this.download && this.href && /^blob:/.test(this.href)) { captured = { url: this.href, name: this.download }; return; } } catch (e) {}
+      try {
+        if (this.download) {
+          // Capture blob downloads; swallow any other download-marked click so a relative/empty
+          // href can never navigate the top frame to its own file:// URL (Chrome blocks that as
+          // "Unsafe attempt to load URL ...").
+          if (this.href && /^blob:/.test(this.href)) { captured = { url: this.href, name: this.download }; }
+          return;
+        }
+      } catch (e) {}
       return orig.apply(this, arguments);
     };
     const finish = () => {
       proto.click = orig;
       if (!captured) { resolve(null); return; }
+      if (!/^blob:/.test(captured.url)) { console.warn("captureDownload: skipped non-blob URL", captured.url); resolve(null); return; }
       fetch(captured.url).then((r) => r.arrayBuffer()).then((ab) => resolve({ name: captured.name, bytes: new Uint8Array(ab) })).catch(() => resolve(null));
     };
     let r;
@@ -352,8 +377,8 @@ async function openProject(file) {
 
 /* ---------- wiring ---------- */
 function boot() {
-  // theme from storage
-  let saved = "auto"; try { saved = localStorage.getItem("maptool_theme") || "auto"; } catch (e) {}
+  // theme from storage (dark is the unified default; only "light" is the alternate)
+  let saved = "dark"; try { saved = localStorage.getItem("maptool_theme") || "dark"; } catch (e) {}
   applyTheme(saved);
 
   $("tabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) switchTab(b.dataset.tab); });

@@ -181,6 +181,33 @@ def patch_assets(src):
     return src
 
 
+# ── generator patches ─────────────────────────────────────────────────────────
+# Bug 3: the zoom/pan/reset overlay was gated `display:none` + a mobile-only JS reveal,
+# so the buttons never appeared on desktop. Default it visible (the mobile JS line is then
+# a harmless no-op). UI/CSS only — generation output is untouched.
+ZOOM_OLD = "#zoomOverlay{position:absolute;bottom:10px;right:10px;display:none;flex-direction:column;gap:6px;z-index:20}"
+ZOOM_NEW = "#zoomOverlay{position:absolute;bottom:10px;right:10px;display:flex;flex-direction:column;gap:6px;z-index:20}"
+
+def patch_generate(src):
+    if ZOOM_OLD in src: src = src.replace(ZOOM_OLD, ZOOM_NEW, 1); print("  patched: zoom overlay visible on desktop")
+    else: print("  WARN: zoomOverlay target not found")
+    return src
+
+
+# ── cartographer patches ──────────────────────────────────────────────────────
+# Bug 1: `appearance:slider-vertical` is a deprecated, non-standard keyword (Chrome/Edge log a
+# [Deprecation] warning and will remove it). The standard replacement (writing-mode + direction)
+# is already on the same rule, so we just drop the two deprecated declarations.
+SLIDER_OLD = ("    -webkit-appearance:slider-vertical; appearance:slider-vertical;\n"
+              "    writing-mode:vertical-lr; direction:rtl;")
+SLIDER_NEW = "    writing-mode:vertical-lr; direction:rtl;"
+
+def patch_cartograph(src):
+    if SLIDER_OLD in src: src = src.replace(SLIDER_OLD, SLIDER_NEW, 1); print("  patched: removed deprecated appearance:slider-vertical")
+    else: print("  WARN: slider-vertical target not found")
+    return src
+
+
 # ── tool parsing ──────────────────────────────────────────────────────────────
 def parse_tool(src):
     """Return dict: css, body, libs[], app  (app = concatenated app scripts)."""
@@ -222,6 +249,12 @@ def transform_part(p):
         rest = m.group(3) or ""
         host = ":host(" + compound + ")" if compound else ":host"
         return host + rest
+    # leading [data-theme="X"] theme selector -> :host([data-theme="X"]) so a shadow-mounted tool's
+    # own light/amoled themes apply to the host (the build sets data-theme on each tool-host). Only
+    # data-theme is remapped; other attribute selectors ([disabled], input[type=...]) are left alone.
+    m = re.match(r'^(\[data-theme[^\]]*\])((?:\.[\w-]+|:[\w-]+|\[[^\]]+\])*)(\s.*|>.*|~.*|\+.*)?$', p)
+    if m:
+        return ":host(" + m.group(1) + (m.group(2) or "") + ")" + (m.group(3) or "")
     return p
 
 def transform_css(css):
@@ -258,11 +291,9 @@ def build_shell(carriers_html, harness_js):
                   "Cartalith Gen1 v0.04 — single-page integration. The three engines run in the same document,\n      each isolated in its own Shadow DOM, sharing one project save and seamless handoffs.")
     s = s.replace("Each tool runs intact; a generated world flows straight into the", "Each engine runs intact in one page; a generated world flows straight into the")
 
-    # add a theme toggle + .tool-host CSS
+    # add a theme toggle (the .tool-host rule now lives in rc_shell.html directly)
     s = s.replace('<div class="spacer"></div>\n  <div class="menu" id="projMenu">',
-                  '<div class="spacer"></div>\n  <button class="mbtn" id="themeBtn" style="margin-right:8px">◑ Light</button>\n  <div class="menu" id="projMenu">')
-    s = s.replace(".pane iframe{width:100%;height:100%;border:0;display:block;background:var(--deepest)}",
-                  ".pane iframe{width:100%;height:100%;border:0;display:block;background:var(--deepest)}\n  .pane .tool-host{position:absolute;inset:0;display:block;overflow:hidden}")
+                  '<div class="spacer"></div>\n  <button class="mbtn" id="themeBtn" style="margin-right:8px">◐ Dark</button>\n  <div class="menu" id="projMenu">')
     # booting placeholders stay; harness replaces pane content on mount
 
     # the harness's own comments mention </script — escape so they don't close the script early
@@ -281,8 +312,9 @@ def main():
     for tool, file in SOURCES.items():
         print(f"Processing {tool} <- {file} …")
         src = read(file)
-        if tool == "assets":
-            src = patch_assets(src)
+        if tool == "assets":      src = patch_assets(src)
+        elif tool == "generate":  src = patch_generate(src)
+        elif tool == "cartograph": src = patch_cartograph(src)
         t = parse_tool(src)
 
         css = transform_css(t["css"])

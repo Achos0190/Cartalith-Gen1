@@ -6025,6 +6025,19 @@ function pyramidTileBounds(cW, cH, z, col, row){
   const { cols, rows }=pyramidDims(z), stepX=(cW-1)/cols, stepY=(cH-1)/rows;
   return { x:col*stepX, y:row*stepY, w:stepX, h:stepY };
 }
+/* v0.04 ocean culling: true iff a coarse-cell rect holds ANY land above LOCAL sea level. floor..ceil spans
+   every coarse cell bilinear sampling can read (so a thin coastline is never pruned); early-out ⇒ land rects
+   are cheap, only all-ocean rects pay the full scan. Reads module globals field/geoidField/GW/GH/seaLevel. */
+function rectHasLand(rx, ry, rw, rh){
+  const sea=state.seaLevel;
+  let x0=Math.floor(rx), y0=Math.floor(ry), x1=Math.ceil(rx+rw), y1=Math.ceil(ry+rh);
+  if(x0<0)x0=0; if(y0<0)y0=0; if(x1>GW-1)x1=GW-1; if(y1>GH-1)y1=GH-1;
+  for(let y=y0;y<=y1;y++){ const rb=y*GW; for(let x=x0;x<=x1;x++){ const i=rb+x; if(field[i]-(geoidField?geoidField[i]:0)>=sea) return true; } }
+  return false;
+}
+/* A child tile's coarse bounds ⊆ its parent's, so an all-ocean parent ⇒ all-ocean children automatically —
+   one per-tile test prunes the whole subtree (no parent tracking). */
+function tileHasLand(z, col, row){ const b=pyramidTileBounds(GW, GH, z, col, row); return rectHasLand(b.x, b.y, b.w, b.h); }
 /* choose the pyramid level whose tile pixels best match the on-screen pixels at a given zoom — the
    "reverse mipmap": zoom in ⇒ higher z (finer tiles), capped so the live working set stays ~viewport-sized. */
 function pyramidLevelForZoom(scale, baseW, tileSize, maxLevel){
@@ -6146,6 +6159,7 @@ async function bakeVisibleTiles(){
   _splatK=(state.mode==='biome'&&assetPack&&assetPack.texAny)?(state.viz.splat||0):0;   /* Phase 3: bake splat into the stored biome PNG consistently */
   const bakedKeys=[];
   for(const k of visibleTileKeys(v.z, v.x0, v.y0, v.x1, v.y1)){
+    if(!tileHasLand(v.z,k.col,k.row)) continue;                  // v0.04: ocean culling — don't bake all-ocean tiles (smaller atlas/save)
     const lk=lodCacheKey(v.z,k.col,k.row,_lodTile); const b=pyramidTileBounds(GW,GH,v.z,k.col,k.row);
     let t=_lodCache.get(lk); if(!t){ const e=_lodEdits.get(lk); if(e) t={data:e.base,w:e.w,h:e.h,z:v.z,col:k.col,row:k.row}; }
     if(!t) t=pyramidTile(field,GW,GH,v.z,k.col,k.row,_lodTile,lodTileOpts());
@@ -6419,6 +6433,7 @@ function refineVisibleTiles(){
   const v=lodViewRect(), opts=lodTileOpts();
   for(const k of visibleTileKeys(v.z, v.x0, v.y0, v.x1, v.y1)){
     if(bakedCover(v.z,k.col,k.row)) continue;                    // Phase 2a: images override generation — no refine beneath baked
+    if(!tileHasLand(v.z,k.col,k.row)) continue;                  // v0.04: ocean culling — never refine all-ocean tiles
     const key=lodCacheKey(v.z,k.col,k.row,_lodTile);
     if(!lodCacheGet(key)) lodCachePut(key, pyramidTile(field, GW, GH, v.z, k.col, k.row, _lodTile, opts));
   }
@@ -6491,7 +6506,9 @@ function buildTileManifest(o){
   o=o||{}; const cols=o.cols||1, rows=o.rows||1, ts=o.tileSize||1024, hasCoarse=!!o.bounds;
   const stepX=hasCoarse?o.bounds.w/cols:0, stepY=hasCoarse?o.bounds.h/rows:0, tiles=[];
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-    const t={ row:r, col:c, file:(o.fileFor?o.fileFor(r,c):`tiles/tile_${r}_${c}.png`) };
+    const empty=o.isEmpty?!!o.isEmpty(r,c):false;   // v0.04: ocean-culled tiles carry empty:true + file:null (consumer falls back to coarse)
+    const t={ row:r, col:c, file: empty?null:(o.fileFor?o.fileFor(r,c):`tiles/tile_${r}_${c}.png`) };
+    if(empty) t.empty=true;
     if(hasCoarse) t.coarse={ x:o.bounds.x+c*stepX, y:o.bounds.y+r*stepY, w:stepX+1, h:stepY+1 };
     tiles.push(t);
   }
@@ -6660,8 +6677,11 @@ async function exportRegionTiles(sel, cols, rows, ts, wantGzip, onP){
   const td=tileDims(sel,cols,rows,ts), tw=td.w, th=td.h;   // aspect-preserving (no squish on non-square selections)
   const stepX=sel.w/cols, stepY=sel.h/rows;                // coarse sub-bounds per tile (for the Phase-3 biome PNG)
   _splatK=(state.mode==='biome'&&assetPack&&assetPack.texAny)?(state.viz.splat||0):0;
-  const E=[]; let usedGzip=false; const tot=cols*rows;
+  const E=[]; let usedGzip=false; const tot=cols*rows; const empty=new Uint8Array(rows*cols);   // v0.04: ocean-culled tiles (skipped) → marked in the manifest
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    if(!rectHasLand(sel.x+c*stepX, sel.y+r*stepY, stepX, stepY)){   // v0.04: skip all-ocean tiles — smaller export
+      empty[r*cols+c]=1; if(onP) onP((r*cols+c+1)/tot); continue;
+    }
     const tile=refineTile(field,GW,GH,sel,cols,rows,c,r,tw,th,opts);
     let bin=packHeight16(tile,tw*th), name=`tiles/refined_${r}_${c}_rg16.bin`;
     if(wantGzip){ const z=await gzipBytes(bin); if(z){ bin=z; name+='.gz'; usedGzip=true; } }
@@ -6673,7 +6693,7 @@ async function exportRegionTiles(sel, cols, rows, ts, wantGzip, onP){
   }
   const man=buildTileManifest({cols,rows,tileSize:ts,tileW:tw,tileH:th,width:cols*tw,height:rows*th,
     seed:state.tect.seed,world:state.world,bounds:sel,heightEncoding:'rg16',
-    compression:usedGzip?'gzip':'store',fileFor:(r,c)=>`tiles/refined_${r}_${c}.png`});
+    compression:usedGzip?'gzip':'store',fileFor:(r,c)=>`tiles/refined_${r}_${c}.png`,isEmpty:(r,c)=>empty[r*cols+c]===1});
   E.push({name:'tiles/index.json',data:new TextEncoder().encode(JSON.stringify(man,null,2))});
   return E;
 }

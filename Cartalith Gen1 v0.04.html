@@ -15846,7 +15846,9 @@ const ROUTE_COLOR_KEYS = [
 ];
 
 function getCSSVar(key){
-    return getComputedStyle(document.documentElement).getPropertyValue(key).trim();
+    /* document.body is the shadow host in this proxy context, so CSS variables
+       defined in :host{} (like --biome-coastal) resolve correctly here. */
+    return getComputedStyle(document.body).getPropertyValue(key).trim();
 }
 function getRouteColor(key){ return getCSSVar(key) || "#73b7ff"; }
 function nextRouteColorKey(){

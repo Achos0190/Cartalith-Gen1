@@ -8106,6 +8106,8 @@ button.settings-group-title{ width:100%; display:flex; align-items:center; justi
         <button type="button" class="menubar-item" data-workspace="mapsetup">Map Setup</button>
     </nav>
     <div class="menubar-spacer"></div>
+    <button type="button" id="lodDetailToggle" class="menubar-item" style="display:none" aria-pressed="true"
+            title="Toggle LOD detail tiles — zoom in for finer terrain baked from the generator">◳ LOD detail</button>
     <button type="button" id="settingsCog" class="menubar-cog" title="Settings — travel modifiers" aria-label="Settings">⚙</button>
 </div>
 
@@ -15979,6 +15981,11 @@ const state = {
 
     camera:{x:0, y:0, zoom:1},
 
+    /* v0.04: LOD detail (the Generate engine in read-only view-mode). lodAtlas carries the baked
+       pyramid's lookup params {worldKey,tileSize,maxLevel}; lodView toggles the overlay. */
+    lodAtlas:null,
+    lodView:true,
+
     mode:"measure",            /* measure (Routes) | place | map_setup | ways */
 
     /* top-level workspace: "routes" | "mapsetup" | "planner". */
@@ -17779,6 +17786,40 @@ function updateUI(){
 ═══════════════════════════════════════════════════════════════════════════════
 */
 
+/* v0.04: LOD detail overlay — delegates to the Generate engine's read-only view-mode compositor
+   (window.__gen1RenderLOD). It renders the visible world rect's baked chunk PNGs into an offscreen
+   sized to the viewport, which we then draw in world coords so it lands exactly over the coarse image.
+   Non-baked (ocean) tiles are skipped → the coarse image shows through. Editing layers stay above. */
+let _cartLodScratch = null;
+function drawLODDetail(){
+    if(!state.lodView || !state.lodAtlas || !state.image) return;
+    if(typeof window.__gen1RenderLOD !== "function") return;
+    const z = state.camera.zoom; if(!(z > 0)) return;
+    const cw = canvas.width, ch = canvas.height;
+    /* visible world rect (image px = coarse cells) from the camera inverse */
+    const x0 = (0 - state.camera.x) / z, y0 = (0 - state.camera.y) / z;
+    const x1 = (cw - state.camera.x) / z, y1 = (ch - state.camera.y) / z;
+    const ow = Math.max(2, Math.min(4096, Math.round(cw))), oh = Math.max(2, Math.min(4096, Math.round(ch)));
+    if(!_cartLodScratch) _cartLodScratch = document.createElement("canvas");
+    _cartLodScratch.width = ow; _cartLodScratch.height = oh;
+    const octx = _cartLodScratch.getContext("2d"); octx.clearRect(0, 0, ow, oh);
+    let res = null;
+    try{
+        res = window.__gen1RenderLOD(octx, ow, oh, {x0, y0, x1, y1}, {
+            worldKey: state.lodAtlas.worldKey, tileSize: state.lodAtlas.tileSize,
+            maxLevel: state.lodAtlas.maxLevel, onReady: scheduleRender
+        });
+    }catch(_){ res = null; }
+    if(res && res.drew) ctx.drawImage(_cartLodScratch, x0, y0, x1 - x0, y1 - y0);   /* offscreen maps to worldRect ⇒ fills the view exactly */
+}
+/* reflect LOD availability + on/off in the toolbar toggle (no-op if the control isn't present) */
+function updateLodToggleUI(){
+    const b = document.getElementById("lodDetailToggle"); if(!b) return;
+    const has = !!state.lodAtlas;
+    b.style.display = has ? "" : "none";
+    b.classList.toggle("active", has && !!state.lodView);
+    b.setAttribute("aria-pressed", String(has && !!state.lodView));
+}
 function render(){
     if(!ctx){ updateUI(); return; }
 
@@ -17788,6 +17829,9 @@ function render(){
     ctx.scale(state.camera.zoom, state.camera.zoom);
 
     if(state.image) ctx.drawImage(state.image, 0, 0);
+
+    /* v0.04: LOD detail — overlay the Generate engine's baked tiles (view-mode) over the coarse image. */
+    drawLODDetail();
 
     /* Biome paint grid only shows in Map Setup mode. */
     if(state.mode === "map_setup") drawBiomeGrid();
@@ -21747,6 +21791,9 @@ document.getElementById("saveBtn").addEventListener("click", () => {
             years:politicsYears            /* which slice blobs are in the ZIP */
         },
         activeRouteId:state.activeRouteId,
+        /* v0.04: LOD detail atlas lookup params (the chunk PNGs themselves travel via the embedded
+           generate component / World/ entries; this just records how to address them). */
+        lodAtlas:state.lodAtlas || null,
         /* main-map display filters (politics visibility lives in
            politics.showInRoutes above). */
         filters:{ settlements:state.routeFilters.settlements, pois:state.routeFilters.pois,
@@ -21929,6 +21976,19 @@ function loadFromZip(buffer){
 
     applyLoadedState(data, rawGridData, !!bakedEntry);
 
+    /* v0.04: a baked LOD pyramid (World/atlas.json + World/ chunk tiles) may travel with the project.
+       Hand the raw entries to the shell bridge → it imports the chunks into the shared IndexedDB atlas
+       (via the Generate engine) and returns the lookup params for view-mode rendering. */
+    try{
+        const hasAtlas = entries.some(e => e.name === "World/atlas.json");
+        if(hasAtlas && typeof window.__gen1ImportAtlas === "function"){
+            const zipObj = {}; for(const e of entries) zipObj[e.name] = e.data;
+            Promise.resolve(window.__gen1ImportAtlas(zipObj)).then(info => {
+                if(info && info.worldKey){ state.lodAtlas = info; if(typeof scheduleRender === "function") scheduleRender(); updateLodToggleUI(); }
+            }).catch(()=>{});
+        }
+    }catch(_){}
+
     /* restore the saved planner state verbatim when it's meaningful,
        and cancel the auto-projection applyLoadedState just scheduled (the
        restored stages already reflect the routes as saved). A lone untagged
@@ -22044,6 +22104,9 @@ function applyLoadedState(data, rawGridData, isBaked){
             }) : [],
             createdAt:r.createdAt || new Date().toISOString()
         }));
+    }
+    if(data.lodAtlas && data.lodAtlas.worldKey){   /* v0.04: restore LOD detail atlas params */
+        state.lodAtlas = { worldKey:data.lodAtlas.worldKey, tileSize:data.lodAtlas.tileSize||512, maxLevel:data.lodAtlas.maxLevel||4 };
     }
     if(Array.isArray(data.places)){
         state.places = data.places.map(p => {
@@ -22355,6 +22418,16 @@ function closeSettings(){
     const m = document.getElementById("settingsModal");
     if(m) m.classList.remove("open");
 }
+(function wireLodDetail(){
+    const b = document.getElementById("lodDetailToggle");
+    if(b) b.addEventListener("click", () => {
+        state.lodView = !state.lodView;
+        updateLodToggleUI();
+        render();
+        setStatus(state.lodView ? "LOD detail on — zoom in for finer terrain." : "LOD detail off.");
+    });
+    updateLodToggleUI();
+})();
 (function wireSettings(){
     const cog   = document.getElementById("settingsCog");
     const close = document.getElementById("settingsModalClose");
@@ -24201,6 +24274,29 @@ async function handoffWorldToCartograph() {
   } catch (err) { toast("Handoff failed: " + (err && err.message)); }
   finally { btn.disabled = false; btn.textContent = label; }
 }
+
+/* ---------- bridges: Cartograph LOD view-mode ↔ the Generate engine (same page) ---------- */
+/* Import a project's baked World/ atlas chunks into the shared IndexedDB store (via the Generate
+   engine) and return the lookup params the Cartographer needs to render them in view-mode. */
+window.__gen1ImportAtlas = async function (zipObj) {
+  try {
+    const mfBytes = zipObj && zipObj["World/atlas.json"]; if (!mfBytes) return null;
+    const man = JSON.parse(new TextDecoder().decode(mfBytes));
+    if (man.kind !== "cartalith-atlas") return null;
+    const m = mounted.generate ? mods.generate : mountTool("generate");
+    if (m && m.atlasImportEntries) { try { await m.atlasImportEntries(zipObj); } catch (e) { console.warn("atlasImportEntries failed", e); } }
+    let maxLevel = 1; for (const c of (man.chunks || [])) if (c.z > maxLevel) maxLevel = c.z;
+    return { worldKey: man.worldKey, tileSize: man.tileSize || 512, maxLevel };
+  } catch (e) { console.warn("__gen1ImportAtlas failed", e); return null; }
+};
+/* Draw the baked LOD tiles for a world rect into a target ctx (read-only view-mode). */
+window.__gen1RenderLOD = function (targetCtx, dstW, dstH, worldRect, opts) {
+  try {
+    const m = mounted.generate ? mods.generate : mountTool("generate");
+    if (m && m.renderLODComposite) return m.renderLODComposite(targetCtx, dstW, dstH, worldRect, opts);
+  } catch (e) {}
+  return null;
+};
 
 /* ---------- handoff: Asset Packs → Generate ---------- */
 async function handoffPackToGenerate() {

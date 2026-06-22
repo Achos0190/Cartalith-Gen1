@@ -6244,10 +6244,11 @@ function chunkState(z,col,row){
 /* chunk-debug overlay on the LOD view: colored per-level grid, hash-colored chunks, tile labels (LOD/coords/parent/state) */
 function drawLODChunkDebug(v){
   if(!(_lodGrid||_lodChunkCol||_lodLabels)) return;
+  const VW=view.width, VH=view.height;
   const keys=visibleTileKeys(v.z, v.x0, v.y0, v.x1, v.y1), lc=LOD_LEVEL_COLS[v.z%LOD_LEVEL_COLS.length];
-  const fs=Math.max(9,Math.round(GW/110)), lh=fs*1.25, lw=Math.max(1.5,GW/360); vctx.textBaseline='top'; vctx.font=fs+'px monospace';
+  const fs=Math.max(9,Math.round(VW/110)), lh=fs*1.25, lw=Math.max(1.5,VW/360); vctx.textBaseline='top'; vctx.font=fs+'px monospace';
   for(const k of keys){ const b=pyramidTileBounds(GW,GH,v.z,k.col,k.row);
-    const dx=(b.x-v.x0)/(v.x1-v.x0)*GW, dy=(b.y-v.y0)/(v.y1-v.y0)*GH, dw=b.w/(v.x1-v.x0)*GW, dh=b.h/(v.y1-v.y0)*GH, st=chunkState(v.z,k.col,k.row);
+    const dx=(b.x-v.x0)/(v.x1-v.x0)*VW, dy=(b.y-v.y0)/(v.y1-v.y0)*VH, dw=b.w/(v.x1-v.x0)*VW, dh=b.h/(v.y1-v.y0)*VH, st=chunkState(v.z,k.col,k.row);
     if(_lodChunkCol){ const c=chunkColorHash(v.z,k.col,k.row); vctx.fillStyle='rgba('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+',0.32)'; vctx.fillRect(dx,dy,dw,dh); }
     if(_lodGrid){
       /* faint child-quadrant guides (the next LOD level's split) so the tiling reads even when one chunk fills the view */
@@ -6289,7 +6290,7 @@ function brushHeight(data, w, h, cx, cy, r, strength, mode, opts){
 }
 /* map a canvas grid coord (gx,gy in the GW×GH view) to the tile under it + local pixel coords (LOD nav state) */
 function lodPick(gx,gy){
-  const v=lodViewRect(), wx=v.x0+(gx/GW)*(v.x1-v.x0), wy=v.y0+(gy/GH)*(v.y1-v.y0);
+  const v=lodViewRect(), wx=v.x0+(gx/view.width)*(v.x1-v.x0), wy=v.y0+(gy/view.height)*(v.y1-v.y0);
   const dims=pyramidDims(v.z), sx=(GW-1)/dims.cols, sy=(GH-1)/dims.rows;
   const col=Math.max(0,Math.min(dims.cols-1,Math.floor(wx/sx))), row=Math.max(0,Math.min(dims.rows-1,Math.floor(wy/sy)));
   const b=pyramidTileBounds(GW,GH,v.z,col,row), td=tileDims({x:0,y:0,w:GW-1,h:GH-1},dims.cols,dims.rows,_lodTile);
@@ -6420,8 +6421,10 @@ function refineVisibleTiles(){
 }
 function drawLODView(){
   try{
+    /* VW×VH = the actual canvas pixel dimensions (may be larger than GW×GH when LOD expands to viewport) */
+    const VW=view.width, VH=view.height;
     const v=lodViewRect();
-    vctx.clearRect(0,0,GW,GH);
+    vctx.clearRect(0,0,VW,VH);
     if(!_lodScratch) _lodScratch=document.createElement('canvas');
     /* Phase 3: tiles follow the View mode — Biome = the full landColorCore look, Relief = the height ramp.
        v0.109: a lith/soil/water debug view tiles through the affordance renderer instead. */
@@ -6433,10 +6436,10 @@ function drawLODView(){
     /* 1) instant overview: the coarse world for the visible region, upscaled with NO procedural detail.
        v0.134: compose ALL overlapping edit-deltas into it (area-averaged to this view res) so painted
        detail ALWAYS surfaces — even without refining — and reads faithfully when zoomed out. */
-    let base=amplifyRegion(field, GW, GH, {x:v.x0, y:v.y0, w:v.x1-v.x0, h:v.y1-v.y0}, GW, GH, {detailAmp:0, sea:state.seaLevel});
-    base=composeTileEdits(base, GW, GH, {x:v.x0, y:v.y0, w:v.x1-v.x0, h:v.y1-v.y0});
-    _lodScratch.width=GW; _lodScratch.height=GH;
-    _lodScratch.getContext('2d').putImageData(new ImageData(tileRGBA(base,GW,GH,v.x0,v.y0,v.x1-v.x0,v.y1-v.y0),GW,GH),0,0);
+    let base=amplifyRegion(field, GW, GH, {x:v.x0, y:v.y0, w:v.x1-v.x0, h:v.y1-v.y0}, VW, VH, {detailAmp:0, sea:state.seaLevel});
+    base=composeTileEdits(base, VW, VH, {x:v.x0, y:v.y0, w:v.x1-v.x0, h:v.y1-v.y0});
+    _lodScratch.width=VW; _lodScratch.height=VH;
+    _lodScratch.getContext('2d').putImageData(new ImageData(tileRGBA(base,VW,VH,v.x0,v.y0,v.x1-v.x0,v.y1-v.y0),VW,VH),0,0);
     vctx.drawImage(_lodScratch,0,0);
     /* 2) overlay the refined/baked tiles the user has generated/baked (baked image > refined; no work on
        navigate). Non-baked tiles get their overlapping edit-deltas composed in at full tile resolution. */
@@ -6447,7 +6450,7 @@ function drawLODView(){
       else { const ek=lodCacheKey(v.z,k.col,k.row,_lodTile); t=lodCacheGet(ek); if(!t){ const e=_lodEdits.get(ek); if(e) t={data:e.base,w:e.w,h:e.h}; } if(!t) continue; }   /* refined procedural base (or an edit's frozen base if the cache evicted it) */
       const b=pyramidTileBounds(GW,GH,v.z,k.col,k.row);
       const drawData=baked? t.data : composeTileEdits(t.data,t.w,t.h,b);   /* v0.134: edits resampled into the refined tile */
-      const dx=(b.x-v.x0)/(v.x1-v.x0)*GW, dy=(b.y-v.y0)/(v.y1-v.y0)*GH, dw=b.w/(v.x1-v.x0)*GW, dh=b.h/(v.y1-v.y0)*GH;
+      const dx=(b.x-v.x0)/(v.x1-v.x0)*VW, dy=(b.y-v.y0)/(v.y1-v.y0)*VH, dw=b.w/(v.x1-v.x0)*VW, dh=b.h/(v.y1-v.y0)*VH;
       _lodScratch.width=t.w; _lodScratch.height=t.h;
       _lodScratch.getContext('2d').putImageData(new ImageData(tileRGBA(drawData,t.w,t.h,b.x,b.y,b.w,b.h),t.w,t.h),0,0);
       vctx.drawImage(_lodScratch,dx,dy,dw,dh);
@@ -7389,7 +7392,13 @@ function lodZoomStep(f){ _lodZoom=Math.max(1,Math.min(64,f>1?_lodZoom*2:_lodZoom
 document.getElementById('zoomIn').addEventListener('click',()=>{ if(_lodOn){ lodZoomStep(2); return; } const c=viewCenter(); zoomAt(c[0],c[1],1.35); });
 document.getElementById('zoomOut').addEventListener('click',()=>{ if(_lodOn){ lodZoomStep(0.5); return; } const c=viewCenter(); zoomAt(c[0],c[1],1/1.35); });
 document.getElementById('zoomReset').addEventListener('click',()=>{ if(_lodOn){ _lodZoom=1; _lodCx=GW/2; _lodCy=GH/2; renderNow(); return; } panMode=false; const pb=document.getElementById('panBtn'); if(pb)pb.classList.remove('on'); resetView(); });
-{ const lc=document.getElementById('lodChk'); if(lc) lc.addEventListener('change',()=>{ _lodOn=lc.checked; painting=false; panDrag=null; /* clear stuck sculpt/pan state when toggling LOD */ if(_lodOn){ _lodCx=GW/2; _lodCy=GH/2; _lodZoom=Math.max(1,_lodZoom); } applyView(); renderNow(); }); }
+{ const lc=document.getElementById('lodChk'); if(lc) lc.addEventListener('change',()=>{ _lodOn=lc.checked; painting=false; panDrag=null;
+  if(_lodOn){ _lodCx=GW/2; _lodCy=GH/2; _lodZoom=Math.max(1,_lodZoom);
+    /* Expand canvas to fill the viewport so LOD tiles use the full screen, not just GW×GH pixels */
+    const cw=document.querySelector('.canvas-wrap'); if(cw){ const r=cw.getBoundingClientRect(); view.width=Math.max(GW,Math.round(r.width)); view.height=Math.max(GH,Math.round(r.height)); }
+  } else { view.width=GW; view.height=GH; }
+  const oc=document.getElementById('polyOverlay'); if(oc){ oc.width=view.width; oc.height=view.height; }
+  applyView(); renderNow(); }); }
 { const la=document.getElementById('lodAutoChk'); if(la) la.addEventListener('change',()=>{ state.lodAuto=la.checked; }); }   /* v0.133: auto-enter LOD on zoom */
 bind('zoomDetailR',e=>{ state.viz.zoomDetail=+e.target.value/100; document.getElementById('zoomDetailV').textContent=state.viz.zoomDetail.toFixed(2)+'×'; lodCacheClear(); if(_lodOn) renderNow(); });   /* v0.133: how much procedural relief emerges on zoom (1× = legacy) */
 { const seg=document.getElementById('lodTileSeg'); if(seg) seg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b)return; [...seg.children].forEach(c=>c.classList.toggle('on',c===b)); _lodTile=+b.dataset.ts; lodCacheClear(); if(_lodOn) renderNow(); }); }
@@ -7604,6 +7613,7 @@ try{__X.decodeBiomeRLE=decodeBiomeRLE;}catch(e){}
 try{__X.cartalithGridManifest=cartalithGridManifest;}catch(e){}
 try{__X.loadAssetPack=loadAssetPack;}catch(e){}
 try{__X.clearAssetPack=clearAssetPack;}catch(e){}
+try{__X.getSettlementSeeds=()=>{ try{ return findSettlementSeeds(currentSettlementSuitability(),GW,GH).map(s=>({x:s.x,y:s.y,score:s.score,biome:s.biome})); }catch(_){ return []; } };}catch(e){}
 try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e){}
 </script>
 <script type="text/cartalith-css" data-tool="cartograph">:host{
@@ -23891,24 +23901,39 @@ function zipRead(buf) {
 function extractWorld() {
   const m = mounted.generate ? mods.generate : mountTool("generate");
   const r = shadowOf("generate");
-  const view = r && r.getElementById("view");
-  let gw = view ? view.width : 0, gh = view ? view.height : 0, km = 800;
-  let imageDataUrl = null, biomeRLE = null, terrainRLE = null;
-  try { imageDataUrl = view ? view.toDataURL("image/png") : null; } catch (e) {}
+  const genView = r && r.getElementById("view");
+  /* gw/gh = coarse grid dims (not the LOD canvas dims) */
+  let gw = 0, gh = 0, km = 800;
+  let imageDataUrl = null, biomeRLE = null, terrainRLE = null, seeds = [];
+  /* Prefer the LOD canvas when it's active and larger than the coarse grid */
+  try { imageDataUrl = genView ? genView.toDataURL("image/png") : null; } catch (e) {}
   try { biomeRLE = u8(m.encodeBiomeRLE(m.buildCartBiome())); } catch (e) {}
   try { terrainRLE = u8(m.encodeBiomeRLE(m.buildCartTerrain())); } catch (e) {}
   try { const man = m.cartalithGridManifest(); gw = man.widthCells; gh = man.heightCells; km = man.mapWidthKm; } catch (e) {}
-  return { gw, gh, mapWidthKm: km, imageDataUrl, biomeRLE, terrainRLE };
+  try { seeds = m.getSettlementSeeds ? m.getSettlementSeeds() : []; } catch (e) {}
+  return { gw, gh, mapWidthKm: km, imageDataUrl, biomeRLE, terrainRLE, seeds };
 }
 function buildCartographProject(parts) {
   const gw = parts.gw || 0, gh = parts.gh || 0, km = parts.mapWidthKm || 800;
+  /* Convert Generate settlement seeds → Cartalith places (settlement POIs at grid coords) */
+  const places = (parts.seeds || []).map((s, i) => ({
+    id: "p_gen_" + i,
+    name: "Settlement " + (i + 1),
+    category: "settlement",
+    klass: "village",
+    x: s.x, y: s.y,
+    description: "Suitability: " + (s.score != null ? s.score.toFixed(2) : "?"),
+    traits: [],
+    econ: {},
+    createdAt: new Date().toISOString()
+  }));
   const proj = {
     version: 9,
     image: parts.imageDataUrl ? { name: "generated.png", mime: "image/png", width: gw, height: gh } : null,
     grid: { cellSize: 1, appliedCellSize: 1, widthCells: gw, heightCells: gh, baked: true },
     terrain: parts.terrainRLE ? { baked: true } : null,
     calibration: { calibrated: true, pixelsPerUnit: (km > 0 ? gw / km : 1), unit: "km", points: [] },
-    routes: [], places: [], ways: [],
+    routes: [], places, ways: [],
     politics: { polities: [], timeline: { start: 1, end: 10, interval: 1 }, activeYear: 1, opacity: 0.5, showInRoutes: true, years: [] },
     activeRouteId: null,
     filters: { settlements: true, pois: true, hiddenClasses: [], hiddenPoiTypes: [] },

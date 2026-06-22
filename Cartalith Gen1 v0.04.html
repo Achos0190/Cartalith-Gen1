@@ -54,6 +54,9 @@
   .flowbar button.flowbtn{font-family:var(--sans);font-size:12px;color:var(--accent-text);background:var(--accent);border:0;border-radius:7px;padding:6px 13px;cursor:pointer;font-weight:600;white-space:nowrap}
   .flowbar button.flowbtn:hover{background:var(--accent-hover)}
   .flowbar button.flowbtn[disabled]{opacity:.5;cursor:default}
+  .flowbar .fb-opt{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;color:var(--muted)}
+  .flowbar .fb-opt.hidden{display:none}
+  .flowbar .fb-opt select{font-family:var(--sans);font-size:11px;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:3px 5px;cursor:pointer}
 
   /* ---- stage / panes ---- */
   main.stage{position:relative;flex:1 1 auto;min-height:0;background:var(--deepest)}
@@ -121,6 +124,13 @@
 
 <div class="flowbar" id="flowbar">
   <div class="fb-msg" id="fbMsg"></div>
+  <label class="fb-opt hidden" id="fbDepthWrap" for="fbDepth" title="How deep to bake the LOD detail pyramid (ocean tiles are skipped). Deeper = more zoom-in detail, larger export.">LOD detail
+    <select id="fbDepth">
+      <option value="3">to L3 (lighter)</option>
+      <option value="4" selected>to L4 (balanced)</option>
+      <option value="5">to L5 (finest, large)</option>
+    </select>
+  </label>
   <button class="flowbtn hidden" id="fbBtn"></button>
 </div>
 
@@ -6049,7 +6059,7 @@ let _lodCache=new Map(), _lodCacheMax=48, _lodGen=0;        // LRU; _lodGen inva
 function lodCacheKey(z,col,row,ts){ return _lodGen+':'+ts+':'+z+':'+col+':'+row; }
 function lodCacheGet(k){ if(!_lodCache.has(k)) return null; const v=_lodCache.get(k); _lodCache.delete(k); _lodCache.set(k,v); return v; }   // touch → most-recent
 function lodCachePut(k,v){ if(_lodCache.has(k)) _lodCache.delete(k); _lodCache.set(k,v); while(_lodCache.size>_lodCacheMax) _lodCache.delete(_lodCache.keys().next().value); }
-function lodCacheClear(){ _lodCache.clear(); }
+function lodCacheClear(){ _lodCache.clear(); if(typeof _atlasPng!=='undefined'){ _atlasPng.clear(); _atlasPngLoading.clear(); } }   // v0.04: also drop the view-mode PNG cache on world change
 /* col/row span of tiles overlapping a world rect (coarse coords) at level z */
 function tilesInView(z, vx0, vy0, vx1, vy1, cW, cH){
   const { cols, rows }=pyramidDims(z), sx=(cW-1)/cols, sy=(cH-1)/rows;
@@ -6172,6 +6182,40 @@ async function bakeVisibleTiles(){
   if(n){ _atlasMeta=atlasMetaRec(_worldKey,{ts:_lodTile, chunks:_atlasBaked.size}); await atlasPutMeta(_worldKey); }   // Phase 2b: refresh metadata
   return n;
 }
+/* v0.04: bake the WHOLE land pyramid (levels 1..maxZ, ocean tiles pruned) into the atlas, so a complete LOD
+   set can travel to the Cartographer. Spans every level/tile rather than one view rect; keyed by the current
+   _lodTile (the caller sets it). Sequential + atlasPut-to-IDB + microtask yields ⇒ bounded memory. */
+async function bakeAllLandTiles(maxZ, onProgress){
+  maxZ=Math.max(1, Math.min(8, (maxZ|0)||4));
+  _splatK=(state.mode==='biome'&&assetPack&&assetPack.texAny)?(state.viz.splat||0):0;   // bake the splat into the stored biome PNG consistently
+  let total=0; for(let z=1;z<=maxZ;z++){ const {cols,rows}=pyramidDims(z); for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) if(tileHasLand(z,c,r)) total++; }
+  const opts=lodTileOpts(); let done=0, n=0;
+  for(let z=1;z<=maxZ;z++){ const {cols,rows}=pyramidDims(z);
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      if(!tileHasLand(z,c,r)) continue;                          // ocean culling
+      const ak=atlasChunkKey(z,c,r,_lodTile);
+      if(_atlasBaked.has(ak)){ done++; if(onProgress)onProgress(done/Math.max(1,total)); continue; }   // already baked → skip
+      const b=pyramidTileBounds(GW,GH,z,c,r);
+      const t=pyramidTile(field,GW,GH,z,c,r,_lodTile,opts);
+      const flat={ data:composeTileEdits(t.data,t.w,t.h,b), w:t.w, h:t.h, z, col:c, row:r };
+      const enc=atlasEncodeChunk(flat), png=await tilePngBytes(flat.data,flat.w,flat.h,b);
+      const ok=await atlasPut({ key:ak, worldKey:_worldKey, ts:_lodTile, z, col:c, row:r, w:flat.w, h:flat.h, rg16:enc.rg16, png:png?new Blob([png],{type:'image/png'}):null, ver:VERSION, time:Date.now() });
+      if(ok){ _atlasBaked.add(ak); _atlasImg.delete(ak); n++; }
+      done++; if(onProgress)onProgress(done/Math.max(1,total));
+      await microtask();
+    }
+  }
+  if(n){ _atlasMeta=atlasMetaRec(_worldKey,{ts:_lodTile, chunks:_atlasBaked.size}); await atlasPutMeta(_worldKey); }
+  return n;
+}
+/* v0.04: bake the land pyramid AND export it as portable World/ entries in one shot, under a temporary tile
+   size (so bake keys + manifest tileSize stay consistent). Returns atlasExportEntries' {entries,manifest}|null.
+   Used by the Generate→Cartograph handoff so the LOD detail travels with the project. */
+async function bakeAndExportPyramid(maxZ, tileSize, onProgress){
+  const prevTile=_lodTile; if(tileSize) _lodTile=tileSize|0;
+  try{ await bakeAllLandTiles(maxZ, onProgress); return await atlasExportEntries(true); }
+  finally{ _lodTile=prevTile; }
+}
 /* ===================== Atlas Phase 4: portable World/ ZIP export+import (docs/ATLAS_ARCHITECTURE.md) =====================
    The IndexedDB atlas is per-browser; this round-trips a whole world's baked chunks to a self-contained ZIP
    (rg16 height + visual PNG per chunk, gzip-optional, plus a manifest carrying the worldKey + params) and back
@@ -6226,6 +6270,7 @@ async function atlasImportEntries(zip){
     if(ok){ n++; if(wk===_worldKey){ _atlasBaked.add(key); _atlasImg.delete(key); } }
   }
   if(n) await atlasPut(atlasMetaRec(wk,{ts, chunks:n}));   // explicit (atlasPutMeta would key off _worldKey/_atlasBaked.size)
+  if(n && typeof _atlasPng!=='undefined'){ _atlasPng.clear(); _atlasPngLoading.clear(); }   // v0.04: invalidate view-mode PNG cache so imported chunks re-decode
   return n;
 }
 /* ---- browser shells (download / file-picker; guarded) ---- */
@@ -6478,6 +6523,42 @@ function drawLODView(){
     drawLODChunkDebug(v);   /* Atlas Phase 1: chunk grid / colors / labels overlay (toggles off ⇒ no-op) */
     return true;
   }catch(e){ console.warn('LOD view failed → normal render',e); _lodOn=false; return false; }
+}
+/* ===================== v0.04: read-only LOD "view mode" (the Cartographer reuses this engine) =====================
+   Draws this world's BAKED chunk PNGs (from the shared IndexedDB atlas) for a world rect into a target ctx whose
+   full dstW×dstH maps to that rect. It draws the stored visual PNG (not re-rendered height), so it has NO field/
+   climate dependency and works after a page reload. Non-baked tiles (ocean / un-baked) are skipped so the caller's
+   underlay (e.g. Cartalith's coarse map image) shows through. Keyed by an explicit worldKey + tileSize so it reads
+   an imported atlas regardless of the live Generate session's _worldKey/_lodTile. */
+let _atlasPng=new Map(), _atlasPngLoading=new Set();   // ak → decoded ImageBitmap/HTMLImageElement (null = known-absent); transient, never serialized
+function atlasLoadPng(ak, onReady){
+  if(_atlasPng.has(ak)||_atlasPngLoading.has(ak)) return; _atlasPngLoading.add(ak);
+  const fail=()=>{ _atlasPng.set(ak,null); _atlasPngLoading.delete(ak); };          // negative-cache misses ⇒ no repeated IDB hits per frame
+  atlasGet(ak).then(rec=>{
+    if(!rec||!rec.png){ fail(); return; }
+    const done=img=>{ _atlasPng.set(ak,img); _atlasPngLoading.delete(ak); if(onReady)onReady(); };
+    try{
+      if(typeof createImageBitmap==='function' && typeof Blob!=='undefined' && rec.png instanceof Blob){ createImageBitmap(rec.png).then(done, fail); }
+      else if(typeof Blob!=='undefined' && rec.png instanceof Blob){ const url=URL.createObjectURL(rec.png), im=new Image(); im.onload=()=>{ done(im); setTimeout(()=>URL.revokeObjectURL(url),0); }; im.onerror=fail; im.src=url; }
+      else fail();
+    }catch(_){ fail(); }
+  }, fail);
+}
+function renderLODComposite(targetCtx, dstW, dstH, worldRect, opts){
+  opts=opts||{};
+  const wk=opts.worldKey||_worldKey, ts=(opts.tileSize|0)||_lodTile, maxL=(opts.maxLevel|0)||(state.lodMaxLevel||8);
+  const x0=worldRect.x0, y0=worldRect.y0, x1=worldRect.x1, y1=worldRect.y1, rw=Math.max(1e-6,x1-x0), rh=Math.max(1e-6,y1-y0);
+  const span=(GW-1)/rw, z=Math.max(1, pyramidLevelForZoom(span, GW, ts, maxL));
+  let drew=0, pending=0;
+  for(const k of visibleTileKeys(z, x0, y0, x1, y1)){
+    const ak=atlasKeyStr(wk, ts, z, k.col, k.row);
+    if(!_atlasPng.has(ak)){ atlasLoadPng(ak, opts.onReady); pending++; continue; }   // not yet decoded → underlay shows this frame
+    const img=_atlasPng.get(ak); if(!img) continue;                                   // known-absent (ocean / un-baked) → underlay shows
+    const b=pyramidTileBounds(GW,GH,z,k.col,k.row);
+    const dx=(b.x-x0)/rw*dstW, dy=(b.y-y0)/rh*dstH, dw=b.w/rw*dstW, dh=b.h/rh*dstH;
+    try{ targetCtx.drawImage(img, dx, dy, dw, dh); drew++; }catch(_){}
+  }
+  return { z, drew, pending };
 }
 /* aspect-preserving tile pixel dims: a tile spanning stepX×stepY coarse cells gets its LONGER coarse
    edge = ts px, the shorter scaled to match — so the assembled cols·tileW × rows·tileH image always
@@ -7639,6 +7720,14 @@ try{__X.cartalithGridManifest=cartalithGridManifest;}catch(e){}
 try{__X.loadAssetPack=loadAssetPack;}catch(e){}
 try{__X.clearAssetPack=clearAssetPack;}catch(e){}
 try{__X.getSettlementSeeds=()=>{ try{ return findSettlementSeeds(currentSettlementSuitability(),GW,GH).map(s=>({x:s.x,y:s.y,score:s.score,biome:s.biome})); }catch(_){ return []; } };}catch(e){}
+/* v0.04: LOD-pyramid handoff + Cartographer view-mode surface */
+try{__X.bakeAllLandTiles=bakeAllLandTiles;}catch(e){}
+try{__X.bakeAndExportPyramid=bakeAndExportPyramid;}catch(e){}
+try{__X.atlasExportEntries=atlasExportEntries;}catch(e){}
+try{__X.atlasImportEntries=atlasImportEntries;}catch(e){}
+try{__X.renderLODComposite=renderLODComposite;}catch(e){}
+try{__X.worldKey=worldKey;}catch(e){}
+try{Object.defineProperty(__X,'_worldKey',{get:function(){return _worldKey;}});}catch(e){}
 try{Object.defineProperty(__X,'state',{get:function(){return state;}});}catch(e){}
 </script>
 <script type="text/cartalith-css" data-tool="cartograph">:host{
@@ -23935,10 +24024,11 @@ function switchTab(tab) {
 
 /* ---------- flow / handoff bar ---------- */
 function updateFlowbar() {
-  const bar = $("flowbar"), msg = $("fbMsg"), btn = $("fbBtn");
-  bar.classList.remove("hide"); btn.classList.add("hidden");
+  const bar = $("flowbar"), msg = $("fbMsg"), btn = $("fbBtn"), dw = $("fbDepthWrap");
+  bar.classList.remove("hide"); btn.classList.add("hidden"); if (dw) dw.classList.add("hidden");
   if (activeTab === "generate") {
-    msg.innerHTML = "<b>Generate</b> a world, then send it straight into the cartographer as a base map with biome &amp; terrain paint grids.";
+    msg.innerHTML = "<b>Generate</b> a world, then send it straight into the cartographer as a base map with biome &amp; terrain paint grids, plus baked LOD detail tiles.";
+    if (dw) dw.classList.remove("hidden");
     btn.textContent = "Send world → Cartograph"; btn.classList.remove("hidden"); btn.onclick = handoffWorldToCartograph;
   } else if (activeTab === "assets") {
     msg.innerHTML = "<b>Author</b> a texture/icon pack, then push it into the world engine's renderer.";
@@ -24081,21 +24171,35 @@ function buildCartographProject(parts) {
   if (parts.imageDataUrl) entries.push({ name: "image.png", data: dataUrlToU8(parts.imageDataUrl) });
   if (parts.biomeRLE) entries.push({ name: "biome_baked.bin", data: u8(parts.biomeRLE) });
   if (parts.terrainRLE) entries.push({ name: "terrain_baked.bin", data: u8(parts.terrainRLE) });
+  /* v0.04: the baked LOD pyramid (World/ chunk tiles + World/atlas.json) travels with the project so the
+     Cartographer can render zoomable detail tiles via the same engine in view-mode. */
+  if (parts.atlasEntries) for (const e of parts.atlasEntries) entries.push({ name: e.name, data: u8(e.data) });
   return zipStore(entries);
 }
 async function handoffWorldToCartograph() {
-  const btn = $("fbBtn"); btn.disabled = true;
+  const btn = $("fbBtn"); btn.disabled = true; const label = btn.textContent;
   try {
     toast("Sending world to the cartographer…", 6000);
     const parts = extractWorld();
     if (!parts || (!parts.biomeRLE && !parts.imageDataUrl)) { toast("Could not read the generated world."); return; }
+    /* v0.04: bake the land LOD pyramid (ocean tiles pruned) to the chosen depth and gather its World/ entries */
+    try {
+      const m = mounted.generate ? mods.generate : mountTool("generate");
+      const dsel = $("fbDepth"); const depth = dsel ? (parseInt(dsel.value, 10) || 4) : 4;
+      if (m && m.bakeAndExportPyramid) {
+        toast("Baking LOD detail tiles (depth " + depth + ")… this can take a moment.", 60000);
+        const ax = await m.bakeAndExportPyramid(depth, 512, p => { btn.textContent = "Baking… " + Math.round(p * 100) + "%"; });
+        if (ax && ax.entries) parts.atlasEntries = ax.entries;
+      }
+    } catch (e) { console.warn("LOD bake failed — sending without detail tiles", e); }
+    btn.textContent = label;
     const zip = buildCartographProject(parts);
     mountTool("cartograph");
     await toolLoadProject("cartograph", zip);
     switchTab("cartograph");
-    toast("World opened in Cartograph — base map, biome & terrain grids loaded.");
+    toast("World opened in Cartograph — base map, biome & terrain grids" + (parts.atlasEntries ? " + LOD detail tiles" : "") + " loaded.");
   } catch (err) { toast("Handoff failed: " + (err && err.message)); }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; btn.textContent = label; }
 }
 
 /* ---------- handoff: Asset Packs → Generate ---------- */

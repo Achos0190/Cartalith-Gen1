@@ -1,7 +1,10 @@
 # Cartalith — World-Centric Architecture (the GIS reset)
 
 > **Status:** Phase 1 foundation shipped as `Cartalith Gen1 v0.08.html` (self-contained, hand-written,
-> not a build-script artifact). This document is the contract the migration follows.
+> not a build-script artifact). `v0.09.html` extends it with **hydraulic + thermal erosion** (the canonical
+> "expensive simulation → cached, regeneration-safe dataset → still editable" op — baked into `erosionDelta`,
+> composed in `nodeElevation`, recomputed downstream) and **endorheic lake filling** (Priority-Flood →
+> `water=2` → Lake biome). This document is the contract the migration follows.
 >
 > **Why this exists.** `Cartalith Gen1 v0.07.html` unified the three tools *by isolation* — the elevation
 > engine, the Cartalith editor and the asset compiler each run unmodified inside their own **shadow DOM**,
@@ -90,6 +93,13 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
 - **P4 — Assets & export:** asset-pack module feeding splat/icons/symbols across every layer; save schema
   v10; tiled-LOD/atlas chunk store for very large worlds (chunked storage + dirty-region tiles).
 - **P5 — Performance:** worker-offloaded heavy nodes, R32F GPU layers, spatial indexing.
+
+> **Command vs node.** Cheap, deterministic-from-params stages are auto-recomputing graph **nodes**
+> (continents…infrastructure). Expensive, iterative, partly-stochastic stages (erosion now; full
+> stream-power/glacial in P2) are **commands**: run on demand, bake a cached delta that persists through
+> regenerate and re-composes in its owning node, then drive the downstream cascade. This is the perf
+> contract — "expensive simulations produce cached datasets that become editable," never continuously
+> re-simulated.
 
 ## 6. What v0.08 deliberately does NOT yet have
 

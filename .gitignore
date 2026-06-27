@@ -1,2 +1,6 @@
 # Claude Code harness artifacts (transient agent worktrees)
 .claude/worktrees/
+
+# Python bytecode cache (from importing build scripts in tests)
+__pycache__/
+*.pyc

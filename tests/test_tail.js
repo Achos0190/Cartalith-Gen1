@@ -3097,6 +3097,42 @@ if (typeof buildNPP === 'function') {
   check('currentWildlife: deterministic', w1.regions.length === w2.regions.length && (!w1.regions[0] || w1.regions[0].richness === w2.regions[0].richness));
 }
 
+/* ---------- v0.145: carveRiverValleys — real carved valleys in generate() ---------- */
+if (typeof carveRiverValleys === 'function') {
+  const oldCarve = state.carveRivers;
+
+  // baseline with carving OFF — two runs must be bit-identical (determinism, gate works)
+  state.carveRivers = false; generate();
+  const preField = field.slice();
+  generate();
+  let offDet = true; for (let i = 0; i < field.length; i++) if (field[i] !== preField[i]) { offDet = false; break; }
+  check('carveRivers:false → generate() deterministic (gate is a no-op)', offDet);
+
+  // carving ON — field must stay finite (invariant 2)
+  state.carveRivers = true; generate();
+  const carvedField = field.slice();
+  check('carveRivers:true → field stays finite (invariant 2)', Array.from(carvedField).every(Number.isFinite));
+
+  // at least some land cells must be incised below the pre-carve surface
+  let incised = 0;
+  for (let i = 0; i < carvedField.length; i++)
+    if (preField[i] >= state.seaLevel && carvedField[i] < preField[i] - 1e-6) incised++;
+  check('carveRivers:true → land cells net-incise below pre-carve surface', incised > 0);
+
+  // riverMask cells must sit at their locked floor (entrenchment invariant)
+  let maskOk = true;
+  for (let i = 0; i < riverMask.length; i++)
+    if (riverMask[i] && field[i] > riverFloor[i] + 1e-6) { maskOk = false; break; }
+  check('carveRivers:true → riverMask cells sit at or below their locked floor', maskOk);
+
+  // deterministic: a second carve-on run must be bit-identical
+  generate();
+  let onDet = true; for (let i = 0; i < field.length; i++) if (field[i] !== carvedField[i]) { onDet = false; break; }
+  check('carveRivers:true → generate() deterministic across two runs', onDet);
+
+  state.carveRivers = oldCarve; generate();   // restore
+}
+
 /* ---------- async tests own the summary (gzip + region export, v0.053) ---------- */
 (async () => {
   // gzip round-trip via CompressionStream (Node 18+ has it; skip gracefully otherwise)

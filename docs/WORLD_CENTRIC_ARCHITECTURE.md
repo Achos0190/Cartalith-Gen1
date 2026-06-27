@@ -88,6 +88,13 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
 - **P2 — Engine science migration:** replace each compact node with the real `elevation_foundation`
   algorithm (tectonic-feature graph, worker erosion kernels, weather v2, Köppen, gravity/geoid/tides),
   wired as graph nodes writing the shared World. Reuse the 821-assertion harness per node.
+  - **Started (v0.10):** the **tectonics node** now produces TYPED boundaries via the engine's T0
+    `classifyBoundary` matrix (collision / subduction / arc / rift / transform, from per-plate crust +
+    normal-stress `C` + shear `S`) and stamps per-type signed landform profiles — parallel mountain
+    belts, ocean-side trench + volcanic arc, rift graben + shoulders, transform fault valley — by
+    multi-source Dijkstra distance from each margin. `boundaryType` is a shared cell attribute; the Plate
+    layer colours by it. Next P2 nodes: real stream-power/glacial erosion kernels, weather-v2 winds,
+    Köppen climate.
 - **P3 — Cartograph content:** routes/ways/places with traits & economics, politics-timeline layers,
   journey planner — as vector layers + tools on the same World (no separate editor).
 - **P4 — Assets & export:** asset-pack module feeding splat/icons/symbols across every layer; save schema

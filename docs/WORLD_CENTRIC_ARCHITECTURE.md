@@ -153,3 +153,7 @@ isolation build, pouring capability into the same spine:
   palettes, multi-scale hillshade (macro+meso+micro), ambient occlusion, atmospheric haze, beach rim,
   depth-banded smoothed-bathymetry water with surf line. Bilinear smoothing for continuous fields; Style
   controls (sun/relief/occlusion/smoothing). The main map now reads as a realistic atlas, not flat cells.
+- **v0.17 — resolution:** `W/H/N` are dynamic; `setResolution(w,h)` reallocates the World at 320×160 →
+  2048×1024, recomputes chunk/index dims, resets layer canvases and regenerates from the same seed
+  (procedural gen keyed on `x/W,y/H` → higher res = a higher-detail version of the *same* world). With
+  v0.16's bilinear smoothing → crisp coastlines/biomes at scale. A Resolution picker in the Source panel.

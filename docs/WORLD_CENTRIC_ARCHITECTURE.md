@@ -93,8 +93,12 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
     normal-stress `C` + shear `S`) and stamps per-type signed landform profiles — parallel mountain
     belts, ocean-side trench + volcanic arc, rift graben + shoulders, transform fault valley — by
     multi-source Dijkstra distance from each margin. `boundaryType` is a shared cell attribute; the Plate
-    layer colours by it. Next P2 nodes: real stream-power/glacial erosion kernels, weather-v2 winds,
-    Köppen climate.
+    layer colours by it.
+  - **Erosion kernels (v0.11):** two more erosion *commands* beside the v0.09 droplet — **stream-power**
+    (Priority-Flood sink-fill → drainage area → `E = K·Aᵐ·Sⁿ / rock-resistance`, anti-ridge clamp →
+    dendritic river valleys) and **glacial** (cold-gated abrasion → U-trough over-deepening). Both bake
+    into `erosionDelta` and drive the cascade. `priorityFill` is now the shared flood routine (lakes +
+    stream routing). Next P2 nodes: weather-v2 winds, Köppen climate.
 - **P3 — Cartograph content:** routes/ways/places with traits & economics, politics-timeline layers,
   journey planner — as vector layers + tools on the same World (no separate editor).
 - **P4 — Assets & export:** asset-pack module feeding splat/icons/symbols across every layer; save schema

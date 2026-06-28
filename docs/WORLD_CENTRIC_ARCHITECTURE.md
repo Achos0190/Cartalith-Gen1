@@ -166,6 +166,12 @@ isolation build, pouring capability into the same spine:
   + size slider) OR a user-imported image (PNG/SVG → data-URL) per slot. The icon pack saves *with* the
   project (data-URLs in the JSON), so it travels in one file — no external pack required.
 
+- **v0.20 — diagonal-artifact fix + "ways" vector smoothing:** roads + trade routes were raw D8 45°
+  staircases (the "vector lines"); now `rdpSimplify` → centripetal `catmullRom` (ported from the engine's
+  ways/river smoothing) turns them into smooth flowing curves (cached per path). The structured-tectonics
+  uplift gets an `fbm` crest-wiggle on the Dijkstra distance → breaks the regular octagonal facet bands
+  into organic belts. (Sea-route render style stubbed for v0.21.)
+
 This completes the v0.07-parity push for the user's named focus areas (graphics · resolution · planner ·
 icons). The remaining v0.07-only items (LOD/atlas tiling, GPU compute, ZIP texture-splat packs) stay
 hardware-bound / architecturally optional and don't block parity on the requested aspects.

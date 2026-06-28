@@ -161,3 +161,11 @@ isolation build, pouring capability into the same spine:
   base[foot/horse/cart/boat] × slope × biome × cold × altitude → total days), distance, avg pace, climate
   range, biome breakdown, hazards (high passes / arid / sub-zero / water crossings), elevation-profile
   sketch. A Planner panel updates live as a route is drawn.
+- **v0.19 — customizable icon pack (in-system):** five symbol slots
+  (hamlet/town/city/metropolis/place), each a built-in procedural marker (classic/minimal/heraldic styles
+  + size slider) OR a user-imported image (PNG/SVG → data-URL) per slot. The icon pack saves *with* the
+  project (data-URLs in the JSON), so it travels in one file — no external pack required.
+
+This completes the v0.07-parity push for the user's named focus areas (graphics · resolution · planner ·
+icons). The remaining v0.07-only items (LOD/atlas tiling, GPU compute, ZIP texture-splat packs) stay
+hardware-bound / architecturally optional and don't block parity on the requested aspects.

@@ -142,3 +142,14 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
 asset-pack import; politics *timeline* (per-era slices) + journey planner depth; Web-Worker offload of
 heavy commands + R32F GPU layers (browser-verified-only, exactly as the `elevation_foundation` flags them).
 None of these change the world-centric architecture — they pour additional capability into the same spine.
+
+## 7. v0.07 feature-parity push (graphics · resolution · planner · icons)
+
+After P1–P5, a parity pass brings the unified tool up to the visual + feature level of the v0.07
+isolation build, pouring capability into the same spine:
+
+- **v0.16 — graphic representation:** faithful compact port of the engine's `landColorCore` — two-pass
+  canopy-closure `materialWeights` (snow/rock/sand/wetland/canopy/grass) + climate-selected 3-tone
+  palettes, multi-scale hillshade (macro+meso+micro), ambient occlusion, atmospheric haze, beach rim,
+  depth-banded smoothed-bathymetry water with surf line. Bilinear smoothing for continuous fields; Style
+  controls (sun/relief/occlusion/smoothing). The main map now reads as a realistic atlas, not flat cells.

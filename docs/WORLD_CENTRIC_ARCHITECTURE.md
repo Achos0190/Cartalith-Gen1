@@ -157,3 +157,7 @@ isolation build, pouring capability into the same spine:
   2048×1024, recomputes chunk/index dims, resets layer canvases and regenerates from the same seed
   (procedural gen keyed on `x/W,y/H` → higher res = a higher-detail version of the *same* world). With
   v0.16's bilinear smoothing → crisp coastlines/biomes at scale. A Resolution picker in the Source panel.
+- **v0.18 — journey planner:** `planJourney(route, mode)` → terrain-aware travel report (per-cell speed =
+  base[foot/horse/cart/boat] × slope × biome × cold × altitude → total days), distance, avg pace, climate
+  range, biome breakdown, hazards (high passes / arid / sub-zero / water crossings), elevation-profile
+  sketch. A Planner panel updates live as a route is drawn.

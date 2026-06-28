@@ -170,7 +170,18 @@ isolation build, pouring capability into the same spine:
   staircases (the "vector lines"); now `rdpSimplify` → centripetal `catmullRom` (ported from the engine's
   ways/river smoothing) turns them into smooth flowing curves (cached per path). The structured-tectonics
   uplift gets an `fbm` crest-wiggle on the Dijkstra distance → breaks the regular octagonal facet bands
-  into organic belts. (Sea-route render style stubbed for v0.21.)
+  into organic belts.
+- **v0.21 — auto routes per continent + sea faring:** `landComponents` flood-fills continents;
+  `nodeInfrastructure` builds a road MST *within each continent* + a maritime MST over coastal/port towns
+  (water-hugging cost) → sea routes link ocean towns. Roads carry `{pts,sea}`; GeoJSON gains road/sea_route.
+- **v0.22 — place settings editor:** select/place a place → edit name, type (→ marker tier), population,
+  polity (faction colour), trait chips; persists in the save. (Asset-pack review: v0.07's shadow-DOM
+  compiler was isolation-only; the in-system equivalent is the v0.19 icon pack.)
+- **v0.23 — polity layer + terrain coupling:** `buildPolities()` derives the political layer from
+  settlements (capitals per continent → nearest-capital allegiance → land-confined cost-Voronoi capped by
+  a "reach"); manual paint still overrides. `classifyBiome` now takes slope (steep → barren rock / alpine),
+  and route/road/planner travel cost gains a mountain-pass (alt²) penalty — terrain visibly drives biome
+  and travel.
 
 This completes the v0.07-parity push for the user's named focus areas (graphics · resolution · planner ·
 icons). The remaining v0.07-only items (LOD/atlas tiling, GPU compute, ZIP texture-splat packs) stay

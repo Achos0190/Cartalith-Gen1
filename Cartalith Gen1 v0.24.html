@@ -1710,6 +1710,7 @@ function switchTab(t){
 }
 function buildTabBar(){
   document.querySelectorAll('#tabBar .tab').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  switchTab(activeTab); // hide all panels except the default (gen)
 }
 
 /* ---- debug quick-view builder ---- */

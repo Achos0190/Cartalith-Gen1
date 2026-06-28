@@ -109,8 +109,11 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
   and a **Territory** tool (paint political ownership per faction → `cells.region`). New Places / Trade
   routes / Political-territory layers; all persist in the project save; Civilization workspace wired to
   them. Follow-ups: settlement economics/traits, politics *timeline* (per-era slices), journey planner.
-- **P4 — Assets & export:** asset-pack module feeding splat/icons/symbols across every layer; save schema
-  v10; tiled-LOD/atlas chunk store for very large worlds (chunked storage + dirty-region tiles).
+- **P4 — Assets & export (v0.14 — export + symbols shipped):** GIS export suite — composite map **PNG**
+  at N× scale (one shared `renderLayersToCanvas` path), single active-layer PNG, and vector **GeoJSON**
+  (places/settlements as lon/lat points, routes as LineStrings, per-faction area summary). Tiered
+  procedural settlement **symbols** (hamlet/town/city/metropolis). Save schema consolidated (v13).
+  Deferred sub-item (architecturally optional): ZIP asset-pack import for sprite/texture packs.
 - **P5 — Performance:** worker-offloaded heavy nodes, R32F GPU layers, spatial indexing.
 
 > **Command vs node.** Cheap, deterministic-from-params stages are auto-recomputing graph **nodes**

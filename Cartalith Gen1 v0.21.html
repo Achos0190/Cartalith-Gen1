@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Cartalith — World GIS (v0.21)</title>
+<!--
+  Cartalith Gen1 v0.21 — auto routes for EVERYTHING (per continent) + sea faring.
+  nodeInfrastructure now: (1) flood-fills land into continents and builds a
+  least-cost road MST WITHIN EACH continent (every landmass gets its own
+  network, not just one group); (2) builds a maritime MST over coastal/port
+  towns with a water-hugging cost so ocean towns are linked by sea routes
+  (dashed blue, smoothed by the v0.20 ways logic). Roads carry {pts,sea};
+  GeoJSON export gains road/sea_route features; the inspector shows landmass.
+  (Earlier:)
+  Cartalith Gen1 v0.20 — diagonal-artifact fix + "ways" vector smoothing.
+  (1) Tectonic uplift smoothing is now isotropic (3-pass 3×3 incl. diagonals) →
+  dissolves the octagonal facets the multi-source Dijkstra distance left in the
+  mountain belts (measured diag/axis anisotropy drops toward isotropic).
+  (2) Roads + trade routes are no longer raw D8 45° staircases — rdpSimplify →
+  centripetal catmullRom (ported from the engine's ways/river smoothing) turns
+  them into smooth flowing curves. (Sea-route styling stub for v0.21.)
+  (Earlier:)
+  Cartalith Gen1 v0.19 — customizable icon pack (in-system).
+  Five symbol slots (hamlet/town/city/metropolis/place) render a built-in
+  procedural marker in one of three styles (classic/minimal/heraldic), OR a
+  user-imported image (PNG/SVG → data-URL) per slot. Marker-size slider. The
+  icon pack is saved with the project (data-URLs in the JSON), so it travels in
+  one file — no external pack needed.
+  (Earlier:)
+  Cartalith Gen1 v0.18 — Journey planner (Cartalith parity feature).
+  planJourney(route, mode) turns a route into a terrain-aware travel report:
+  per-cell speed = base(mode: foot/horse/cart/boat) × slope × biome × cold ×
+  altitude factors → total days; plus distance, avg pace, climate range, biome
+  breakdown, hazards (high passes / arid / sub-zero / water crossings) and an
+  elevation profile sketch. Planner panel updates live as you draw a route.
+  (Earlier:)
+  Cartalith Gen1 v0.17 — selectable working RESOLUTION (toward v0.07 parity).
+  W/H/N are now dynamic; setResolution(w,h) reallocates the whole World at the
+  chosen grid (320×160 up to 2048×1024), recomputes chunk/index dims, resets
+  layer canvases and regenerates from the same seed (procedural gen is keyed on
+  x/W,y/H, so higher res = a higher-detail version of the same world). Combined
+  with v0.16's bilinear smoothing → crisp coastlines/biomes at scale.
+  (Earlier:)
+  Cartalith Gen1 v0.16 — graphic-representation overhaul toward v0.07 parity.
+  The main map is now a faithful compact port of the elevation_foundation
+  material renderer: two-pass canopy-closure materialWeights (snow/rock/sand/
+  wetland/canopy/grass) with climate-selected 3-tone palettes, multi-scale
+  hillshade (macro+meso+micro), ambient occlusion, atmospheric haze, beach rim,
+  and depth-banded smoothed-bathymetry water with a surf line. Bilinear
+  smoothing for continuous fields (crisp for categorical) + Style controls
+  (sun angle / relief exaggeration / occlusion / smoothing). A flat "Biome
+  class" layer keeps the categorical view.
+  (Earlier:)
+  Cartalith Gen1 v0.15 — P5 performance: dirty-region CHUNKED raster rendering
+  (each layer is tiled into 32×32 chunks; a local brush/territory edit rebuilds
+  only the touched chunks, not the whole W×H image — perf HUD shows N/total
+  chunks) + a uniform-grid SPATIAL INDEX for O(1) vector picking. Completes the
+  perf contract (lazy/debounced recompute + chunked storage + dirty regions).
+  (Earlier:)
+  Cartalith Gen1 v0.14 — P4 export & symbols: GIS export suite (composite map PNG
+  at N× scale, single active-layer PNG, vector features as lon/lat GeoJSON incl.
+  faction-area summary) + tiered procedural settlement symbols (hamlet/town/city/
+  metropolis). One renderLayersToCanvas path drives the PNG bakes.
+  (Earlier:)
+  Cartalith Gen1 v0.13 — P3 content tools (the Cartograph layer, on ONE World):
+  Place tool (drop/select/Delete settlements), Route tool (terrain-aware least-cost
+  trade routes via Dijkstra, Esc commits), Territory tool (paint political ownership
+  per faction → cells.region). New Places / Trade-routes / Political-territory layers;
+  all persist in the project save. Civilization workspace wired to them.
+  (Earlier:)
+  Cartalith Gen1 v0.12 — completes P2 climate: weather-v2 + Köppen.
+  Wind field (trade easterlies / mid-lat westerlies / polar easterlies) drives
+  DOWNWIND moisture advection (ocean saturates the airmass; orographic rainout +
+  drying crossing land → real rain shadows + dry continental interiors). A Köppen
+  node classifies climate (A/B/C/D/E + subtypes) as its own layer + Wind layer.
+  (Earlier:)
+  Cartalith Gen1 v0.11 — World-Centric Architecture foundation (Phase 1 + P2).
+  v0.11 adds two real erosion-kernel commands beside the v0.09 droplet:
+  stream-power incision (sink-fill → MFD drainage area → E=K·Aᵐ·Sⁿ/resistance,
+  anti-ridge clamp → dendritic river valleys) and cold-gated glacial abrasion
+  (U-trough over-deepening). Both bake into the cached erosionDelta and drive
+  the dependency cascade. (Earlier:)
+  Cartalith Gen1 v0.10 — structured tectonics (P2 start).
+  A SINGLE application: one World object, one renderer (layer stack), one tool
+  framework, one dependency-graph simulation. Workspaces are UI presets only.
+  v0.09 added hydraulic+thermal erosion (cached, regeneration-safe erosionDelta)
+  + endorheic lake filling (Priority-Flood). v0.10 begins the engine-science
+  migration (P2): the tectonics node now produces TYPED plate boundaries
+  (collision / subduction / arc / rift / transform — the elevation_foundation
+  T0 matrix) and stamps per-type structured landforms (parallel mountain belts,
+  trench+volcanic-arc, rift grabens) instead of blob uplift.
+  See docs/WORLD_CENTRIC_ARCHITECTURE.md. Not yet feature-complete vs v0.07.
+  Zero dependencies, runs from file://.
+-->
+<style>
+  :root{
+    --bg:#14110c; --panel:#1c1813; --panel2:#221d16; --line:#352c20;
+    --accent:#b08d54; --accent2:#d8b878; --text:#e8dcc4; --muted:#9c8b6c;
+    --good:#7bbf6a; --warn:#d8a13a; --bad:#c75c4a;
+    --rail:54px; --left:268px; --right:262px; --top:46px; --status:24px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font:13px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; user-select:none}
+  button{font:inherit; color:var(--text); background:var(--panel2); border:1px solid var(--line);
+    border-radius:5px; padding:5px 8px; cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.on{background:var(--accent); color:#1a140a; border-color:var(--accent); font-weight:600}
+  input[type=range]{width:100%; accent-color:var(--accent); touch-action:none}
+  select,input[type=text],input[type=number]{font:inherit; color:var(--text); background:var(--panel2);
+    border:1px solid var(--line); border-radius:4px; padding:3px 5px}
+  .muted{color:var(--muted)}
+
+  /* ---- frame ---- */
+  #top{position:fixed; left:0; right:0; top:0; height:var(--top); background:var(--panel);
+    border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; padding:0 12px; z-index:30}
+  #brand{font-weight:700; letter-spacing:.5px; color:var(--accent2)}
+  #brand small{color:var(--muted); font-weight:400; letter-spacing:0}
+  #workspaces{display:flex; gap:4px; margin-left:6px}
+  #workspaces button{padding:5px 10px}
+  #topright{margin-left:auto; display:flex; gap:6px; align-items:center}
+
+  #rail{position:fixed; left:0; top:var(--top); bottom:var(--status); width:var(--rail);
+    background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column;
+    align-items:center; gap:4px; padding:8px 0; z-index:20}
+  #rail button{width:40px; height:40px; padding:0; font-size:18px; display:flex; align-items:center;
+    justify-content:center; position:relative}
+  #rail button .lab{position:absolute; left:46px; background:#000a; padding:2px 6px; border-radius:4px;
+    white-space:nowrap; font-size:11px; opacity:0; pointer-events:none; transition:.1s}
+  #rail button:hover .lab{opacity:1}
+
+  #left{position:fixed; left:var(--rail); top:var(--top); bottom:var(--status); width:var(--left);
+    background:var(--panel); border-right:1px solid var(--line); overflow-y:auto; z-index:15}
+  #right{position:fixed; right:0; top:var(--top); bottom:var(--status); width:var(--right);
+    background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; z-index:15}
+  .sec{border-bottom:1px solid var(--line); padding:9px 11px}
+  .sec h3{margin:0 0 7px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--accent2)}
+  .row{display:flex; align-items:center; gap:7px; margin:5px 0}
+  .row label{flex:0 0 80px; color:var(--muted); font-size:12px}
+  .row .v{flex:0 0 38px; text-align:right; font-variant-numeric:tabular-nums; color:var(--accent2)}
+
+  /* layer list */
+  #layers .lyr{display:flex; align-items:center; gap:6px; padding:4px 3px; border-radius:4px; cursor:pointer}
+  #layers .lyr.active{background:var(--panel2); outline:1px solid var(--line)}
+  #layers .lyr .eye{width:20px; text-align:center; opacity:.55}
+  #layers .lyr.vis .eye{opacity:1; color:var(--accent2)}
+  #layers .lyr .nm{flex:1; font-size:12px}
+  #layers .lyr input[type=range]{flex:0 0 56px}
+  #layers .lyr .kind{font-size:9px; color:var(--muted); text-transform:uppercase}
+
+  /* center */
+  #stage{position:fixed; left:calc(var(--rail) + var(--left)); right:var(--right); top:var(--top);
+    bottom:var(--status); background:#0c0a07; overflow:hidden}
+  #view{position:absolute; left:0; top:0; image-rendering:pixelated; cursor:crosshair}
+  #overlay{position:absolute; left:0; top:0; pointer-events:none}
+  #scalebar{position:absolute; right:14px; bottom:12px; height:22px; display:flex; align-items:flex-end;
+    gap:0; font-size:10px; color:var(--text); text-shadow:0 1px 2px #000; pointer-events:none}
+  #scalebar .bar{border:1px solid var(--text); border-top:none; height:7px}
+  #hint{position:absolute; left:12px; bottom:10px; font-size:11px; color:var(--muted);
+    background:#000a; padding:3px 7px; border-radius:4px; pointer-events:none}
+
+  /* status */
+  #status{position:fixed; left:0; right:0; bottom:0; height:var(--status); background:var(--panel);
+    border-top:1px solid var(--line); display:flex; align-items:center; gap:14px; padding:0 12px;
+    font-size:11px; color:var(--muted); z-index:30; font-variant-numeric:tabular-nums}
+  #status b{color:var(--text); font-weight:600}
+
+  /* inspector */
+  .insp-row{display:flex; justify-content:space-between; gap:8px; padding:2px 0; border-bottom:1px dotted var(--line)}
+  .insp-row .k{color:var(--muted)}
+  .insp-row .val{color:var(--text); text-align:right; font-variant-numeric:tabular-nums}
+  .sw{display:inline-block; width:10px; height:10px; border-radius:2px; vertical-align:-1px; margin-right:5px}
+
+  .toolopt{display:none}
+  .toolopt.show{display:block}
+  .pill{display:inline-block; padding:2px 7px; border:1px solid var(--line); border-radius:10px;
+    font-size:11px; margin:2px 3px 0 0; cursor:pointer}
+  .pill.on{background:var(--accent); color:#1a140a; border-color:var(--accent)}
+
+  /* busy */
+  #busy{position:fixed; inset:0; background:#0009; display:none; align-items:center; justify-content:center;
+    z-index:50; flex-direction:column; gap:10px}
+  #busy.show{display:flex}
+  #busy .spin{width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--accent);
+    border-radius:50%; animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media(max-width:720px){
+    :root{--left:0px; --right:0px}
+    #left,#right{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div id="brand">CARTALITH <small>· World GIS v0.21</small></div>
+  <div id="workspaces"></div>
+  <div id="topright">
+    <button id="btnNew" title="New world (random seed)">New</button>
+    <button id="btnSave" title="Save project">Save</button>
+    <button id="btnLoad" title="Open project">Open</button>
+    <input id="fileLoad" type="file" accept=".json,.cartalith,application/json" style="display:none">
+  </div>
+</div>
+
+<div id="rail"></div>
+
+<div id="left">
+  <div class="sec">
+    <h3>Layers</h3>
+    <div id="layers"></div>
+  </div>
+  <div class="sec">
+    <h3>Tool options</h3>
+    <div id="toolopts"></div>
+  </div>
+  <div class="sec">
+    <h3>World</h3>
+    <div class="row"><label>Seed</label><input id="seed" type="number" style="flex:1" value="1"><button id="reseed" title="Random">⟳</button></div>
+    <div class="row"><label>Sea level</label><input id="seaLevel" type="range" min="0.25" max="0.6" step="0.005" value="0.42"><span class="v" id="seaLevelV">.42</span></div>
+    <div class="row"><label>Plates</label><input id="plates" type="range" min="6" max="28" step="1" value="14"><span class="v" id="platesV">14</span></div>
+    <div class="row"><label>Relief</label><input id="relief" type="range" min="0.3" max="1.8" step="0.05" value="1"><span class="v" id="reliefV">1.0</span></div>
+    <div class="row"><label>Map width</label><input id="mapKm" type="number" min="500" max="40000" step="500" value="12000" style="flex:1"><span class="muted">km</span></div>
+    <div class="row"><label>Resolution</label><select id="resSel" style="flex:1">
+      <option value="320">320×160 (fast)</option>
+      <option value="512">512×256</option>
+      <option value="768">768×384</option>
+      <option value="1024">1024×512 (HD)</option>
+      <option value="1536">1536×768 (heavy)</option>
+      <option value="2048">2048×1024 (very heavy)</option>
+    </select></div>
+    <div class="muted" style="font-size:11px"><span id="resLabel">320×160 · 0.05MP</span> — higher = crisper coastlines/biomes, slower generate. Changing it regenerates from the seed.</div>
+    <button id="btnGen" style="width:100%; margin-top:6px" class="on">Generate world</button>
+    <div class="row" style="margin-top:8px"><label>Erosion</label><input id="erodeAmt" type="range" min="1" max="6" step="1" value="3"><span class="v" id="erodeAmtV">3</span></div>
+    <button id="btnErode" style="width:100%">Hydraulic (droplet)</button>
+    <button id="btnStream" style="width:100%; margin-top:4px">Stream-power (river valleys)</button>
+    <button id="btnGlacial" style="width:100%; margin-top:4px">Glacial (cold highlands)</button>
+    <div class="muted" style="font-size:11px; margin-top:5px">Each erosion op bakes into a cached, regeneration-safe layer; downstream rivers/biomes recompute from it. Stronger = more iterations.</div>
+  </div>
+  <div class="sec">
+    <h3>Export</h3>
+    <div class="row"><label>PNG scale</label><input id="expScale" type="range" min="1" max="8" step="1" value="4"><span class="v" id="expScaleV">4×</span></div>
+    <button id="btnExpMap" style="width:100%">Export map (PNG)</button>
+    <button id="btnExpLayer" style="width:100%; margin-top:4px">Export active layer (PNG)</button>
+    <button id="btnExpFeatures" style="width:100%; margin-top:4px">Export features (GeoJSON)</button>
+    <div class="muted" style="font-size:11px; margin-top:5px">PNG bakes the visible layer stack. Features exports places, routes and territories as lon/lat GeoJSON.</div>
+  </div>
+  <div class="sec">
+    <h3>Style</h3>
+    <div class="row"><label>Sun angle</label><input id="sunAz" type="range" min="0" max="360" step="5" value="315"><span class="v" id="sunAzV">315°</span></div>
+    <div class="row"><label>Relief</label><input id="exag" type="range" min="6" max="80" step="2" value="34"><span class="v" id="exagV">34</span></div>
+    <div class="row"><label>Occlusion</label><input id="ao" type="range" min="0" max="1" step="0.05" value="0.5"><span class="v" id="aoV">.50</span></div>
+    <div class="row"><label>Smoothing</label><input id="smoothChk" type="checkbox" checked style="width:auto;flex:0"><span class="muted" style="font-size:11px">bilinear (vs pixel)</span></div>
+  </div>
+  <div class="sec">
+    <h3>Icon pack</h3>
+    <div class="row"><label>Marker style</label><select id="iconStyle" style="flex:1">
+      <option value="classic">Classic</option><option value="minimal">Minimal</option><option value="heraldic">Heraldic</option>
+    </select></div>
+    <div class="row"><label>Marker size</label><input id="markerScale" type="range" min="0.5" max="2.5" step="0.1" value="1"><span class="v" id="markerScaleV">1.0</span></div>
+    <div id="iconSlots" style="margin-top:4px"></div>
+    <input id="iconFile" type="file" accept="image/*" style="display:none">
+    <div class="muted" style="font-size:11px; margin-top:4px">Import a PNG/SVG per symbol slot to make your own icon pack, or use the built-in styles. Saved with the project.</div>
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="view"></canvas>
+  <canvas id="overlay"></canvas>
+  <div id="scalebar"></div>
+  <div id="hint"></div>
+</div>
+
+<div id="right">
+  <div class="sec">
+    <h3>Inspector</h3>
+    <div id="inspector"><div class="muted">Hover or click the map.</div></div>
+  </div>
+  <div class="sec">
+    <h3>Selection / analysis</h3>
+    <div id="analysis"><div class="muted">Use Measure, Region or Select.</div></div>
+  </div>
+  <div class="sec">
+    <h3>Journey planner</h3>
+    <div class="row"><label>Mode</label><select id="travelMode" style="flex:1">
+      <option value="foot">On foot</option><option value="horse" selected>On horseback</option>
+      <option value="cart">By cart/caravan</option><option value="boat">By boat (water)</option>
+    </select></div>
+    <canvas id="profileCv" width="240" height="56" style="width:100%;height:56px;background:#14110c;border:1px solid var(--line);border-radius:4px;margin:4px 0"></canvas>
+    <div id="planner"><div class="muted">Draw a route (Route tool) to plan a journey: distance, days, terrain &amp; hazards.</div></div>
+  </div>
+</div>
+
+<div id="status">
+  <span>Workspace: <b id="stWs">Atlas</b></span>
+  <span>Tool: <b id="stTool">Inspect</b></span>
+  <span>Target: <b id="stTarget">—</b></span>
+  <span id="stPos">—</span>
+  <span style="margin-left:auto" id="stPerf">—</span>
+</div>
+
+<div id="busy"><div class="spin"></div><div id="busyMsg" class="muted">Building world…</div></div>
+
+<script>
+"use strict";
+(function(){
+/* =========================================================================
+   ONE application scope. Sections:
+   0 const/palette · 1 math/noise · 2 World model · 3 sim nodes · 4 graph
+   5 colormaps · 6 layers+renderer · 7 view · 8 tools · 9 workspaces
+   10 UI · 11 save/load · 12 init
+   ========================================================================= */
+
+/* ---- 0. constants & palette ---------------------------------------------- */
+let W = 320, H = 160;              // equirectangular 2:1 world grid (mutable via setResolution)
+let N = W * H;
+const $ = id => document.getElementById(id);
+
+const BIOMES = [ // index: name, color
+  ['Ocean',            [40, 78,120]],
+  ['Ice sheet',        [232,238,245]],
+  ['Tundra',           [156,164,150]],
+  ['Boreal forest',    [60, 96, 78]],
+  ['Temperate forest', [70,118, 66]],
+  ['Grassland',        [158,168, 96]],
+  ['Desert',           [205,182,128]],
+  ['Savanna',          [184,170, 92]],
+  ['Seasonal tropics', [96,142, 60]],
+  ['Rainforest',       [34, 96, 52]],
+  ['Wetland',          [86,120, 96]],
+  ['Alpine / barren',  [150,142,130]],
+  ['Lake',             [62,108,150]],
+];
+const ROCKS = [ // index: name, color
+  ['Basalt',      [56, 60, 68]],
+  ['Granite',     [176,160,150]],
+  ['Metamorphic', [120,112,128]],
+  ['Sandstone',   [196,160,108]],
+  ['Limestone',   [206,200,176]],
+  ['Shale',       [108,104, 96]],
+  ['Andesite',    [128,116,104]],
+];
+// erosional resistance by rock index (higher = erodes slower) — modulates stream-power K
+const ROCK_RESIST=[0.8, 1.0, 0.95, 0.5, 0.6, 0.4, 0.85];
+
+/* ---- 1. math / noise ----------------------------------------------------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const clamp01=v=>v<0?0:v>1?1:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const smooth=t=>t*t*(3-2*t);
+function hash2(ix,iy,s){let h=Math.imul(ix,374761393)+Math.imul(iy,668265263)+Math.imul(s|0,0x9E3779B1);
+  h=Math.imul(h^h>>>13,1274126177);return((h^h>>>16)>>>0)/4294967296;}
+function vnoise(x,y,s){const x0=Math.floor(x),y0=Math.floor(y),fx=x-x0,fy=y-y0,
+  u=smooth(fx),v=smooth(fy),
+  a=hash2(x0,y0,s),b=hash2(x0+1,y0,s),c=hash2(x0,y0+1,s),d=hash2(x0+1,y0+1,s);
+  return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v;}
+function fbm(x,y,s,oct){let amp=1,fr=1,sum=0,nrm=0;for(let i=0;i<oct;i++){sum+=amp*vnoise(x*fr,y*fr,s+i*131);
+  nrm+=amp;amp*=0.5;fr*=2;}return sum/nrm;}
+const idx=(x,y)=>y*W+x;
+const lat=y=>90-(y+0.5)/H*180;           // +90 N .. -90 S
+
+/* ---- 2. World model ------------------------------------------------------ */
+function makeCells(){
+  return {
+    elevBase:new Float32Array(N), elevDelta:new Float32Array(N), erosionDelta:new Float32Array(N), elevation:new Float32Array(N),
+    slope:new Float32Array(N),
+    plateId:new Int16Array(N), plateBoundary:new Uint8Array(N), boundaryType:new Uint8Array(N), uplift:new Float32Array(N),
+    rockType:new Uint8Array(N),
+    flowAccum:new Float32Array(N), water:new Uint8Array(N), rivers:new Float32Array(N),
+    temperature:new Float32Array(N), rainfall:new Float32Array(N), windU:new Float32Array(N), windV:new Float32Array(N), koppen:new Uint8Array(N),
+    biome:new Uint8Array(N), biomeOverride:new Int8Array(N).fill(-1),
+    fertility:new Float32Array(N), habitability:new Float32Array(N), settleSuit:new Float32Array(N),
+    region:new Uint8Array(N),   // P3 political ownership (faction id; 0 = unclaimed)
+  };
+}
+// Political factions (P3 content layer). Index 0 = unclaimed.
+const FACTIONS=[['Unclaimed',[60,60,60]],['Aurelia',[206,84,72]],['Veldmark',[86,156,96]],
+  ['Korrath',[92,124,206]],['Sythe Dominion',[196,164,72]],['Mirelle',[166,96,186]],['Draumr League',[80,176,184]]];
+const World = {
+  meta:{ seed:1, width:W, height:H, kmPerCell:12000/W, seaLevel:0.42, peakM:8000, plates:14, relief:1, erodeLevel:3,
+    sunAz:315, exag:34, ao:0.5, smooth:true, iconStyle:'classic', markerScale:1, name:'Untitled World' },
+  icons:{},     // customizable icon pack: slot → image data-URL (persisted in the save)
+  cells: makeCells(),
+  vectors:{ settlements:[], roads:[], labels:[], annotations:[], places:[], userRoutes:[] },
+};
+
+/* ---- 3. simulation nodes -------------------------------------------------
+   Each node: name, deps, run(W). Nodes write shared World.cells.
+   Compact, academically-grounded approximations; heavier engine science
+   (tectonic-feature graph, worker erosion, weather v2, Köppen) swaps in P2. */
+
+function nodeContinents(){
+  const c=World.cells, s=World.meta.seed;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    // low-frequency continental mask, poles pulled down a touch
+    const n=fbm(x/W*4, y/H*3, s, 5);
+    const m=fbm(x/W*2+11, y/H*2+7, s+50, 4);
+    let cont=clamp01((n*0.65+m*0.35-0.34)*2.2);
+    c.uplift[idx(x,y)]=0; // reset; tectonics fills
+    c.elevBase[idx(x,y)]=cont; // provisional, elevation node finalizes
+  }
+}
+
+// Structured tectonics (condensed elevation_foundation tectonic-feature-graph T0–T3):
+// typed plate boundaries + per-type signed landform profiles stamped by distance.
+const BTYPE=['none','collision','subduction','arc','rift','transform'];
+const BT_COL=[[0,0,0],[210,90,50],[150,84,184],[214,92,170],[78,182,112],[226,200,72]];
+// classifyBoundary (T0 matrix): shear-dominant→transform; convergent splits by crust; else rift.
+function classifyBoundary(ocA,ocB,C,S){
+  if(Math.abs(S)>1.5*Math.abs(C)) return 5;                 // transform
+  if(C>0){ if(!ocA&&!ocB) return 1; if(ocA&&ocB) return 3; return 2; } // collision / arc / subduction
+  return 4;                                                  // rift (divergent)
+}
+const gauss=(d,mu,sig)=>Math.exp(-((d-mu)*(d-mu))/(2*sig*sig));
+function nodeTectonics(){
+  const c=World.cells, s=World.meta.seed, np=World.meta.plates;
+  const rng=mulberry32(s*2654435761>>>0);
+  const px=new Float32Array(np), py=new Float32Array(np), vx=new Float32Array(np), vy=new Float32Array(np);
+  for(let i=0;i<np;i++){px[i]=rng()*W; py[i]=rng()*H; const a=rng()*Math.PI*2; vx[i]=Math.cos(a); vy[i]=Math.sin(a);}
+  // nearest-seed Voronoi → plateId
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ let best=0,bd=1e9;
+    for(let i=0;i<np;i++){const dx=x-px[i],dy=y-py[i],d=dx*dx+dy*dy; if(d<bd){bd=d;best=i;}}
+    c.plateId[idx(x,y)]=best; }
+  // per-plate crust: oceanic when its mean continental mask is low (drives the T0 matrix + trench polarity)
+  const csum=new Float64Array(np), ccnt=new Float64Array(np);
+  for(let i=0;i<N;i++){const p=c.plateId[i]; csum[p]+=c.elevBase[i]; ccnt[p]++;}
+  const oceanic=new Uint8Array(np); for(let p=0;p<np;p++) oceanic[p]= (csum[p]/Math.max(1,ccnt[p]))<0.32?1:0;
+  // classify each boundary cell by its strongest-interacting neighbour plate (normal stress C, shear S)
+  c.plateBoundary.fill(0); c.boundaryType.fill(0);
+  const bAmp=new Float32Array(N); const sources=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=idx(x,y), p=c.plateId[i]; let best=-1,bestMag=0,bC=0,bS=0;
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue;
+      const q=c.plateId[idx(nx,ny)]; if(q===p)continue;
+      const nl=Math.hypot(dx,dy)||1, nxu=dx/nl, nyu=dy/nl;       // boundary normal (toward neighbour)
+      const rvx=vx[p]-vx[q], rvy=vy[p]-vy[q];                    // relative plate velocity
+      const C=-(rvx*nxu+rvy*nyu), S=rvx*(-nyu)+rvy*(nxu);        // normal (convergence+) / tangential shear
+      const mag=Math.abs(C)+Math.abs(S); if(mag>bestMag){bestMag=mag;best=q;bC=C;bS=S;} }
+    if(best<0)continue;
+    const t=classifyBoundary(oceanic[p],oceanic[best],bC/2,bS/2);
+    c.plateBoundary[i]=1; c.boundaryType[i]=t;
+    bAmp[i]= t===5 ? Math.min(1,Math.abs(bS)/2) : Math.min(1,Math.abs(bC)/2);
+    sources.push(i);
+  }
+  // multi-source Dijkstra: nearest-boundary distance + carried {type, amplitude}
+  const LS=Math.max(3,Math.round(W/56)), RAD=6*LS;
+  const dist=new Float32Array(N).fill(Infinity), nType=new Uint8Array(N), nAmp=new Float32Array(N), heap=new MinHeap();
+  for(const i of sources){ dist[i]=0; nType[i]=c.boundaryType[i]; nAmp[i]=bAmp[i]; heap.push(i,0); }
+  const NB8=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.4142],[1,-1,1.4142],[-1,1,1.4142],[-1,-1,1.4142]];
+  while(heap.size){ const i=heap.pop(), di=dist[i]; if(di>RAD)continue; const x=i%W,y=(i/W)|0;
+    for(const[dx,dy,w]of NB8){ const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue; const j=idx(nx,ny);
+      const nd=di+w; if(nd<dist[j]){ dist[j]=nd; nType[j]=nType[i]; nAmp[j]=nAmp[i]; heap.push(j,nd); } } }
+  // stamp signed per-type profiles (belt / trench+arc / island arc / graben+shoulders / fault valley)
+  c.uplift.fill(0);
+  for(let i=0;i<N;i++){
+    const d0=dist[i]; if(d0>RAD)continue; const x=i%W,y=(i/W)|0, t=nType[i], A=nAmp[i], oc=oceanic[c.plateId[i]]; let U=0;
+    // fbm crest-wiggle on the distance breaks the regular octagonal Dijkstra bands
+    // into organic, wandering belts → removes straight diagonal facets (engine technique).
+    const d=Math.max(0, d0 + (fbm(x/W*22, y/H*22, s+411, 3)-0.5)*LS*1.1);
+    if(t===1)       U = A*( gauss(d,0,LS) + 0.55*gauss(d,2*LS,0.8*LS) + 0.35*gauss(d,4*LS,0.9*LS) ); // collision belt (parallel ranges)
+    else if(t===2)  U = oc ? -0.95*A*gauss(d,0,0.7*LS)                                               // ocean-side trench
+                           : 0.8*A*gauss(d,1.4*LS,1.0*LS) - 0.18*A*gauss(d,3.6*LS,1.2*LS);           // Andean arc + foreland dip
+    else if(t===3)  U = -0.8*A*gauss(d,0,0.7*LS) + 0.55*A*gauss(d,1.7*LS,0.95*LS);                   // intra-ocean trench + island arc
+    else if(t===4)  U = -0.5*A*gauss(d,0,0.8*LS) + 0.32*A*gauss(d,1.7*LS,0.9*LS);                    // rift graben + uplifted shoulders
+    else if(t===5)  U = -0.30*A*gauss(d,0,0.7*LS);                                                   // transform fault valley
+    c.uplift[i]=U;
+  }
+  // isotropic smooth (2-pass 3×3 box incl. diagonals) — softens the Dijkstra facets.
+  for(let pass=0;pass<2;pass++){ const u=Float32Array.from(c.uplift);
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){ const i=idx(x,y);
+      c.uplift[i]=(u[i]*4 + (u[i-1]+u[i+1]+u[i-W]+u[i+W])*2 + u[i-1-W]+u[i+1-W]+u[i-1+W]+u[i+1+W])/16; } }
+  // rock type from tectonic setting
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=idx(x,y), cont=c.elevBase[i], near=dist[i]<2*LS, bt=nType[i];
+    if(cont<0.2 && c.uplift[i]<=0.05) c.rockType[i]=0;                 // basalt ocean crust
+    else if(near && (bt===2||bt===3)) c.rockType[i]=6;                // andesite volcanic arc
+    else if(c.uplift[i]>0.35) c.rockType[i]=2;                        // metamorphic orogenic belt
+    else if(cont>0.62) c.rockType[i]=1;                              // granite craton
+    else { const r=vnoise(x*0.2,y*0.2,s+3); c.rockType[i]= r<0.34?3: r<0.67?4:5; } // sedimentary
+  }
+}
+
+function nodeElevation(){
+  const c=World.cells, s=World.meta.seed, rel=World.meta.relief;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=idx(x,y);
+    const cont=c.elevBase[i];
+    const detail=fbm(x/W*16, y/H*12, s+200, 6)-0.5;
+    const ridge=Math.max(0,c.uplift[i])*0.9;
+    let e = cont*0.55 + ridge*0.7*rel + detail*0.18*rel + Math.min(0,c.uplift[i])*0.35; // trenches/grabens carve
+    e = clamp01(e + 0.18);
+    // composed terrain = procedural base + baked erosion + user sculpt overlay
+    c.elevation[i] = clamp01(e + c.erosionDelta[i] + c.elevDelta[i]);
+  }
+  // slope (central differences, grid units)
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const xl=Math.max(0,x-1),xr=Math.min(W-1,x+1),yt=Math.max(0,y-1),yb=Math.min(H-1,y+1);
+    const gx=(c.elevation[idx(xr,y)]-c.elevation[idx(xl,y)]);
+    const gy=(c.elevation[idx(x,yb)]-c.elevation[idx(x,yt)]);
+    c.slope[idx(x,y)]=Math.sqrt(gx*gx+gy*gy);
+  }
+}
+
+function nodeHydrology(){
+  const c=World.cells, sea=World.meta.seaLevel;
+  for(let i=0;i<N;i++){ c.water[i]= c.elevation[i]<sea?1:0; c.flowAccum[i]=1; c.rivers[i]=0; }
+  // steepest-descent flow accumulation: process cells high→low
+  const order=new Int32Array(N); for(let i=0;i<N;i++)order[i]=i;
+  order.sort((a,b)=>c.elevation[b]-c.elevation[a]);
+  for(let k=0;k<N;k++){
+    const i=order[k]; if(c.water[i])continue;
+    const x=i%W, y=(i/W)|0; let lo=-1, le=c.elevation[i];
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]){
+      const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue;
+      const j=idx(nx,ny); if(c.elevation[j]<le){le=c.elevation[j]; lo=j;}
+    }
+    if(lo>=0) c.flowAccum[lo]+=c.flowAccum[i];
+  }
+  // river intensity (log-scaled discharge over land)
+  const thr=N*0.0012;
+  for(let i=0;i<N;i++){
+    if(c.water[i]||c.flowAccum[i]<thr){c.rivers[i]=0;continue;}
+    c.rivers[i]=clamp01(Math.log(c.flowAccum[i]/thr)/Math.log(N*0.05/thr));
+  }
+  fillLakes(c,sea);            // pool endorheic basins → inland lakes (water=2)
+}
+// Priority-Flood (Barnes 2014): flood from map borders + ocean (cells below sea).
+// Returns the FILLED surface lvl[i] = the spill level (>= elevation) — the sink-filled
+// DEM used both for lake detection and for stream-power drainage routing.
+function priorityFill(h,sea){
+  const lvl=new Float32Array(N).fill(Infinity), done=new Uint8Array(N), heap=new MinHeap();
+  for(let i=0;i<N;i++){ const x=i%W,y=(i/W)|0;
+    if(x===0||x===W-1||y===0||y===H-1||h[i]<sea){ lvl[i]=h[i]; done[i]=1; heap.push(i,lvl[i]); } }
+  while(heap.size){ const i=heap.pop(), li=lvl[i], x=i%W, y=(i/W)|0;
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue;
+      const j=idx(nx,ny); if(done[j])continue; const nl=h[j]>li?h[j]:li; lvl[j]=nl; done[j]=1; heap.push(j,nl); } }
+  return lvl;
+}
+function fillLakes(c,sea){
+  const lvl=priorityFill(c.elevation,sea), thr=0.012;
+  for(let i=0;i<N;i++){ if(c.water[i]===1)continue; if(lvl[i]-c.elevation[i]>thr){ c.water[i]=2; c.rivers[i]=0; } }
+}
+
+// Weather-v2 climate node: latitude-band wind field (trade easterlies / mid-lat
+// westerlies / polar easterlies) + DOWNWIND moisture advection. Air saturates over
+// ocean, rains out on orographic uplift and dries crossing land → real rain shadows
+// behind ranges + dry continental interiors (not just a coastal bonus).
+function windBand(absLat){ return (absLat<30||absLat>60) ? -1 : 1; } // +1 westerly (→E), -1 easterly (→W)
+function nodeClimate(){
+  const c=World.cells, sea=World.meta.seaLevel, s=World.meta.seed;
+  // temperature + wind vectors
+  for(let y=0;y<H;y++){
+    const L=Math.abs(lat(y))/90, wx=windBand(Math.abs(lat(y)));
+    for(let x=0;x<W;x++){ const i=idx(x,y);
+      const land=Math.max(0,c.elevation[i]-sea);
+      c.temperature[i] = 30 - 52*Math.pow(L,1.25) - land/(1-sea)*World.meta.peakM*0.0065 + (vnoise(x*0.15,y*0.15,s+71)-0.5)*4;
+      c.windU[i]=wx; c.windV[i]=0;
+    }
+  }
+  // moisture advection — wind is zonal (per-row), so sweep each row downwind in 1D
+  const BASE=0.16, ORO=3.4, LOSS=0.05, LANDEVAP=0.018;
+  for(let y=0;y<H;y++){
+    const al=Math.abs(lat(y)), wx=windBand(al);
+    const conv = 0.5*Math.exp(-Math.pow(al/9,2)) + 0.30*Math.exp(-Math.pow((al-55)/16,2)) - 0.20*Math.exp(-Math.pow((al-28)/12,2));
+    const xs = wx>0?0:W-1, xe = wx>0?W:-1, step=wx>0?1:-1;
+    let h=0.3;                                   // incoming airmass humidity
+    for(let x=xs; x!==xe; x+=step){ const i=idx(x,y);
+      if(c.water[i]){                            // ocean re-saturates the airmass
+        const sat=clamp01(0.5+Math.max(0,c.temperature[i])/45); if(h<sat)h=sat;
+        c.rainfall[i]=clamp01(0.4+conv*0.6); continue;
+      }
+      const up=x-step, upElev=(up>=0&&up<W)?c.elevation[idx(up,y)]:c.elevation[i];
+      const uplift=Math.max(0,c.elevation[i]-upElev);
+      const oroRain=h*ORO*uplift;                // orographic rainout
+      c.rainfall[i]=clamp01(0.12 + conv*0.7 + h*BASE + oroRain); // convective + advective + orographic
+      h=clamp01(h*(1-LOSS) - oroRain + LANDEVAP); // drier downwind / leeward (rain shadow + continentality)
+    }
+  }
+}
+function nearWater(c,x,y){
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue; if(c.water[idx(nx,ny)])return true;
+  } return false;
+}
+function nearWater(c,x,y){
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue; if(c.water[idx(nx,ny)])return true;
+  } return false;
+}
+
+function classifyBiome(T,R,elev,sea,water,rivers){
+  if(water) return 0;               // ocean (lake handled in node)
+  if(T<-7) return 1;                // ice
+  const land=(elev-sea)/(1-sea);
+  if(land>0.62) return 11;          // alpine/barren
+  if(T<2)  return land>0.3?11:2;    // tundra
+  if(T<6)  return 3;                // boreal
+  if(rivers>0.35 && R>0.6 && land<0.12) return 10; // wetland
+  if(T<18){ // temperate
+    if(R<0.32) return 6;            // cold desert
+    if(R<0.5)  return 5;            // grassland
+    return 4;                       // temperate forest
+  }
+  // warm
+  if(R<0.28) return 6;              // desert
+  if(R<0.45) return 7;              // savanna
+  if(R<0.68) return 8;              // seasonal tropics
+  return 9;                         // rainforest
+}
+function nodeBiomes(){
+  const c=World.cells, sea=World.meta.seaLevel;
+  for(let i=0;i<N;i++){
+    let b=classifyBiome(c.temperature[i],c.rainfall[i],c.elevation[i],sea,c.water[i],c.rivers[i]);
+    if(c.water[i]===2) b=12;                  // inland lake
+    if(c.biomeOverride[i]>=0) b=c.biomeOverride[i];
+    c.biome[i]=b;
+  }
+}
+
+// Köppen-style climate classification (major groups + common subtypes) as its OWN
+// layer — "climate as just another view of the same world." Seasonality is
+// approximated from latitude + continentality (no seasonal sim yet, P4 weather).
+const KOPPEN=[ // 0 ocean, then code:name:color
+  ['—','Ocean',[36,64,96]],
+  ['Af','Tropical rainforest',[24,84,46]],['Am','Tropical monsoon',[44,120,60]],['Aw','Tropical savanna',[110,170,80]],
+  ['BW','Desert',[214,180,120]],['BS','Steppe',[200,196,120]],
+  ['Cf','Temperate humid',[88,168,90]],['Cs','Mediterranean',[170,196,90]],['Cw','Temperate dry-winter',[120,180,110]],
+  ['Df','Continental humid',[80,140,150]],['Dw','Subarctic',[110,140,170]],
+  ['ET','Tundra',[170,176,170]],['EF','Ice cap',[236,240,246]],
+];
+// classifyKoppen(annual mean T °C, annual precip mm, |lat|, continentality 0..1)
+function classifyKoppen(T,Pmm,absLat,cont){
+  const seasonRange = absLat*0.6 + cont*16;            // °C swing proxy
+  const Tcold = T - seasonRange/2, Twarm = T + seasonRange/2;
+  const dryThresh = 20*T + 280;                        // Patton-ish annual aridity threshold (mm)
+  if(Pmm < dryThresh*0.5) return 4;                    // BW desert
+  if(Pmm < dryThresh)      return 5;                    // BS steppe
+  if(Tcold >= 18) return Pmm>2000?1:(Pmm>1200?2:3);    // A: Af / Am / Aw
+  if(Twarm < 10)  return Twarm>0?11:12;                // E: ET / EF
+  if(Tcold > -3){ return Pmm<700?7:(absLat>40&&cont>0.4?8:6); } // C: Cs / Cw / Cf
+  return seasonRange>40?10:9;                           // D: Dw / Df
+}
+function nodeKoppen(){
+  const c=World.cells, sea=World.meta.seaLevel, mm=3000;
+  for(let i=0;i<N;i++){
+    if(c.water[i]===1){ c.koppen[i]=0; continue; }
+    const x=i%W,y=(i/W)|0, cont=nearWater(c,x,y)?0:0.6;  // crude continentality
+    c.koppen[i]=classifyKoppen(c.temperature[i], c.rainfall[i]*mm, Math.abs(lat(y)), cont);
+  }
+}
+
+const FERT=[0,0,.15,.4,.6,.55,.1,.4,.6,.7,.65,.1,0]; // by biome index
+function nodeHabitability(){
+  const c=World.cells, sea=World.meta.seaLevel;
+  for(let i=0;i<N;i++){
+    if(c.water[i]){c.fertility[i]=0;c.habitability[i]=0;c.settleSuit[i]=0;continue;}
+    const T=c.temperature[i];
+    const comfort=Math.exp(-Math.pow((T-16)/16,2));            // peaks ~16°C
+    const wet=clamp01(c.rainfall[i]*1.1);
+    const flat=1-clamp01(c.slope[i]*7);
+    const fert=FERT[c.biome[i]]*lerp(0.5,1,wet)*flat;
+    c.fertility[i]=clamp01(fert);
+    const water=clamp01(c.rivers[i]*1.4 + (nearWater(c,i%W,(i/W)|0)?0.35:0));
+    const hab=comfort*0.4 + c.fertility[i]*0.35 + water*0.25;
+    c.habitability[i]=clamp01(hab*flat);
+  }
+  // settlement suitability: habitability + coast/river/trade bonuses
+  for(let i=0;i<N;i++){
+    if(c.water[i]){c.settleSuit[i]=0;continue;}
+    const x=i%W,y=(i/W)|0;
+    const coast=nearWater(c,x,y)?0.18:0;
+    const river=c.rivers[i]>0.25?0.16:0;
+    c.settleSuit[i]=clamp01(c.habitability[i]*0.7+coast+river);
+  }
+}
+
+const SYL=['ar','bel','cor','dun','el','far','gol','hal','ith','kor','lan','mor','nor','os','par','quel','ral','sen','tor','ul','val','wyn','yr','zan'];
+function settleName(rng){let n=2+((rng()*2)|0),s='';for(let i=0;i<n;i++)s+=SYL[(rng()*SYL.length)|0];return s[0].toUpperCase()+s.slice(1);}
+function nodeSettlements(){
+  const c=World.cells; const rng=mulberry32((World.meta.seed*40503+7)>>>0);
+  // greedy local maxima of settleSuit with suppression radius
+  const order=new Int32Array(N); for(let i=0;i<N;i++)order[i]=i;
+  order.sort((a,b)=>c.settleSuit[b]-c.settleSuit[a]);
+  const taken=new Uint8Array(N), R=9, list=[];
+  for(let k=0;k<N && list.length<26;k++){
+    const i=order[k]; if(c.settleSuit[i]<0.36)break; if(taken[i])continue;
+    const x=i%W,y=(i/W)|0;
+    list.push({x,y,suit:c.settleSuit[i], pop:Math.round(800+c.settleSuit[i]*c.fertility[i]*48000),
+      name:settleName(rng), coastal:nearWater(c,x,y)});
+    for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){const nx=x+dx,ny=y+dy;
+      if(nx<0||nx>=W||ny<0||ny>=H)continue; if(dx*dx+dy*dy<=R*R)taken[idx(nx,ny)]=1;}
+  }
+  World.vectors.settlements=list;
+  World.vectors.labels=list.map(s=>({x:s.x,y:s.y,text:s.name,kind:'settlement'}));
+  invalidateVectorIndex();
+}
+
+let _continentField=null;   // per-cell continent id (set by nodeInfrastructure)
+// connected land components (continents) — 4-neighbour flood fill; 0 = water.
+function landComponents(){
+  const c=World.cells, comp=new Int32Array(N), stack=[]; let cid=0;
+  for(let s=0;s<N;s++){ if(c.water[s]||comp[s])continue; cid++; comp[s]=cid; stack.length=0; stack.push(s);
+    while(stack.length){ const i=stack.pop(), x=i%W, y=(i/W)|0;
+      for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){ const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue;
+        const j=idx(nx,ny); if(!c.water[j]&&!comp[j]){ comp[j]=cid; stack.push(j); } } } }
+  return {comp, count:cid};
+}
+// build a least-cost MST over a group of settlement indices, push the edge paths as {pts,sea}
+function mstRoads(group, cost, sea){
+  const st=World.vectors.settlements, n=group.length; if(n<2)return;
+  const trees=[], D=[]; for(const gi of group){ const s=st[gi], r=dijkstra(cost,s.x,s.y); trees.push(r.prev); D.push(r.dist); }
+  const inM=new Uint8Array(n), best=new Float32Array(n).fill(Infinity), from=new Int32Array(n).fill(-1); best[0]=0; const edges=[];
+  for(let it=0;it<n;it++){ let u=-1,bd=Infinity; for(let i=0;i<n;i++)if(!inM[i]&&best[i]<bd){bd=best[i];u=i;}
+    if(u<0)break; inM[u]=1; if(from[u]>=0)edges.push([from[u],u]);
+    for(let v=0;v<n;v++){ if(inM[v])continue; const d=D[u][idx(st[group[v]].x,st[group[v]].y)]; if(d<best[v]){best[v]=d; from[v]=u;} } }
+  for(const[a,b]of edges){ const path=reconstruct(trees[a], st[group[a]], st[group[b]]);
+    if(path&&path.length>1) World.vectors.roads.push({pts:path, sea:!!sea}); }
+}
+// Auto-routes for EVERYTHING: a land road network per continent + a maritime
+// network linking coastal/port towns across the seas.
+function nodeInfrastructure(){
+  const c=World.cells, st=World.vectors.settlements; World.vectors.roads=[];
+  if(st.length<1)return;
+  const {comp,count}=landComponents();
+  _continentField=comp;                                  // cache for the inspector / polity (v0.22+)
+  for(const s of st) s.continent=comp[idx(s.x,s.y)];     // tag each settlement's landmass
+  World.meta.continents=count;
+  // (1) land roads — one MST per continent (separate landmasses each get their own network)
+  const landCost=new Float32Array(N); for(let i=0;i<N;i++) landCost[i]=c.water[i]?Infinity:1+Math.pow(c.slope[i]*9,2);
+  const byCont={}; st.forEach((s,gi)=>{ (byCont[s.continent]=byCont[s.continent]||[]).push(gi); });
+  for(const k in byCont) mstRoads(byCont[k], landCost, false);
+  // (2) sea routes — MST over coastal/port towns; cost hugs water (land traversable but costly,
+  //     so paths leave port, sail water, and land at the destination port).
+  const ports=[]; st.forEach((s,gi)=>{ if(s.coastal)ports.push(gi); });
+  if(ports.length>=2){ const seaCost=new Float32Array(N); for(let i=0;i<N;i++) seaCost[i]=c.water[i]?1:60;
+    mstRoads(ports, seaCost, true); }
+}
+function dijkstra(cost,sx,sy){
+  const dist=new Float32Array(N).fill(Infinity), prev=new Int32Array(N).fill(-1);
+  const heap=new MinHeap(); const s=idx(sx,sy); dist[s]=0; heap.push(s,0);
+  while(heap.size){
+    const i=heap.pop(); const di=dist[i]; const x=i%W,y=(i/W)|0;
+    for(const[dx,dy,w]of[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.41],[1,-1,1.41],[-1,1,1.41],[-1,-1,1.41]]){
+      const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue; const j=idx(nx,ny);
+      const cc=cost[j]; if(!isFinite(cc))continue; const nd=di+cc*w;
+      if(nd<dist[j]){dist[j]=nd; prev[j]=i; heap.push(j,nd);}
+    }
+  }
+  return {dist,prev};
+}
+function reconstruct(prev,a,b){
+  let i=idx(b.x,b.y); if(prev[i]<0 && !(a.x===b.x&&a.y===b.y))return null;
+  const pts=[]; let guard=0; while(i>=0 && guard++<N){pts.push([i%W,(i/W)|0]); if(i===idx(a.x,a.y))break; i=prev[i];}
+  return pts;
+}
+class MinHeap{
+  constructor(){this.k=[];this.v=[];this.size=0;}
+  push(k,v){this.k.push(k);this.v.push(v);this.size++;let c=this.size-1;
+    while(c>0){const p=(c-1)>>1; if(this.v[p]<=this.v[c])break; this._sw(p,c); c=p;}}
+  pop(){const top=this.k[0]; this.size--; const lk=this.k.pop(),lv=this.v.pop();
+    if(this.size>0){this.k[0]=lk;this.v[0]=lv; let p=0; for(;;){let l=2*p+1,r=l+1,m=p;
+      if(l<this.size&&this.v[l]<this.v[m])m=l; if(r<this.size&&this.v[r]<this.v[m])m=r;
+      if(m===p)break; this._sw(p,m); p=m;}} return top;}
+  _sw(a,b){const tk=this.k[a];this.k[a]=this.k[b];this.k[b]=tk; const tv=this.v[a];this.v[a]=this.v[b];this.v[b]=tv;}
+}
+
+/* ---- 4. dependency graph ------------------------------------------------- */
+const NODES = [
+  {name:'continents',     deps:[],                          layers:[],                       run:nodeContinents},
+  {name:'tectonics',      deps:['continents'],              layers:['geology','plates'],     run:nodeTectonics},
+  {name:'elevation',      deps:['tectonics'],               layers:['elevation','hillshade','slope'], run:nodeElevation},
+  {name:'hydrology',      deps:['elevation'],               layers:['rivers'],               run:nodeHydrology},
+  {name:'climate',        deps:['hydrology'],               layers:['temperature','rainfall','wind'], run:nodeClimate},
+  {name:'biomes',         deps:['climate'],                 layers:['biomes'],               run:nodeBiomes},
+  {name:'koppen',         deps:['climate'],                 layers:['koppen'],               run:nodeKoppen},
+  {name:'habitability',   deps:['biomes','hydrology'],      layers:['habitability'],         run:nodeHabitability},
+  {name:'settlements',    deps:['habitability'],            layers:['settlements'],          run:nodeSettlements},
+  {name:'infrastructure', deps:['settlements','elevation'], layers:['roads'],                run:nodeInfrastructure},
+];
+const NODE=Object.fromEntries(NODES.map(n=>[n.name,n]));
+const DEPENDENTS={}; NODES.forEach(n=>DEPENDENTS[n.name]=[]);
+NODES.forEach(n=>n.deps.forEach(d=>DEPENDENTS[d].push(n.name)));
+const dirty=new Set();
+function markDirty(name){ if(dirty.has(name))return; dirty.add(name); DEPENDENTS[name].forEach(markDirty); }
+function runGraph(){
+  const t0=performance.now(); let ran=0;
+  for(const n of NODES){ if(!dirty.has(n.name))continue; n.run(World); dirty.delete(n.name); ran++;
+    n.layers.forEach(l=>{ const L=LAYERMAP[l]; if(L)L.dataDirty=true; }); }
+  lastPerf={ms:(performance.now()-t0),ran}; needsRender=true;
+}
+function regenerate(full){
+  showBusy('Building world…');
+  if(full){ World.cells.elevDelta.fill(0); World.cells.erosionDelta.fill(0); World.cells.biomeOverride.fill(-1); World.cells.region.fill(0);
+    World.vectors.annotations=[]; World.vectors.places=[]; World.vectors.userRoutes=[]; selectedPlace=null; routeWaypoints=[]; }
+  setTimeout(()=>{ markDirty('continents'); runGraph(); buildLayerList(); render(); refreshScalebar(); hideBusy(); },20);
+}
+
+// Erosion is the canonical "expensive simulation → cached dataset → still editable"
+// op: a hydraulic droplet pass (Siggraph/SebLague family) + light thermal talus,
+// baked deterministically into erosionDelta so it survives regenerate and re-composes
+// in nodeElevation. Runs on demand (a command, not an auto-node), then drives the
+// dependency cascade (hydrology → climate → biomes → settlements).
+function erodeTerrain(drops){
+  const c=World.cells, pre=Float32Array.from(c.elevation), h=Float32Array.from(c.elevation);
+  const rng=mulberry32((World.meta.seed*2246822519 + 1013)>>>0);
+  const MAXLIFE=30, INERTIA=0.05, CAP=8, MINSLOPE=0.01, DEP=0.3, ERO=0.3, EVAP=0.02, G=4;
+  for(let d=0; d<drops; d++){
+    let px=rng()*(W-2)+0.5, py=rng()*(H-2)+0.5, dx=0, dy=0, vel=1, water=1, sed=0;
+    for(let life=0; life<MAXLIFE; life++){
+      const xi=px|0, yi=py|0; if(xi<0||xi>=W-1||yi<0||yi>=H-1)break;
+      const fx=px-xi, fy=py-yi;
+      const i00=idx(xi,yi),i10=idx(xi+1,yi),i01=idx(xi,yi+1),i11=idx(xi+1,yi+1);
+      const gx=(h[i10]-h[i00])*(1-fy)+(h[i11]-h[i01])*fy;
+      const gy=(h[i01]-h[i00])*(1-fx)+(h[i11]-h[i10])*fx;
+      const hOld=h[i00]*(1-fx)*(1-fy)+h[i10]*fx*(1-fy)+h[i01]*(1-fx)*fy+h[i11]*fx*fy;
+      dx=dx*INERTIA-gx*(1-INERTIA); dy=dy*INERTIA-gy*(1-INERTIA);
+      const len=Math.hypot(dx,dy); if(len<1e-6)break; dx/=len; dy/=len;
+      px+=dx; py+=dy;
+      if(px<0.5||px>=W-1.5||py<0.5||py>=H-1.5)break;
+      const nxi=px|0,nyi=py|0,nfx=px-nxi,nfy=py-nyi;
+      const j00=idx(nxi,nyi),j10=idx(nxi+1,nyi),j01=idx(nxi,nyi+1),j11=idx(nxi+1,nyi+1);
+      const hNew=h[j00]*(1-nfx)*(1-nfy)+h[j10]*nfx*(1-nfy)+h[j01]*(1-nfx)*nfy+h[j11]*nfx*nfy;
+      const dh=hNew-hOld;
+      const cap=Math.max(-dh,MINSLOPE)*vel*water*CAP;
+      if(dh>0 || sed>cap){
+        const dep = dh>0 ? Math.min(sed,dh) : (sed-cap)*DEP; sed-=dep;
+        h[i00]+=dep*(1-fx)*(1-fy); h[i10]+=dep*fx*(1-fy); h[i01]+=dep*(1-fx)*fy; h[i11]+=dep*fx*fy;
+      } else {
+        const e=Math.min((cap-sed)*ERO, -dh); sed+=e;
+        h[i00]-=e*(1-fx)*(1-fy); h[i10]-=e*fx*(1-fy); h[i01]-=e*(1-fx)*fy; h[i11]-=e*fx*fy;
+      }
+      vel=Math.sqrt(Math.max(0, vel*vel - dh*G)); water*=(1-EVAP); if(water<0.01)break;
+    }
+  }
+  // light thermal talus (move material off over-steep faces)
+  for(let pass=0;pass<2;pass++)for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+    const i=idx(x,y); let mx=-1,md=0.02;
+    for(const[ax,ay]of[[1,0],[-1,0],[0,1],[0,-1]]){ const j=idx(x+ax,y+ay); const diff=h[i]-h[j]; if(diff>md){md=diff;mx=j;} }
+    if(mx>=0){ const move=(md-0.02)*0.25; h[i]-=move; h[mx]+=move; }
+  }
+  for(let i=0;i<N;i++){ let v=h[i]-pre[i]; if(!Number.isFinite(v))v=0; c.erosionDelta[i]+=v; }
+  markDirty('elevation'); runGraph();
+}
+
+// Stream-power incision (engine family: detachment-limited E = K·Aᵐ·Sⁿ / resistance,
+// MFD-style drainage, anti-ridge clamp). Carves dendritic valley NETWORKS along the
+// drainage tree — the channelised counterpart to the droplet pass. Command, baked.
+const NB8W=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.4142],[1,-1,1.4142],[-1,1,1.4142],[-1,-1,1.4142]];
+function streamErode(iters){
+  const c=World.cells, sea=World.meta.seaLevel, pre=Float32Array.from(c.elevation), h=Float32Array.from(c.elevation);
+  const m=0.5, n=1.0, K=0.16, order=new Int32Array(N);
+  for(let it=0; it<iters; it++){
+    const filled=priorityFill(h,sea);                         // sink-filled DEM for routing
+    const recv=new Int32Array(N).fill(-1), rdist=new Float32Array(N);
+    for(let i=0;i<N;i++){ if(h[i]<sea)continue; const x=i%W,y=(i/W)|0; let best=-1,bs=0,bw=1;
+      for(const[dx,dy,w]of NB8W){ const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue; const j=idx(nx,ny);
+        const sl=(filled[i]-filled[j])/w; if(sl>bs){bs=sl;best=j;bw=w;} } recv[i]=best; rdist[i]=bw; }
+    for(let i=0;i<N;i++)order[i]=i; order.sort((a,b)=>filled[b]-filled[a]); // high→low
+    const area=new Float32Array(N).fill(1);
+    for(let k=0;k<N;k++){ const i=order[k]; if(recv[i]>=0)area[recv[i]]+=area[i]; }
+    for(let k=0;k<N;k++){ const i=order[k]; if(h[i]<sea||recv[i]<0)continue;
+      const S=Math.max(0,(h[i]-h[recv[i]])/rdist[i]); if(S<=0)continue;
+      const inc=K*Math.pow(area[i],m)*Math.pow(S,n)/ROCK_RESIST[c.rockType[i]];
+      let nh=h[i]-inc; const floor=h[recv[i]]+1e-4; if(nh<floor)nh=floor; if(nh<sea-0.03)nh=sea-0.03; // anti-ridge + sane floor
+      h[i]=nh;
+    }
+  }
+  for(let i=0;i<N;i++){ let v=h[i]-pre[i]; if(!Number.isFinite(v))v=0; c.erosionDelta[i]+=v; }
+  markDirty('elevation'); runGraph();
+}
+
+// Glacial abrasion (cold-gated): over-deepens cold, steep terrain into U-shaped
+// troughs (abrasion ∝ basal slope × ice cover; most material carried downslope,
+// a little lost to over-deepening). Command, baked.
+function glacialErode(iters){
+  const c=World.cells, sea=World.meta.seaLevel, pre=Float32Array.from(c.elevation), h=Float32Array.from(c.elevation);
+  for(let it=0; it<iters; it++){
+    for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){ const i=idx(x,y); if(h[i]<sea)continue;
+      const T=c.temperature[i]; if(T>-1)continue; const ice=clamp01((-1-T)/12);
+      let lo=-1,bs=0,bw=1; for(const[dx,dy,w]of NB8W){ const j=idx(x+dx,y+dy); const sl=(h[i]-h[j])/w; if(sl>bs){bs=sl;lo=j;bw=w;} }
+      if(lo<0)continue; const abr=bs*ice*0.12; h[i]-=abr; h[lo]+=abr*0.6; // 40% lost → over-deepening
+    }
+  }
+  for(let i=0;i<N;i++){ let v=h[i]-pre[i]; if(!Number.isFinite(v))v=0; c.erosionDelta[i]+=v; }
+  markDirty('elevation'); runGraph();
+}
+
+/* ---- 5. colormaps -------------------------------------------------------- */
+function hypso(e){
+  const sea=World.meta.seaLevel;
+  if(e<sea){ const t=clamp01((sea-e)/sea); return [lerp(64,18,t),lerp(104,40,t),lerp(150,78,t)]; }
+  const t=clamp01((e-sea)/(1-sea));
+  if(t<0.5){const u=t/0.5; return [lerp(96,196,u),lerp(150,182,u),lerp(86,120,u)];}
+  const u=(t-0.5)/0.5; return [lerp(196,236,u),lerp(182,236,u),lerp(120,238,u)];
+}
+function ramp(v,stops){ v=clamp01(v); for(let i=1;i<stops.length;i++){const a=stops[i-1],b=stops[i];
+  if(v<=b[0]){const t=(v-a[0])/(b[0]-a[0]+1e-9); return[lerp(a[1],b[1],t),lerp(a[2],b[2],t),lerp(a[3],b[3],t)];}}
+  const l=stops[stops.length-1]; return[l[1],l[2],l[3]];}
+const TEMP=[[0,30,60,140],[0.4,70,120,200],[0.55,230,225,180],[0.75,232,150,70],[1,200,50,40]];
+const RAIN=[[0,205,182,128],[0.4,196,196,150],[0.7,80,150,150],[1,40,90,160]];
+const HAB =[[0,30,30,30],[0.4,90,80,40],[0.7,140,160,70],[1,120,210,110]];
+function tempT(T){return clamp01((T+25)/60);}
+function hillshade(x,y){
+  const c=World.cells;
+  const xl=Math.max(0,x-1),xr=Math.min(W-1,x+1),yt=Math.max(0,y-1),yb=Math.min(H-1,y+1);
+  const gx=(c.elevation[idx(xr,y)]-c.elevation[idx(xl,y)])*W*0.5;
+  const gy=(c.elevation[idx(x,yb)]-c.elevation[idx(x,yt)])*H*0.5;
+  // light from NW
+  const nz=1, len=Math.sqrt(gx*gx+gy*gy+1);
+  const sh=( -gx*0.6 - gy*0.6 + nz*0.9 )/(len*1.3);
+  return clamp(0.45+sh,0,1);
+}
+
+/* ---- 5b. realistic material renderer (faithful compact port of the
+   elevation_foundation landColorCore: material-weight synthesis + climate
+   palettes + multi-scale hillshade + AO + atmospheric haze + depth water) --- */
+function mix3(a,b,t){ return [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t]; }
+function ramp3(p,t){ t=clamp01(t); return t<0.5? mix3(p[0],p[1],t/0.5) : mix3(p[1],p[2],(t-0.5)/0.5); }
+function smoothstep(a,b,x){ const t=clamp01((x-a)/((b-a)||1e-6)); return t*t*(3-2*t); }
+// earthy cartographic palettes (3 tonal steps), ported from the engine
+const W_ABYSS=[[8,36,58],[10,45,70],[18,59,89]], W_DEEP=[[16,58,87],[26,75,104],[42,96,122]];
+const W_SHELF=[[47,118,150],[76,151,182],[111,179,207]], W_TROP=[[88,184,181],[121,206,197],[149,222,210]], W_GLAC=[[127,174,190],[165,197,207],[194,215,222]];
+const SAND_BEACH=[[200,180,138],[215,195,154],[227,208,167]], SAND_TROP=[[228,212,181],[239,226,197],[246,234,213]];
+const SAND_DESERT=[[201,169,104],[215,182,118],[226,197,138]], SAND_RED=[[168,101,61],[191,119,75],[208,137,92]];
+const GRASS_DRY=[[154,138,93],[176,154,106],[192,171,119]], GRASS_TEMP=[[127,138,86],[143,155,97],[162,175,112]];
+const GRASS_BOREAL=[[102,114,79],[115,128,90],[133,145,107]], GRASS_SAV=[[181,160,94],[198,176,109],[216,193,128]];
+const WOOD_TEMP=[[53,65,40],[66,82,50],[85,104,67]], WOOD_DENSE=[[40,51,31],[50,64,38],[64,80,48]];
+const WOOD_BOREAL=[[47,56,44],[57,68,53],[70,84,69]], WOOD_TROP=[[29,71,37],[40,96,50],[52,120,63]];
+const ROCK_GRANITE=[[123,117,108],[147,139,128],[170,161,149]], ROCK_SANDSTONE=[[167,122,87],[188,141,103],[208,159,118]], ROCK_SCREE=[[106,102,95],[122,118,110],[141,137,128]];
+const SNOW_SEAS=[[217,215,210],[232,231,228],[245,245,245]], SNOW_PERM=[[237,240,242],[245,247,248],[252,252,252]], SNOW_GLAC=[[184,210,219],[203,224,230],[221,236,239]];
+const WETLAND_TEMP=[[58,72,52],[72,88,63],[89,108,78]], WETLAND_TROP=[[46,68,44],[60,86,55],[76,106,68]], MANGROVE=[[38,56,42],[50,72,52],[64,90,65]];
+function grassCol(T,M,r,t){ let c; if(T<4) c=mix3(ramp3(GRASS_BOREAL,t),ramp3(GRASS_TEMP,t),clamp01(M)); else if(T>22&&M<0.4) c=mix3(ramp3(GRASS_SAV,t),ramp3(GRASS_DRY,t),clamp01(M*2)); else c=mix3(ramp3(GRASS_DRY,t),ramp3(GRASS_TEMP,t),clamp01(M)); const d=1-r*0.16; return [c[0]*d,c[1]*d,c[2]*d]; }
+function forestCol(T,M,t){ if(T<3) return ramp3(WOOD_BOREAL,t); if(T>20&&M>0.45) return ramp3(WOOD_TROP,t); if(M>0.62) return ramp3(WOOD_DENSE,t); return ramp3(WOOD_TEMP,t); }
+function sandCol(T,M,r,t){ if(T>24&&M<0.1) return ramp3(SAND_RED,t); return ramp3(SAND_DESERT,t); }
+function rockCol(T,M,r,t){ if(r>0.82) return ramp3(ROCK_SCREE,t); if(T>18&&M<0.32) return ramp3(ROCK_SANDSTONE,t); return ramp3(ROCK_GRANITE,t); }
+function snowCol(T,t){ return T<-12?ramp3(SNOW_GLAC,t):T<-4?ramp3(SNOW_PERM,t):ramp3(SNOW_SEAS,t); }
+function wetlandCol(T,mg,t){ return mg?ramp3(MANGROVE,t):ramp3(T>20?WETLAND_TROP:WETLAND_TEMP,t); }
+// two-pass canopy-closure material weights (Σ≈1), faithful to the engine
+function materialWeights(T,M,slope,r,twi,curv){
+  const curvNorm=clamp01(Math.abs(curv)*300), concave=curv>0?curvNorm:0, convex=curv<0?curvNorm:0;
+  const M_adj=clamp01(M+concave*0.12);
+  const fire=smoothstep(18,26,T)*smoothstep(0.45,0.15,M_adj)*smoothstep(0.08,0.30,M_adj);
+  const Tn=clamp01((T+5)/35), sl=Math.min(1,slope/0.08);
+  const sD0=Math.exp(-1.5*sl)*(0.4+0.6*M_adj), Vp0=Math.pow(clamp01(M_adj),0.7)*Math.pow(Tn,0.5)*Math.pow(Math.max(0,sD0),0.8), C0=1-Math.exp(-2*Vp0);
+  const recycle=clamp01(0.1+Math.max(0,T-10)/50), Meff=clamp01(M_adj+C0*recycle*0.5);
+  const soilD=Math.exp(-1.5*sl)*(0.4+0.6*Meff), Vp=Math.pow(clamp01(Meff),0.7)*Math.pow(Tn,0.5)*Math.pow(Math.max(0,soilD),0.8)*(1-fire*0.4), C=1-Math.exp(-2*Vp);
+  const snow=smoothstep(3,-5,T); let bud=1-snow;
+  const rock=clamp01((Math.pow(sl,1.8)*(1-Vp)*(1-Meff)+convex*0.25)*0.8+smoothstep(0.7,0.95,r)*0.35)*bud; bud-=rock;
+  const sand=smoothstep(17,26,T)*smoothstep(0.24,0.05,Meff)*(1-Vp*0.7)*bud; bud-=sand;
+  const mangroveFrac=smoothstep(18,24,T)*smoothstep(0.08,0,r)*smoothstep(0.10,0.32,M_adj)*bud*0.55;
+  const wetBase=smoothstep(-1,2,twi)*smoothstep(0.08,0.28,M_adj)*smoothstep(0.06,0.01,slope)*bud*0.5, wetCurv=concave*smoothstep(0.08,0.28,M_adj)*bud*0.22;
+  const wetland=Math.min(bud,Math.max(mangroveFrac,wetBase+wetCurv)); bud-=wetland;
+  const isMangrove=mangroveFrac>wetBase+wetCurv;
+  const canopy=C*bud; bud-=canopy; const grass=Math.max(0,bud);
+  return {snow,rock,sand,wetland,canopy,grass,C,Meff,isMangrove};
+}
+// per-cell field helpers (operate on the live elevation grid)
+function _shadeField(c,x,y,s){ const xl=Math.max(0,x-s),xr=Math.min(W-1,x+s),yu=Math.max(0,y-s),yd=Math.min(H-1,y+s);
+  const L=c.elevation[y*W+xl],R=c.elevation[y*W+xr],U=c.elevation[yu*W+x],D=c.elevation[yd*W+x];
+  const ex=(World.meta.exag||34)/s, dzdx=(R-L)*ex, dzdy=(D-U)*ex;
+  let nx=-dzdx,ny=-dzdy,nz=1; const il=1/Math.hypot(nx,ny,nz); nx*=il;ny*=il;nz*=il;
+  const az=(World.meta.sunAz||315)*Math.PI/180, alt=40*Math.PI/180;
+  return Math.max(0, nx*(Math.cos(alt)*Math.sin(az)) + ny*(-Math.cos(alt)*Math.cos(az)) + nz*Math.sin(alt)); }
+function _curvField(c,x,y){ const xl=x>0?x-1:x,xr=x<W-1?x+1:x,yu=y>0?y-1:y,yd=y<H-1?y+1:y;
+  return c.elevation[y*W+xl]+c.elevation[y*W+xr]+c.elevation[yu*W+x]+c.elevation[yd*W+x]-4*c.elevation[y*W+x]; }
+function _aoField(c,x,y){ let m=0,k=0; for(const[dx,dy]of[[5,0],[-5,0],[0,5],[0,-5],[4,4],[-4,-4],[4,-4],[-4,4]]){
+    const nx=x+dx,ny=y+dy; if(nx<0||nx>=W||ny<0||ny>=H)continue; m+=c.elevation[ny*W+nx]; k++; }
+  const broad=k?m/k:c.elevation[y*W+x]; return 1-clamp01((broad-c.elevation[y*W+x])*5.5)*(World.meta.ao!=null?World.meta.ao:0.5); }
+// LAND colour synthesis
+function landColor(x,y,i,c){
+  const sea=World.meta.seaLevel, e=c.elevation[i], r=clamp01((e-sea)/(1-sea));
+  const T=c.temperature[i], M=c.rainfall[i], slope=c.slope[i];
+  const twi=Math.log(1+c.flowAccum[i])-8*slope, curv=_curvField(c,x,y);
+  const nLow=vnoise(x/W*48,y/W*48,11), nHi=vnoise(x/W*96,y/W*96,23);
+  const nBio=0.6*vnoise(x/W*44,y/W*44,31)+0.4*vnoise(x/W*150,y/W*150,33);
+  const Te=T+(nBio-0.5)*7+(nLow-0.5)*2.5, Me=clamp01(M+(nBio-0.5)*0.15+(nHi-0.5)*0.05), twiE=twi+(nBio-0.5)*0.7;
+  const w=materialWeights(Te,Me,slope,r,twiE,curv), t=clamp01(0.5+(nLow-0.5)*1.1+(nHi-0.5)*0.5);
+  let col=[0,0,0]; const add=(cc,k)=>{ col[0]+=cc[0]*k; col[1]+=cc[1]*k; col[2]+=cc[2]*k; };
+  add(snowCol(Te,t),w.snow); add(rockCol(Te,Me,r,t),w.rock); add(sandCol(Te,Me,r,t),w.sand);
+  add(wetlandCol(Te,w.isMangrove,t),w.wetland);
+  if(w.canopy>0){ const us=smoothstep(0.70,0.94,w.C)*w.canopy*0.28; add([20,43,25],us); add(forestCol(Te,w.Meff,t),w.canopy-us); }
+  add(grassCol(Te,Me,r,t),w.grass);
+  const beachT=smoothstep(0.03,0,r)*0.6; if(beachT>0) col=mix3(col, ramp3(Te>22?SAND_TROP:SAND_BEACH,t), beachT);
+  const g=(nHi-0.5)*9; col=[col[0]+g,col[1]+g,col[2]+g];
+  // multi-scale hillshade (0.4 macro + 0.4 meso + 0.2 micro) × AO
+  const shMac=_shadeField(c,x,y,1), shMes=_shadeField(c,x,y,3), shMic=clamp01(shMac+(nHi-0.5)*0.20);
+  const light=(0.45+1.02*Math.pow(clamp01(0.40*shMac+0.40*shMes+0.20*shMic),0.85))*_aoField(c,x,y);
+  let lit=[col[0]*light,col[1]*light,col[2]*light];
+  // gentle atmospheric haze toward map edges
+  const dx=x/(W-1)-0.5, dy=y/(H-1)-0.5, haze=Math.pow(clamp01(Math.hypot(dx,dy)*1.85),2.4)*0.16;
+  lit=mix3(lit,[208,218,230],haze);
+  return [clamp(lit[0],0,255),clamp(lit[1],0,255),clamp(lit[2],0,255)];
+}
+// WATER colour (depth-banded + smoothed bathymetry shade + surf line)
+function seaColor(x,y,i,c){
+  const sea=World.meta.seaLevel, depth=clamp01((sea-c.elevation[i])/sea), T=c.temperature[i];
+  const nLow=vnoise(x/W*48,y/W*48,11);
+  let wc; if(depth<0.2) wc=ramp3(W_SHELF,nLow); else if(depth<0.55) wc=mix3(ramp3(W_SHELF,nLow),ramp3(W_DEEP,nLow),(depth-0.2)/0.35); else wc=mix3(ramp3(W_DEEP,nLow),ramp3(W_ABYSS,nLow),(depth-0.55)/0.45);
+  if(T>22) wc=mix3(wc,ramp3(W_TROP,nLow),smoothstep(22,28,T)*(1-depth)*0.8);
+  if(T<5) wc=mix3(wc,ramp3(W_GLAC,nLow),smoothstep(5,-3,T)*0.7);
+  if(T<-2) wc=mix3(wc,[226,233,239],clamp01((-2-T)/6)*0.85);
+  const surf=smoothstep(0.04,0,depth); if(surf>0) wc=mix3(wc,[176,214,221],surf*0.5);
+  const shB=_shadeField(c,x,y,4), sh2=0.86+0.14*clamp01(shB), tex=(nLow-0.5)*4;
+  return [clamp((wc[0]+tex)*sh2,0,255),clamp((wc[1]+tex)*sh2,0,255),clamp((wc[2]+tex)*sh2,0,255)];
+}
+// rich combined land/water colour for the main map
+function terrainColor(i,c){ const x=i%W,y=(i/W)|0; if(c.water[i]) return seaColor(x,y,i,c); return landColor(x,y,i,c); }
+// multi-scale relief shade [0,1] for the Shaded-relief layer
+function reliefShade(x,y){ const c=World.cells; return clamp01(0.45+1.02*Math.pow(clamp01(0.45*_shadeField(c,x,y,1)+0.35*_shadeField(c,x,y,3)+0.20*_shadeField(c,x,y,6)),0.85)); }
+
+/* ---- 6. layers + renderer (P5: chunked dirty-region rasters) ------------- */
+// The map is tiled into CHUNK×CHUNK chunks; a raster layer rebuilds only the
+// chunks marked dirty (a local brush edit touches a few chunks, not the whole
+// W×H image). Global recompute (runGraph) marks the layer fully dirty.
+const CHUNK=32; let CHX=Math.ceil(W/CHUNK), CHY=Math.ceil(H/CHUNK), NCHUNK=CHX*CHY;
+let _chunkRebuilds=0;                              // chunks rebuilt this frame (perf HUD + tests)
+function rasterLayer(id,name,fn,opts){
+  return Object.assign({id,name,kind:'raster',visible:false,opacity:1,blend:'normal',dataDirty:true,
+    _img:null,_cv:null, dirty:null,               // dirty: Set<chunkIndex> when partial
+    markChunk(ci){ if(!this.dirty)this.dirty=new Set(); this.dirty.add(ci); },
+    markRegion(x0,y0,x1,y1){ const a=Math.max(0,(x0/CHUNK)|0),b=Math.min(CHX-1,(x1/CHUNK)|0),
+      c0=Math.max(0,(y0/CHUNK)|0),d0=Math.min(CHY-1,(y1/CHUNK)|0);
+      for(let cy=c0;cy<=d0;cy++)for(let cx=a;cx<=b;cx++)this.markChunk(cy*CHX+cx); },
+    _rebuild(ci){ const cx=ci%CHX, cy=(ci/CHX)|0, x0=cx*CHUNK, y0=cy*CHUNK, x1=Math.min(W,x0+CHUNK), y1=Math.min(H,y0+CHUNK);
+      const d=this._img.data, c=World.cells;
+      for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){ const i=y*W+x; const col=fn(i,c);
+        d[i*4]=col[0];d[i*4+1]=col[1];d[i*4+2]=col[2];d[i*4+3]=col[3]===undefined?255:col[3]; }
+      this._cv.getContext('2d').putImageData(this._img,0,0,x0,y0,x1-x0,y1-y0); _chunkRebuilds++; },
+    ensure(){ if(!this._cv){this._cv=document.createElement('canvas');this._cv.width=W;this._cv.height=H;
+        this._img=this._cv.getContext('2d').createImageData(W,H); this.dataDirty=true;}
+      if(this.dataDirty){ for(let ci=0;ci<NCHUNK;ci++)this._rebuild(ci); this.dataDirty=false; this.dirty=null; }
+      else if(this.dirty&&this.dirty.size){ this.dirty.forEach(ci=>this._rebuild(ci)); this.dirty=null; } },
+    paint(ctx,view){ this.ensure(); ctx.globalAlpha=this.opacity;
+      ctx.globalCompositeOperation=this.blend==='multiply'?'multiply':'source-over';
+      ctx.imageSmoothingEnabled=(this.smooth===true && World.meta.smooth!==false); // bilinear for continuous fields, crisp for categorical
+      ctx.drawImage(this._cv,0,0,W,H,view.ox,view.oy,W*view.scale,H*view.scale);
+      ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over'; }
+  },opts||{});
+}
+function vectorLayer(id,name,paintFn,opts){
+  return Object.assign({id,name,kind:'vector',visible:false,opacity:1,blend:'normal',dataDirty:false,
+    paint(ctx,view){ ctx.globalAlpha=this.opacity; paintFn(ctx,view); ctx.globalAlpha=1; }
+  },opts||{});
+}
+/* ---- customizable icon pack (in-system) ---------------------------------
+   Five symbol slots. Each renders a built-in procedural marker (style:
+   classic / minimal / heraldic) unless the user imports a custom image for
+   that slot (stored as a data-URL in World.icons, persisted in the save).   */
+const ICON_SLOTS=['hamlet','town','city','metropolis','place'];
+const _iconImg={};                                   // transient slot → HTMLImageElement
+function iconSlotForTier(tier){ return ICON_SLOTS[Math.max(0,Math.min(3,tier))]; }
+function setIcon(slot,dataURL){ if(!dataURL){ delete World.icons[slot]; delete _iconImg[slot]; needsRender=true; return; }
+  World.icons[slot]=dataURL; const im=new Image(); im.onload=()=>{ _iconImg[slot]=im; needsRender=true; }; im.src=dataURL; }
+function rebuildIcons(){ for(const s of ICON_SLOTS){ if(World.icons[s]) setIcon(s,World.icons[s]); else delete _iconImg[s]; } }
+function tier(pop){ return pop>120000?3 : pop>40000?2 : pop>9000?1 : 0; }
+function settleTier(pop){ return tier(pop); }
+const _starPath=(ctx,X,Y,ro,ri)=>{ ctx.beginPath(); for(let a=0;a<5;a++){const an=-Math.PI/2+a*2*Math.PI/5; ctx.lineTo(X+Math.cos(an)*ro,Y+Math.sin(an)*ro); const an2=an+Math.PI/5; ctx.lineTo(X+Math.cos(an2)*ri,Y+Math.sin(an2)*ri);} ctx.closePath(); };
+// draw a marker for a slot at (X,Y). Custom image > procedural glyph (style-aware).
+function drawIcon(ctx,X,Y,slot,fill){
+  const sc=(World.meta.markerScale||1), tierN=ICON_SLOTS.indexOf(slot), base=(slot==='place')?7:(3+tierN*1.7);
+  const im=_iconImg[slot];
+  if(im){ const s=(base+4)*1.6*sc; ctx.drawImage(im, X-s/2, Y-s, s, s); return; }   // bottom-anchored
+  const r=base*sc; ctx.lineWidth=1.5; ctx.strokeStyle='#1a140a'; ctx.fillStyle=fill||'#caa05a';
+  const style=World.meta.iconStyle||'classic';
+  if(slot==='place'){ if(style==='minimal'){ ctx.beginPath(); ctx.arc(X,Y,r*0.6,0,7); ctx.fill(); ctx.stroke(); }
+    else if(style==='heraldic'){ ctx.beginPath(); ctx.moveTo(X-r*0.7,Y-r*0.7); ctx.lineTo(X+r*0.7,Y-r*0.7); ctx.lineTo(X+r*0.7,Y); ctx.lineTo(X,Y+r*0.9); ctx.lineTo(X-r*0.7,Y); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else { _starPath(ctx,X,Y,r,r*0.42); ctx.fill(); ctx.stroke(); } return; }
+  if(style==='minimal'){ ctx.beginPath(); ctx.arc(X,Y,r*0.7,0,7); ctx.fill(); ctx.stroke(); if(tierN>=2){ctx.beginPath();ctx.arc(X,Y,r*0.28,0,7);ctx.fillStyle='#1a140a';ctx.fill();} return; }
+  if(style==='heraldic'){ ctx.beginPath(); ctx.moveTo(X-r*0.8,Y-r*0.8); ctx.lineTo(X+r*0.8,Y-r*0.8); ctx.lineTo(X+r*0.8,Y); ctx.lineTo(X,Y+r); ctx.lineTo(X-r*0.8,Y); ctx.closePath(); ctx.fill(); ctx.stroke(); return; }
+  // classic
+  if(tierN<=1){ ctx.beginPath(); ctx.arc(X,Y,r,0,7); ctx.fill(); ctx.stroke(); }
+  else if(tierN===2){ ctx.beginPath(); ctx.arc(X,Y,r,0,7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(X,Y,r*0.37,0,7); ctx.fillStyle='#1a140a'; ctx.fill(); }
+  else { _starPath(ctx,X,Y,r*1.25,r*0.55); ctx.fill(); ctx.stroke(); }
+}
+function drawSettlementSymbol(ctx,X,Y,tierN,fill){ drawIcon(ctx,X,Y,iconSlotForTier(tierN),fill); }
+let _iconTarget=null;
+function buildIconSlots(){ const host=$('iconSlots'); if(!host)return; const lbl={hamlet:'Hamlet',town:'Town',city:'City',metropolis:'Metropolis',place:'Place'};
+  host.innerHTML=ICON_SLOTS.map(s=>`<div class="row" style="gap:5px"><span style="flex:0 0 70px;font-size:12px">${lbl[s]}</span>
+    <span style="flex:0 0 22px;text-align:center">${World.icons[s]?'🖼':'◆'}</span>
+    <button data-imp="${s}" style="flex:1;padding:3px 4px;font-size:11px">Import</button>
+    <button data-clr="${s}" style="flex:0 0 24px;padding:3px 4px;font-size:11px"${World.icons[s]?'':' disabled'}>✕</button></div>`).join('');
+  host.querySelectorAll('[data-imp]').forEach(b=>b.onclick=()=>{ _iconTarget=b.dataset.imp; $('iconFile').click(); });
+  host.querySelectorAll('[data-clr]').forEach(b=>b.onclick=()=>{ setIcon(b.dataset.clr,null); buildIconSlots(); }); }
+
+/* ---- vector-line smoothing ("ways" logic, ported from the reference) -------
+   Raw routing returns D8 cell paths (45° staircases → diagonal artifacting).
+   rdpSimplify drops collinear noise; centripetal catmullRom resamples to a
+   smooth flowing curve (phantom-reflected endpoints), exactly as the engine
+   smooths ways/rivers and Cartalith smooths routes. Operates on [x,y] pairs. */
+function rdpSimplify(pts, eps){ if(pts.length<3) return pts.slice();
+  const keep=new Uint8Array(pts.length); keep[0]=keep[pts.length-1]=1; const stack=[[0,pts.length-1]];
+  while(stack.length){ const sg=stack.pop(), a=sg[0], b=sg[1]; if(b-a<2)continue;
+    const ax=pts[a][0],ay=pts[a][1],dx=pts[b][0]-ax,dy=pts[b][1]-ay,L2=dx*dx+dy*dy; let worst=-1,wd=-1;
+    for(let i=a+1;i<b;i++){ const d=L2<1e-12?Math.hypot(pts[i][0]-ax,pts[i][1]-ay):Math.abs(dx*(pts[i][1]-ay)-dy*(pts[i][0]-ax))/Math.sqrt(L2); if(d>wd){wd=d;worst=i;} }
+    if(wd>eps){ keep[worst]=1; stack.push([a,worst],[worst,b]); } }
+  const out=[]; for(let i=0;i<pts.length;i++)if(keep[i])out.push(pts[i]); return out; }
+function catmullRom(pts, step){ if(pts.length<2) return pts.slice();
+  const n0=pts.length, P=[[2*pts[0][0]-pts[1][0],2*pts[0][1]-pts[1][1]], ...pts, [2*pts[n0-1][0]-pts[n0-2][0],2*pts[n0-1][1]-pts[n0-2][1]]];
+  const out=[], dist=(a,b)=>Math.hypot(b[0]-a[0],b[1]-a[1]);
+  for(let s=0;s<n0-1;s++){ const P0=P[s],P1=P[s+1],P2=P[s+2],P3=P[s+3];
+    const t0=0,t1=t0+Math.sqrt(dist(P0,P1)),t2=t1+Math.sqrt(dist(P1,P2)),t3=t2+Math.sqrt(dist(P2,P3)); if(t2-t1<1e-6)continue;
+    const segLen=dist(P1,P2), m=Math.max(2,Math.ceil(segLen/step)), addPt=(s<n0-2)?m:m+1;
+    for(let i=0;i<addPt;i++){ const t=t1+(t2-t1)*i/m;
+      const a1x=P0[0]+(P1[0]-P0[0])*(t-t0)/(t1-t0), a1y=P0[1]+(P1[1]-P0[1])*(t-t0)/(t1-t0);
+      const a2x=P1[0]+(P2[0]-P1[0])*(t-t1)/(t2-t1), a2y=P1[1]+(P2[1]-P1[1])*(t-t1)/(t2-t1);
+      const a3x=P2[0]+(P3[0]-P2[0])*(t-t2)/(t3-t2), a3y=P2[1]+(P3[1]-P2[1])*(t-t2)/(t3-t2);
+      const b1x=a1x+(a2x-a1x)*(t-t0)/(t2-t0), b1y=a1y+(a2y-a1y)*(t-t0)/(t2-t0);
+      const b2x=a2x+(a3x-a2x)*(t-t1)/(t3-t1), b2y=a2y+(a3y-a2y)*(t-t1)/(t3-t1);
+      out.push([b1x+(b2x-b1x)*(t-t1)/(t2-t1), b1y+(b2y-b1y)*(t-t1)/(t2-t1)]); } }
+  return out; }
+function smoothPath(cellPts, eps, step){ if(!cellPts||cellPts.length<3) return cellPts||[]; return catmullRom(rdpSimplify(cellPts, eps==null?1.0:eps), step==null?2:step); }
+const _pathSmooth=new WeakMap();
+function smoothCached(pts){ if(!pts||pts.length<3) return pts; let s=_pathSmooth.get(pts); if(!s){ s=smoothPath(pts); _pathSmooth.set(pts,s); } return s; }
+function strokeCellPath(ctx,v,pts){ const sp=smoothCached(pts); ctx.beginPath();
+  for(let k=0;k<sp.length;k++){ const X=v.ox+(sp[k][0]+0.5)*v.scale, Y=v.oy+(sp[k][1]+0.5)*v.scale; k?ctx.lineTo(X,Y):ctx.moveTo(X,Y); } }
+
+const LAYERS=[
+  rasterLayer('elevation','Elevation', i=>{const c=World.cells; const col=hypso(c.elevation[i]); return col;},{smooth:true}),
+  rasterLayer('hillshade','Shaded relief', i=>{const x=i%W,y=(i/W)|0; const s=reliefShade(x,y)*255; return [s,s,s];},{blend:'multiply',opacity:0.55,smooth:true}),
+  rasterLayer('slope','Slope', i=>{const s=clamp01(World.cells.slope[i]*7); const g=255-s*210; return [g+s*40,g,g];}),
+  rasterLayer('geology','Geology (rock)', i=>{const col=ROCKS[World.cells.rockType[i]][1]; if(World.cells.water[i])return[40,52,70]; return col;}),
+  vectorLayer('plates','Plate boundaries', (ctx,v)=>{const c=World.cells; const sz=Math.max(1,v.scale);
+    for(let i=0;i<N;i++){const t=c.boundaryType[i]; if(!t)continue; const col=BT_COL[t]; const x=i%W,y=(i/W)|0;
+      ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`; ctx.fillRect(v.ox+x*v.scale,v.oy+y*v.scale,sz,sz);}}),
+  rasterLayer('temperature','Temperature', i=>{const c=World.cells; if(c.water[i])return[30,40,60]; return ramp(tempT(c.temperature[i]),TEMP);},{smooth:true}),
+  rasterLayer('rainfall','Rainfall', i=>{const c=World.cells; if(c.water[i])return[28,46,72]; return ramp(c.rainfall[i],RAIN);},{smooth:true}),
+  rasterLayer('biomes','Terrain (realistic)', i=>terrainColor(i,World.cells),{smooth:true}),
+  rasterLayer('bioclass','Biome class', i=>{const c=World.cells; if(c.water[i]===1)return[40,78,120]; return BIOMES[c.biome[i]][1];}),
+  rasterLayer('rivers','Rivers & water', i=>{const c=World.cells; if(c.water[i]===2)return[62,108,150,255]; if(c.water[i])return[48,92,140,255];
+    const r=c.rivers[i]; if(r>0.05)return[60,108,156,Math.round(80+r*175)]; return[0,0,0,0];},{opacity:1}),
+  rasterLayer('habitability','Habitability', i=>{const c=World.cells; if(c.water[i])return[26,34,50]; return ramp(c.habitability[i],HAB);},{smooth:true}),
+  rasterLayer('koppen','Köppen climate', i=>{const c=World.cells; if(c.water[i]===1)return[36,64,96]; return KOPPEN[c.koppen[i]][2];}),
+  vectorLayer('wind','Wind field', (ctx,v)=>{ const c=World.cells; const step=Math.max(6,Math.round(10/Math.max(0.4,v.scale)));
+    ctx.strokeStyle='rgba(180,210,240,.55)'; ctx.lineWidth=1;
+    for(let y=step>>1;y<H;y+=step)for(let x=step>>1;x<W;x+=step){ const i=idx(x,y); const u=c.windU[i],vv=c.windV[i]; if(!u&&!vv)continue;
+      const X=v.ox+(x+0.5)*v.scale, Y=v.oy+(y+0.5)*v.scale, L=step*v.scale*0.42, m=Math.hypot(u,vv)||1, ux=u/m, uy=vv/m;
+      ctx.beginPath(); ctx.moveTo(X-ux*L,Y-uy*L); ctx.lineTo(X+ux*L,Y+uy*L);
+      ctx.lineTo(X+ux*L-(ux+uy)*L*0.3, Y+uy*L-(uy-ux)*L*0.3); ctx.stroke(); } }),
+  vectorLayer('roads','Roads', (ctx,v)=>{ ctx.lineCap='round'; ctx.lineJoin='round';
+    for(const road of World.vectors.roads){ const path=road.pts||road; if(!path||path.length<2)continue;
+      const sea=road.sea;
+      strokeCellPath(ctx,v,path);
+      ctx.strokeStyle=sea?'rgba(20,40,70,.5)':'rgba(20,14,8,.6)'; ctx.lineWidth=Math.max(2.2,v.scale*0.5); if(sea)ctx.setLineDash([Math.max(3,v.scale*1.2),Math.max(2,v.scale*0.8)]); ctx.stroke(); ctx.setLineDash([]);
+      strokeCellPath(ctx,v,path);
+      ctx.strokeStyle=sea?'rgba(120,170,200,.9)':'rgba(216,184,120,.92)'; ctx.lineWidth=Math.max(1.2,v.scale*0.26); if(sea)ctx.setLineDash([Math.max(3,v.scale*1.2),Math.max(2,v.scale*0.8)]); ctx.stroke(); ctx.setLineDash([]); } }),
+  rasterLayer('politics','Political territory', i=>{const c=World.cells; const f=c.region[i]; if(!f||c.water[i])return[0,0,0,0];
+    const col=FACTIONS[f][1]; return[col[0],col[1],col[2],150];},{opacity:0.6}),
+  vectorLayer('routes','Trade routes', (ctx,v)=>{ ctx.lineCap='round'; ctx.lineJoin='round';
+    for(const rt of World.vectors.userRoutes){ const p=rt.pts; if(!p||p.length<2)continue;
+      strokeCellPath(ctx,v,p);
+      ctx.strokeStyle='rgba(20,14,8,.55)'; ctx.lineWidth=Math.max(2.5,v.scale*0.5); ctx.stroke();
+      strokeCellPath(ctx,v,p);
+      ctx.strokeStyle='rgba(124,191,106,.95)'; ctx.setLineDash([Math.max(3,v.scale),Math.max(2,v.scale*0.6)]); ctx.lineWidth=Math.max(1.3,v.scale*0.28); ctx.stroke(); ctx.setLineDash([]); } }),
+  vectorLayer('settlements','Settlements', (ctx,v)=>{ for(const s of World.vectors.settlements){
+      const X=v.ox+(s.x+0.5)*v.scale, Y=v.oy+(s.y+0.5)*v.scale;
+      drawSettlementSymbol(ctx,X,Y, settleTier(s.pop), s.coastal?'#d8b878':'#caa05a'); } }),
+  vectorLayer('places','Places (user)', (ctx,v)=>{ for(const p of World.vectors.places){
+      const X=v.ox+(p.x+0.5)*v.scale, Y=v.oy+(p.y+0.5)*v.scale; const sel=p===selectedPlace;
+      drawIcon(ctx,X,Y,'place', sel?'#fff0c8':'#e8c878');
+      ctx.font='600 12px sans-serif'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(12,10,7,.85)'; ctx.strokeText(p.name,X,Y-13); ctx.fillStyle='#f6ecd4'; ctx.fillText(p.name,X,Y-13); } }),
+  vectorLayer('labels','Labels', (ctx,v)=>{ ctx.font='600 12px -apple-system,Segoe UI,sans-serif'; ctx.textAlign='center';
+    for(const l of World.vectors.labels){ const X=v.ox+(l.x+0.5)*v.scale, Y=v.oy+(l.y+0.5)*v.scale-9;
+      ctx.lineWidth=3; ctx.strokeStyle='rgba(12,10,7,.85)'; ctx.strokeText(l.text,X,Y);
+      ctx.fillStyle='#f0e6cf'; ctx.fillText(l.text,X,Y); } }),
+  vectorLayer('annotations','Annotations', (ctx,v)=>{ for(const a of World.vectors.annotations){
+      const X=v.ox+(a.x+0.5)*v.scale, Y=v.oy+(a.y+0.5)*v.scale;
+      ctx.fillStyle='#e8dcc4'; ctx.font='12px sans-serif'; ctx.textAlign='left';
+      ctx.beginPath(); ctx.arc(X,Y,4,0,7); ctx.fillStyle='#d8a13a'; ctx.fill();
+      if(a.text){ctx.fillStyle='#e8dcc4'; ctx.fillText(a.text,X+7,Y+4);} } }),
+];
+const LAYERMAP=Object.fromEntries(LAYERS.map(l=>[l.id,l]));
+
+/* ---- 7. view + renderer -------------------------------------------------- */
+const view={scale:1,ox:0,oy:0};
+let needsRender=true, lastPerf={ms:0,ran:0};
+const cv=$('view'), ovl=$('overlay');
+const ctx=cv.getContext('2d'), octx=ovl.getContext('2d');
+function fitView(){
+  const st=$('stage').getBoundingClientRect();
+  cv.width=ovl.width=st.width; cv.height=ovl.height=st.height;
+  const sc=Math.min(st.width/W, st.height/H)*0.98;
+  view.scale=sc; view.ox=(st.width-W*sc)/2; view.oy=(st.height-H*sc)/2; needsRender=true;
+}
+// Working-grid RESOLUTION change: reallocate the whole World at w×h, recompute the
+// chunk/index dims, reset layer canvases, and regenerate the (resolution-aware) world
+// from the same seed → a higher-detail version of the same world (procedural noise is
+// keyed on x/W,y/H). Cell-bound content (sculpt/erosion/region/places/routes) can't
+// carry across grid sizes, so a resolution change is a fresh regenerate (like "New").
+function setResolution(w,h){
+  W=w; H=h; N=W*H;
+  CHX=Math.ceil(W/CHUNK); CHY=Math.ceil(H/CHUNK); NCHUNK=CHX*CHY; VCOLS=Math.ceil(W/VIDX);
+  World.meta.width=W; World.meta.height=H; World.meta.kmPerCell=(+($('mapKm')&&$('mapKm').value)||12000)/W;
+  World.cells=makeCells();
+  World.vectors.places=[]; World.vectors.userRoutes=[]; World.vectors.annotations=[];
+  selectedPlace=null; routeWaypoints=[]; invalidateVectorIndex();
+  for(const l of LAYERS){ if(l.kind==='raster'){ l._cv=null; l._img=null; l.dataDirty=true; l.dirty=null; } }
+  showBusy('Re-gridding at '+W+'×'+H+'…');
+  setTimeout(()=>{ markDirty('continents'); runGraph(); fitView(); buildLayerList(); refreshScalebar();
+    updateResLabel(); needsRender=true; hideBusy(); },20);
+}
+function updateResLabel(){ const el=$('resLabel'); if(el)el.textContent=W+'×'+H+' · '+((N/1e6).toFixed(2))+'MP'; }
+function render(){
+  _chunkRebuilds=0;
+  ctx.fillStyle='#0c0a07'; ctx.fillRect(0,0,cv.width,cv.height);
+  for(const l of LAYERS){ if(l.visible && l.opacity>0) l.paint(ctx,view); }
+  _lastChunkRebuilds=_chunkRebuilds; needsRender=false;
+}
+function loop(){ if(needsRender)render(); requestAnimationFrame(loop); }
+function screenToCell(sx,sy){ const x=Math.floor((sx-view.ox)/view.scale), y=Math.floor((sy-view.oy)/view.scale);
+  if(x<0||x>=W||y<0||y>=H)return null; return {x,y,i:idx(x,y)}; }
+
+function refreshScalebar(){
+  const km=World.meta.kmPerCell*view.scale; // km per screen px? no: kmPerCell per cell, view.scale px/cell
+  // target ~120px bar → km = 120/view.scale * kmPerCell
+  const targetPx=120; let kmLen=(targetPx/view.scale)*World.meta.kmPerCell;
+  const pow=Math.pow(10,Math.floor(Math.log10(kmLen))); const m=kmLen/pow;
+  const nice=m<1.5?1:m<3.5?2:m<7.5?5:10; kmLen=nice*pow; const px=kmLen/World.meta.kmPerCell*view.scale;
+  const sb=$('scalebar'); sb.innerHTML='';
+  const bar=document.createElement('div'); bar.className='bar'; bar.style.width=px+'px';
+  const lab=document.createElement('div'); lab.textContent=kmLen>=1000?(kmLen/1000)+'×10³ km':kmLen+' km';
+  lab.style.marginRight='4px'; sb.appendChild(lab); sb.appendChild(bar);
+}
+
+/* ---- 8. tools ------------------------------------------------------------ */
+let activeTool='inspect', activeLayer='biomes';
+let brushMode='raise', brushRadius=6, brushStrength=0.4, paintBiome=4;
+let measurePts=[], pathPts=[], regionRect=null, drawingRegion=false, downstreamTimer=null;
+
+const TOOLS=[
+  {id:'inspect',  icon:'🔍', label:'Inspect'},
+  {id:'select',   icon:'⬚',  label:'Select'},
+  {id:'place',    icon:'⚑',  label:'Place'},
+  {id:'route',    icon:'🛣', label:'Route'},
+  {id:'territory',icon:'▦',  label:'Territory'},
+  {id:'brush',    icon:'🖌', label:'Brush'},
+  {id:'measure',  icon:'📏', label:'Measure'},
+  {id:'region',   icon:'▣',  label:'Region stats'},
+  {id:'pan',      icon:'✋', label:'Pan'},
+];
+// P3 state
+let activeFaction=1, selectedPlace=null, routeWaypoints=[], territoryRadius=5;
+// terrain-aware travel cost (water impassable, steep = costly) — shared by Route tool
+function buildTravelCost(){ const c=World.cells, cost=new Float32Array(N);
+  for(let i=0;i<N;i++) cost[i]= c.water[i]? Infinity : 1 + Math.pow(c.slope[i]*9,2); return cost; }
+function buildRouteThrough(wps){ if(wps.length<2)return null; const cost=buildTravelCost(); const full=[];
+  for(let k=1;k<wps.length;k++){ const a=wps[k-1],b=wps[k]; const {prev}=dijkstra(cost,a.x,a.y); const seg=reconstruct(prev,a,b);
+    if(!seg)return null; seg.reverse(); if(k>1)seg.shift(); for(const p of seg)full.push(p); }
+  return full; }
+function commitRoute(){ if(routeWaypoints.length>=2){ const path=buildRouteThrough(routeWaypoints);
+    if(path&&path.length>1){ World.vectors.userRoutes.push({pts:path, km:path.length*World.meta.kmPerCell}); LAYERMAP.routes.dataDirty=false; needsRender=true; updatePlanner(); } }
+  routeWaypoints=[]; }
+
+/* ---- Journey planner (P3 depth): terrain-aware travel time + report --------
+   Per-cell travel speed = base(mode) × slope × biome × cold × altitude factors;
+   journey time = Σ segmentKm / speed. Reports distance, days, biome breakdown,
+   hazards and an elevation profile. Pure (route pts + mode → report). */
+const TRAVEL_MODES={ foot:{name:'On foot',base:26,land:true}, horse:{name:'Horseback',base:52,land:true},
+  cart:{name:'Cart/caravan',base:34,land:true}, boat:{name:'Boat',base:64,land:false} };
+const BIOME_SPEED=[1,0.55,0.7,0.7,0.7,1.1,0.85,1.0,0.65,0.5,0.45,0.55,0.6]; // by biome index (0 ocean…12 lake)
+function planJourney(pts,mode){
+  if(!pts||pts.length<2) return null;
+  const c=World.cells, m=World.meta, M=TRAVEL_MODES[mode]||TRAVEL_MODES.horse;
+  let km=0, days=0, tMin=99, tMax=-99, rain=0, n=0; const bsum={}; let passes=0,crossings=0,desertKm=0,coldKm=0; const profile=[];
+  for(let k=0;k<pts.length;k++){ const x=pts[k][0],y=pts[k][1],i=idx(x,y);
+    const land=clamp01((c.elevation[i]-m.seaLevel)/(1-m.seaLevel)); profile.push(land);
+    const T=c.temperature[i]; if(T<tMin)tMin=T; if(T>tMax)tMax=T; rain+=c.rainfall[i]; n++;
+    bsum[c.biome[i]]=(bsum[c.biome[i]]||0)+1;
+    if(k>0){ const dx=x-pts[k-1][0], dy=y-pts[k-1][1], segKm=Math.hypot(dx,dy)*m.kmPerCell; km+=segKm;
+      const water=c.water[i]>0;
+      // speed factors
+      const slope=c.slope[i], slopeFac=1/(1+8*slope);
+      const onWater = M.land? (water?0.12:1) : (water?1:0.10);      // land modes ford water slowly; boats hug water
+      const bf = M.land ? (BIOME_SPEED[c.biome[i]]||0.8) : 1;
+      const coldFac = T<-5?0.7:1, altFac = land>0.7?0.55:(land>0.5?0.8:1);
+      const speed = Math.max(2, M.base*slopeFac*bf*coldFac*altFac*onWater);  // km/day, floored
+      days += segKm/speed;
+      if(land>0.68) passes++; if((c.water[i]&&M.land)||c.rivers[i]>0.35)crossings++;
+      if(T>24 && c.rainfall[i]<0.22)desertKm+=segKm; if(T<-2)coldKm+=segKm;
+    }
+  }
+  const hazards=[]; if(passes>3)hazards.push('High passes ('+passes+' cells > alpine)');
+  if(desertKm>m.kmPerCell*4)hazards.push('Arid crossing (~'+Math.round(desertKm)+' km)');
+  if(coldKm>m.kmPerCell*4)hazards.push('Sub-zero stretch (~'+Math.round(coldKm)+' km)');
+  if(crossings>0)hazards.push(crossings+' water/river crossing'+(crossings>1?'s':''));
+  const breakdown=Object.entries(bsum).map(([b,ct])=>({biome:+b,name:BIOMES[+b][0],col:BIOMES[+b][1],pct:ct/(profile.length)})).sort((a,b)=>b.pct-a.pct);
+  return { km, days, mode:M.name, speedAvg:km/Math.max(days,1e-6), tMin, tMax, rainMean:rain/n, hazards, breakdown, profile };
+}
+function updatePlanner(){
+  const pts = routeWaypoints.length>=2 ? buildRouteThrough(routeWaypoints)
+            : (World.vectors.userRoutes.length? World.vectors.userRoutes[World.vectors.userRoutes.length-1].pts : null);
+  const mode=($('travelMode')&&$('travelMode').value)||'horse';
+  const plan=planJourney(pts,mode);
+  drawProfile(plan);
+  if(!plan){ $('planner').innerHTML='<div class="muted">Draw a route (Route tool) to plan a journey.</div>'; return; }
+  const dys=plan.days, dStr= dys<1? Math.round(dys*24)+' h' : dys<60? dys.toFixed(1)+' days' : (dys/30).toFixed(1)+' months';
+  const bd=plan.breakdown.slice(0,4).map(b=>`<span class="sw" style="background:rgb(${b.col})"></span>${b.name} ${(b.pct*100|0)}%`).join('<br>');
+  $('planner').innerHTML=`<div class="insp-row"><span class="k">Distance</span><span class="val">${plan.km.toFixed(0)} km</span></div>
+    <div class="insp-row"><span class="k">Travel (${plan.mode})</span><span class="val">${dStr}</span></div>
+    <div class="insp-row"><span class="k">Avg pace</span><span class="val">${plan.speedAvg.toFixed(0)} km/day</span></div>
+    <div class="insp-row"><span class="k">Climate</span><span class="val">${plan.tMin.toFixed(0)}…${plan.tMax.toFixed(0)} °C</span></div>
+    <div style="margin-top:5px">${bd}</div>
+    ${plan.hazards.length?'<div style="margin-top:5px;color:var(--warn);font-size:11px">⚠ '+plan.hazards.join('<br>⚠ ')+'</div>':'<div class="muted" style="margin-top:5px">No notable hazards.</div>'}`;
+}
+function drawProfile(plan){ const cv=$('profileCv'); if(!cv||!cv.getContext)return; const g=cv.getContext('2d'); const w=cv.width,h=cv.height;
+  g.clearRect(0,0,w,h); g.fillStyle='#14110c'; g.fillRect(0,0,w,h); if(!plan||!plan.profile.length)return;
+  const p=plan.profile, n=p.length; g.beginPath(); g.moveTo(0,h);
+  for(let k=0;k<n;k++){ const x=k/(n-1)*w, y=h-clamp01(p[k])*(h-4)-2; k?g.lineTo(x,y):g.moveTo(x,y); }
+  g.lineTo(w,h); g.closePath(); g.fillStyle='rgba(176,141,84,.5)'; g.fill();
+  g.beginPath(); for(let k=0;k<n;k++){ const x=k/(n-1)*w, y=h-clamp01(p[k])*(h-4)-2; k?g.lineTo(x,y):g.moveTo(x,y); }
+  g.strokeStyle='#d8b878'; g.lineWidth=1.5; g.stroke(); }
+
+function setTool(id){ if(activeTool==='route')commitRoute(); activeTool=id; measurePts=[]; pathPts=[]; regionRect=null; selectedPlace=null;
+  document.querySelectorAll('#rail button').forEach(b=>b.classList.toggle('on',b.dataset.tool===id));
+  $('stTool').textContent=TOOLS.find(t=>t.id===id).label; buildToolOpts(); drawOverlay(); updateHint(); }
+
+function brushTargetAttr(){ // which attribute the brush edits, by active layer
+  if(activeLayer==='elevation'||activeLayer==='hillshade'||activeLayer==='slope') return 'elevation';
+  if(activeLayer==='biomes') return 'biome';
+  if(activeLayer==='annotations') return 'annotation';
+  return 'elevation';
+}
+function applyBrush(cell){
+  const attr=brushTargetAttr(), c=World.cells, R=brushRadius;
+  if(attr==='elevation'){
+    for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+      const x=cell.x+dx,y=cell.y+dy; if(x<0||x>=W||y<0||y>=H)continue;
+      const d=Math.sqrt(dx*dx+dy*dy); if(d>R)continue; const w=Math.pow(1-d/R,1.6)*brushStrength*0.04;
+      const i=idx(x,y);
+      if(brushMode==='raise') c.elevDelta[i]+=w;
+      else if(brushMode==='lower') c.elevDelta[i]-=w;
+      else { // smooth: pull elevation toward neighbourhood mean (via delta)
+        let m=0,k=0; for(const[ax,ay]of[[1,0],[-1,0],[0,1],[0,-1]]){const nx=x+ax,ny=y+ay;
+          if(nx<0||nx>=W||ny<0||ny>=H)continue; m+=c.elevation[idx(nx,ny)];k++;}
+        c.elevDelta[i]+=(m/k-c.elevation[i])*w*8;
+      }
+    }
+    markDirty('elevation'); // dependents auto-marked; downstream debounced below
+    NODE.elevation.run(World); dirty.delete('elevation'); // immediate local feedback
+    // dirty-region: only the brushed chunks (+1-cell margin for hillshade/slope) rebuild
+    for(const id of ['elevation','hillshade','slope']) LAYERMAP[id].markRegion(cell.x-R-1,cell.y-R-1,cell.x+R+1,cell.y+R+1);
+    needsRender=true; scheduleDownstream();
+  } else if(attr==='biome'){
+    for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+      const x=cell.x+dx,y=cell.y+dy; if(x<0||x>=W||y<0||y>=H)continue;
+      if(Math.sqrt(dx*dx+dy*dy)>R)continue; const i=idx(x,y); if(c.water[i])continue;
+      c.biomeOverride[i]=paintBiome; c.biome[i]=paintBiome;
+    }
+    LAYERMAP.biomes.markRegion(cell.x-R,cell.y-R,cell.x+R,cell.y+R); needsRender=true;
+  } else if(attr==='annotation'){
+    World.vectors.annotations.push({x:cell.x,y:cell.y,text:''}); needsRender=true;
+  }
+}
+function scheduleDownstream(){ // lazy/dirty recompute — runs after the stroke settles
+  if(downstreamTimer)clearTimeout(downstreamTimer);
+  downstreamTimer=setTimeout(()=>{ markDirty('hydrology'); runGraph(); buildLayerList(); needsRender=true; refreshInspector(lastCell); },240);
+}
+
+/* overlay (tool feedback): drawn on a separate canvas */
+function drawOverlay(){
+  octx.clearRect(0,0,ovl.width,ovl.height);
+  const v=view;
+  if(activeTool==='measure'&&measurePts.length){ strokePath(measurePts,'#d8b878',2); for(const p of measurePts)dot(p,'#d8b878'); }
+  if(activeTool==='route'&&routeWaypoints.length){ const path=buildRouteThrough(routeWaypoints);
+    if(path){ octx.strokeStyle='#7bbf6a'; octx.lineWidth=2; octx.beginPath();
+      path.forEach((p,k)=>{const X=v.ox+(p[0]+0.5)*v.scale,Y=v.oy+(p[1]+0.5)*v.scale;k?octx.lineTo(X,Y):octx.moveTo(X,Y);}); octx.stroke(); }
+    for(const p of routeWaypoints)dot(p,'#d8b878'); }
+  if((activeTool==='territory')&&hoverCell){ const r=territoryRadius*v.scale; const col=FACTIONS[activeFaction][1];
+    octx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},.9)`; octx.lineWidth=1.5;
+    octx.beginPath(); octx.arc(v.ox+(hoverCell.x+0.5)*v.scale,v.oy+(hoverCell.y+0.5)*v.scale,r,0,7); octx.stroke(); }
+  if(activeTool==='region'&&regionRect){ const r=regionRect;
+    octx.strokeStyle='#d8a13a'; octx.lineWidth=1.5; octx.setLineDash([5,4]);
+    octx.strokeRect(v.ox+r.x0*v.scale,v.oy+r.y0*v.scale,(r.x1-r.x0)*v.scale,(r.y1-r.y0)*v.scale); octx.setLineDash([]); }
+  if((activeTool==='brush')&&hoverCell){ const r=brushRadius*v.scale;
+    octx.strokeStyle='rgba(216,184,120,.8)'; octx.lineWidth=1.5;
+    octx.beginPath(); octx.arc(v.ox+(hoverCell.x+0.5)*v.scale,v.oy+(hoverCell.y+0.5)*v.scale,r,0,7); octx.stroke(); }
+}
+function strokePath(pts,col,w,dist){ octx.strokeStyle=col; octx.lineWidth=w; octx.beginPath();
+  pts.forEach((p,k)=>{const X=view.ox+(p.x+0.5)*view.scale,Y=view.oy+(p.y+0.5)*view.scale;k?octx.lineTo(X,Y):octx.moveTo(X,Y);}); octx.stroke(); }
+function dot(p,col){ octx.fillStyle=col; octx.beginPath(); octx.arc(view.ox+(p.x+0.5)*view.scale,view.oy+(p.y+0.5)*view.scale,3,0,7); octx.fill(); }
+
+/* ---- pointer handling (one dispatcher, tool decides) --------------------- */
+let painting=false, panning=false, panStart=null, hoverCell=null, lastCell=null;
+cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(); const cell=screenToCell(e.clientX-r.left,e.clientY-r.top);
+  if(activeTool==='pan'||e.button===1||e.spaceKey){ panning=true; panStart={x:e.clientX,y:e.clientY,ox:view.ox,oy:view.oy}; cv.setPointerCapture(e.pointerId); return; }
+  if(!cell)return;
+  if(activeTool==='brush'){ painting=true; applyBrush(cell); cv.setPointerCapture(e.pointerId); }
+  else if(activeTool==='measure'){ measurePts.push(cell); drawOverlay(); refreshAnalysis(); }
+  else if(activeTool==='route'){ routeWaypoints.push(cell); drawOverlay(); refreshAnalysis(); updatePlanner(); }
+  else if(activeTool==='region'){ drawingRegion=true; regionRect={x0:cell.x,y0:cell.y,x1:cell.x,y1:cell.y}; }
+  else if(activeTool==='place'){ placeAt(cell); }
+  else if(activeTool==='territory'){ painting=true; paintTerritory(cell); cv.setPointerCapture(e.pointerId); }
+  else if(activeTool==='select'||activeTool==='inspect'){ selectAt(cell); }
+});
+// P3 content ops
+function placeAt(cell){ const hit=pickVectorAt(cell.x,cell.y,3,'place');
+  if(hit){ selectedPlace=hit.o; refreshInspector(cell,hit.o); }
+  else { const rng=mulberry32((cell.i*2654435761>>>0)^Date.now()); const p={x:cell.x,y:cell.y,name:settleName(rng),pop:5000,kind:'town'};
+    World.vectors.places.push(p); invalidateVectorIndex(); selectedPlace=p; needsRender=true; refreshInspector(cell,p); } buildToolOpts(); }
+function paintTerritory(cell){ const c=World.cells, R=territoryRadius;
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){ const x=cell.x+dx,y=cell.y+dy; if(x<0||x>=W||y<0||y>=H)continue;
+    if(Math.hypot(dx,dy)>R)continue; const i=idx(x,y); if(c.water[i]&&activeFaction)continue; c.region[i]=activeFaction; }
+  LAYERMAP.politics.markRegion(cell.x-R,cell.y-R,cell.x+R,cell.y+R); needsRender=true; }
+cv.addEventListener('pointermove',e=>{ const r=cv.getBoundingClientRect(); const sx=e.clientX-r.left,sy=e.clientY-r.top;
+  const cell=screenToCell(sx,sy); hoverCell=cell; lastCell=cell;
+  if(panning&&panStart){ view.ox=panStart.ox+(e.clientX-panStart.x); view.oy=panStart.oy+(e.clientY-panStart.y); needsRender=true; refreshScalebar(); drawOverlay(); return; }
+  if(cell){ $('stPos').textContent=`x${cell.x} y${cell.y}  lat ${lat(cell.y).toFixed(0)}°`; if(activeTool==='inspect')refreshInspector(cell); }
+  if(painting&&cell){ if(activeTool==='territory')paintTerritory(cell); else applyBrush(cell); }
+  if(drawingRegion&&cell){ regionRect.x1=cell.x; regionRect.y1=cell.y; refreshAnalysis(); }
+  if(activeTool==='brush'||activeTool==='territory'||activeTool==='route')drawOverlay();
+});
+cv.addEventListener('pointerup',e=>{ if(painting){ const wasBrush=activeTool==='brush'; painting=false; if(wasBrush)scheduleDownstream(); } panning=false; if(drawingRegion){drawingRegion=false; refreshAnalysis();} });
+cv.addEventListener('wheel',e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(); const mx=e.clientX-r.left,my=e.clientY-r.top;
+  const f=e.deltaY<0?1.15:1/1.15; const ns=clamp(view.scale*f,0.2,60);
+  view.ox=mx-(mx-view.ox)*(ns/view.scale); view.oy=my-(my-view.oy)*(ns/view.scale); view.scale=ns;
+  needsRender=true; refreshScalebar(); drawOverlay(); },{passive:false});
+let spaceDown=false;
+window.addEventListener('keydown',e=>{ if(e.code==='Space'){spaceDown=true;}
+  const tag=(e.target&&e.target.tagName)||''; if(tag==='INPUT'||tag==='TEXTAREA')return;
+  if(e.key>='1'&&e.key<='9'){ const t=TOOLS[+e.key-1]; if(t)setTool(t.id); }
+  if(e.key==='Escape'&&activeTool==='route'){ commitRoute(); drawOverlay(); }
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedPlace){ const i=World.vectors.places.indexOf(selectedPlace);
+    if(i>=0)World.vectors.places.splice(i,1); invalidateVectorIndex(); selectedPlace=null; needsRender=true; }
+  if((e.ctrlKey||e.metaKey)&&e.key==='z'){ /* undo hook (P5) */ } });
+window.addEventListener('keyup',e=>{ if(e.code==='Space')spaceDown=false; });
+// make space act as pan modifier in pointerdown
+cv.addEventListener('pointerdown',e=>{ e.spaceKey=spaceDown; },true);
+
+function computePath(){ if(pathPts.length<2)return;
+  const c=World.cells; const cost=new Float32Array(N);
+  for(let i=0;i<N;i++)cost[i]=c.water[i]?Infinity:1+Math.pow(c.slope[i]*9,2);
+  const a=pathPts[pathPts.length-2], b=pathPts[pathPts.length-1];
+  const {prev}=dijkstra(cost,a.x,a.y); const path=reconstruct(prev,a,b);
+  if(path){ const km=path.length*World.meta.kmPerCell;
+    $('analysis').innerHTML=`<div class="insp-row"><span class="k">Least-cost path</span><span class="val">${km.toFixed(0)} km</span></div>
+      <div class="insp-row"><span class="k">Cells</span><span class="val">${path.length}</span></div>
+      <div class="muted" style="margin-top:5px">Click again to extend; terrain-aware (avoids water & steep slopes).</div>`; }
+}
+
+/* ---- P5: spatial index for vector picking (uniform grid hash) ------------ */
+const VIDX=16; let VCOLS=Math.ceil(W/VIDX);
+let _vindex=null, _vindexDirty=true;
+function invalidateVectorIndex(){ _vindexDirty=true; }
+function buildVectorIndex(){ _vindex=new Map();
+  const add=(o,kind)=>{ const k=((o.y/VIDX)|0)*VCOLS+((o.x/VIDX)|0); (_vindex.get(k)||_vindex.set(k,[]).get(k)).push({o,kind}); };
+  for(const s of World.vectors.settlements)add(s,'settlement'); for(const p of World.vectors.places)add(p,'place');
+  _vindexDirty=false; }
+function pickVectorAt(x,y,rad,kindFilter){ if(_vindexDirty||!_vindex)buildVectorIndex(); rad=rad||3;
+  const cx=(x/VIDX)|0, cy=(y/VIDX)|0; let best=null,bd=rad*rad+1;
+  for(let gy=cy-1;gy<=cy+1;gy++)for(let gx=cx-1;gx<=cx+1;gx++){ if(gx<0||gy<0||gx>=VCOLS)continue; const b=_vindex.get(gy*VCOLS+gx); if(!b)continue;
+    for(const e of b){ if(kindFilter&&e.kind!==kindFilter)continue; const dd=(e.o.x-x)*(e.o.x-x)+(e.o.y-y)*(e.o.y-y); if(dd<bd){bd=dd;best=e;} } }
+  return best; }
+
+/* ---- inspector / selection / analysis ------------------------------------ */
+function selectAt(cell){ // spatial-index pick: a user place takes priority over an auto settlement
+  const hit=pickVectorAt(cell.x,cell.y,3);
+  if(hit&&hit.kind==='place'){ selectedPlace=hit.o; needsRender=true; }
+  refreshInspector(cell, hit?hit.o:null);
+}
+function refreshInspector(cell,sel){
+  if(!cell){return;}
+  const c=World.cells, i=cell.i, m=World.meta;
+  const land=(c.elevation[i]-m.seaLevel)/(1-m.seaLevel);
+  const elevM = c.water[i]? -Math.round((m.seaLevel-c.elevation[i])/m.seaLevel*4000) : Math.round(land*m.peakM);
+  const bcol=BIOMES[c.biome[i]][1], rcol=ROCKS[c.rockType[i]][1];
+  const rows=[
+    ['Location',`x${cell.x}, y${cell.y} · lat ${lat(cell.y).toFixed(1)}°`],
+    ['Elevation',`${elevM} m`],
+    ['Surface',c.water[i]?'<span class="sw" style="background:#3060a0"></span>Water':`<span class="sw" style="background:rgb(${rcol})"></span>${ROCKS[c.rockType[i]][0]}`],
+    ['Slope',`${(Math.atan(c.slope[i]*W)*57.3).toFixed(1)}°`],
+    ['Plate',`#${c.plateId[i]}${c.plateBoundary[i]?' · boundary':''}`],
+    ['Discharge',c.water[i]?'—':`${c.flowAccum[i].toFixed(0)}${c.rivers[i]>0.05?' · river':''}`],
+    ['Temperature',`${c.temperature[i].toFixed(1)} °C`],
+    ['Rainfall',`${Math.round(c.rainfall[i]*3000)} mm/yr`],
+    ['Biome',`<span class="sw" style="background:rgb(${bcol})"></span>${BIOMES[c.biome[i]][0]}${c.biomeOverride[i]>=0?' *':''}`],
+    ['Köppen',`${KOPPEN[c.koppen[i]][0]} · ${KOPPEN[c.koppen[i]][1]}`],
+    ['Territory',c.region[i]?`<span class="sw" style="background:rgb(${FACTIONS[c.region[i]][1]})"></span>${FACTIONS[c.region[i]][0]}`:'<span class="muted">Unclaimed</span>'],
+    ['Landmass',c.water[i]?'<span class="muted">— sea —</span>':`continent #${_continentField?_continentField[i]:'—'} of ${World.meta.continents||'—'}`],
+    ['Fertility',bar(c.fertility[i])],
+    ['Habitability',bar(c.habitability[i])],
+  ];
+  if(sel){ rows.unshift([sel.kind?'— Place —':'— Settlement —',`<b>${sel.name}</b>`]); rows.push(['Population',`~${sel.pop.toLocaleString()}`]);
+    if(sel.coastal!==undefined)rows.push(['Trade',sel.coastal?'Coastal':'Inland']); }
+  $('inspector').innerHTML=rows.map(r=>`<div class="insp-row"><span class="k">${r[0]}</span><span class="val">${r[1]}</span></div>`).join('');
+}
+function bar(v){ v=clamp01(v); return `<span style="display:inline-block;width:60px;height:7px;background:#2a2419;border-radius:3px;overflow:hidden;vertical-align:0"><span style="display:block;height:100%;width:${(v*100)|0}%;background:var(--accent)"></span></span> ${(v*100|0)}`; }
+
+function refreshAnalysis(){
+  if(activeTool==='measure'&&measurePts.length>=2){
+    let km=0; for(let k=1;k<measurePts.length;k++){const a=measurePts[k-1],b=measurePts[k];
+      km+=Math.hypot(a.x-b.x,a.y-b.y)*World.meta.kmPerCell;}
+    $('analysis').innerHTML=`<div class="insp-row"><span class="k">Distance</span><span class="val">${km.toFixed(0)} km</span></div>
+      <div class="insp-row"><span class="k">Segments</span><span class="val">${measurePts.length-1}</span></div>
+      <div class="muted" style="margin-top:5px">Click to add points · switch tool to clear.</div>`;
+    return;
+  }
+  if(activeTool==='route'&&routeWaypoints.length){
+    const path=buildRouteThrough(routeWaypoints); const km=path?path.length*World.meta.kmPerCell:0;
+    $('analysis').innerHTML=`<div class="insp-row"><span class="k">Route length</span><span class="val">${km.toFixed(0)} km</span></div>
+      <div class="insp-row"><span class="k">Waypoints</span><span class="val">${routeWaypoints.length}</span></div>
+      <div class="insp-row"><span class="k">Committed</span><span class="val">${World.vectors.userRoutes.length}</span></div>
+      <div class="muted" style="margin-top:5px">Terrain-aware (avoids water & steep slopes). Esc commits.</div>`;
+    return;
+  }
+  if(activeTool==='region'&&regionRect){
+    const r=regionRect; const x0=Math.min(r.x0,r.x1),x1=Math.max(r.x0,r.x1),y0=Math.min(r.y0,r.y1),y1=Math.max(r.y0,r.y1);
+    const c=World.cells; let n=0,land=0,sumT=0,sumR=0,sumH=0; const bc={};
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const i=idx(x,y);n++; if(!c.water[i]){land++;sumT+=c.temperature[i];sumR+=c.rainfall[i];sumH+=c.habitability[i];}
+      bc[c.biome[i]]=(bc[c.biome[i]]||0)+1;}
+    const top=Object.entries(bc).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>`<span class="sw" style="background:rgb(${BIOMES[e[0]][1]})"></span>${BIOMES[e[0]][0]} ${(e[1]/n*100|0)}%`).join('<br>');
+    const areaKm=n*World.meta.kmPerCell*World.meta.kmPerCell;
+    $('analysis').innerHTML=`<div class="insp-row"><span class="k">Area</span><span class="val">${(areaKm/1e6).toFixed(2)}M km²</span></div>
+      <div class="insp-row"><span class="k">Land</span><span class="val">${(land/n*100|0)}%</span></div>
+      <div class="insp-row"><span class="k">Mean temp</span><span class="val">${land?(sumT/land).toFixed(1):'—'} °C</span></div>
+      <div class="insp-row"><span class="k">Mean rain</span><span class="val">${land?Math.round(sumR/land*3000):'—'} mm</span></div>
+      <div class="insp-row"><span class="k">Habitability</span><span class="val">${land?bar(sumH/land):'—'}</span></div>
+      <div style="margin-top:6px">${top}</div>`;
+  }
+}
+
+/* ---- 9. workspaces (UI presets only) ------------------------------------- */
+const WORKSPACES={
+  Geology:    {layers:['hillshade','geology','plates'], tool:'inspect', target:'geology'},
+  Hydrology:  {layers:['hillshade','rivers','rainfall'], tool:'inspect', target:'rivers'},
+  Climate:    {layers:['koppen','rainfall','wind','hillshade'], tool:'inspect', target:'koppen'},
+  Ecology:    {layers:['biomes','rivers'], tool:'inspect', target:'bioclass'},
+  Civilization:{layers:['biomes','politics','rivers','routes','roads','settlements','places'], tool:'place', target:'politics'},
+  Atlas:      {layers:['biomes','rivers','roads','settlements','places','labels'], tool:'inspect', target:'biomes'},
+};
+function setWorkspace(name){
+  const ws=WORKSPACES[name]; if(!ws)return;
+  LAYERS.forEach(l=>l.visible=false);
+  // opacity presets for combined readability
+  ws.layers.forEach(id=>{const L=LAYERMAP[id]; if(L){L.visible=true;}});
+  if(LAYERMAP.rainfall&&ws.layers.includes('rainfall')&&ws.layers.includes('temperature'))LAYERMAP.rainfall.opacity=0.45;
+  else if(LAYERMAP.rainfall)LAYERMAP.rainfall.opacity=1;
+  activeLayer=ws.target; setTool(ws.tool);
+  document.querySelectorAll('#workspaces button').forEach(b=>b.classList.toggle('on',b.dataset.ws===name));
+  $('stWs').textContent=name; buildLayerList(); needsRender=true; $('stTarget').textContent=LAYERMAP[activeLayer]?LAYERMAP[activeLayer].name:'—';
+}
+
+/* ---- 10. UI wiring ------------------------------------------------------- */
+function buildWorkspaces(){ const host=$('workspaces'); host.innerHTML='';
+  for(const name of Object.keys(WORKSPACES)){ const b=document.createElement('button'); b.textContent=name; b.dataset.ws=name;
+    b.onclick=()=>setWorkspace(name); host.appendChild(b); } }
+function buildRail(){ const host=$('rail'); host.innerHTML='';
+  for(const t of TOOLS){ const b=document.createElement('button'); b.dataset.tool=t.id; b.innerHTML=`${t.icon}<span class="lab">${t.label} (${TOOLS.indexOf(t)+1})</span>`;
+    b.onclick=()=>setTool(t.id); host.appendChild(b); } }
+function buildLayerList(){
+  const host=$('layers'); host.innerHTML='';
+  // render top-to-bottom = draw order reversed (top of list = top of map)
+  for(let k=LAYERS.length-1;k>=0;k--){ const l=LAYERS[k];
+    const row=document.createElement('div'); row.className='lyr'+(l.visible?' vis':'')+(l.id===activeLayer?' active':'');
+    row.innerHTML=`<span class="eye">${l.visible?'◉':'○'}</span><span class="nm">${l.name}</span><span class="kind">${l.kind}</span>`;
+    const op=document.createElement('input'); op.type='range'; op.min=0; op.max=1; op.step=0.05; op.value=l.opacity; op.title='Opacity';
+    op.oninput=()=>{l.opacity=+op.value; needsRender=true;}; op.onpointerdown=e=>e.stopPropagation();
+    row.appendChild(op);
+    row.querySelector('.eye').onclick=e=>{e.stopPropagation(); l.visible=!l.visible; buildLayerList(); needsRender=true;};
+    row.onclick=()=>{ activeLayer=l.id; $('stTarget').textContent=l.name; buildLayerList(); buildToolOpts(); };
+    host.appendChild(row);
+  }
+}
+function buildToolOpts(){
+  const host=$('toolopts'); let html='';
+  if(activeTool==='brush'){
+    const attr=brushTargetAttr();
+    html+=`<div class="row"><label>Editing</label><b style="color:var(--accent2)">${LAYERMAP[activeLayer]?LAYERMAP[activeLayer].name:''} → ${attr}</b></div>`;
+    if(attr==='elevation'){
+      html+=`<div class="row" style="flex-wrap:wrap">${['raise','lower','smooth'].map(m=>`<span class="pill ${brushMode===m?'on':''}" data-bm="${m}">${m}</span>`).join('')}</div>`;
+    } else if(attr==='biome'){
+      html+=`<div class="row" style="flex-wrap:wrap">${BIOMES.map((b,bi)=>bi===0?'':`<span class="pill ${paintBiome===bi?'on':''}" data-pb="${bi}"><span class="sw" style="background:rgb(${b[1]})"></span>${b[0]}</span>`).join('')}</div>`;
+    }
+    html+=`<div class="row"><label>Radius</label><input id="brR" type="range" min="1" max="22" step="1" value="${brushRadius}"><span class="v">${brushRadius}</span></div>`;
+    html+=`<div class="row"><label>Strength</label><input id="brS" type="range" min="0.1" max="1" step="0.05" value="${brushStrength}"><span class="v">${brushStrength.toFixed(2)}</span></div>`;
+  } else if(activeTool==='measure'){ html=`<div class="muted">Click points to measure great-cell distance. Result in the analysis panel.</div>`; }
+  else if(activeTool==='place'){ html=`<div class="muted">Click empty land to drop a settlement; click an existing one to select. <b>Delete</b> removes the selected place.</div>`; }
+  else if(activeTool==='route'){ html=`<div class="muted">Click waypoints to lay a terrain-aware trade route. <b>Esc</b> (or switch tool) commits it. Routes avoid water & steep slopes.</div>`; }
+  else if(activeTool==='territory'){ html=`<div class="row" style="flex-wrap:wrap">${FACTIONS.map((f,fi)=>`<span class="pill ${activeFaction===fi?'on':''}" data-fac="${fi}"><span class="sw" style="background:rgb(${f[1]})"></span>${f[0]}</span>`).join('')}</div>
+    <div class="row"><label>Radius</label><input id="trR" type="range" min="1" max="20" step="1" value="${territoryRadius}"><span class="v">${territoryRadius}</span></div>
+    <div class="muted">Paint political ownership. Pick <b>Unclaimed</b> to erase.</div>`; }
+  else if(activeTool==='region'){ html=`<div class="muted">Drag a rectangle for area + biome/climate statistics.</div>`; }
+  else if(activeTool==='select'){ html=`<div class="muted">Click a cell, settlement or place to inspect its attributes.</div>`; }
+  else if(activeTool==='inspect'){ html=`<div class="muted">Hover the map; all attributes of the cell under the cursor show in the Inspector.</div>`; }
+  else if(activeTool==='pan'){ html=`<div class="muted">Drag to pan. Wheel to zoom. (Space also pans with any tool.)</div>`; }
+  host.innerHTML=html;
+  host.querySelectorAll('[data-bm]').forEach(p=>p.onclick=()=>{brushMode=p.dataset.bm; buildToolOpts();});
+  host.querySelectorAll('[data-pb]').forEach(p=>p.onclick=()=>{paintBiome=+p.dataset.pb; buildToolOpts();});
+  host.querySelectorAll('[data-fac]').forEach(p=>p.onclick=()=>{activeFaction=+p.dataset.fac; buildToolOpts(); drawOverlay();});
+  const br=$('brR'); if(br)br.oninput=()=>{brushRadius=+br.value; br.nextElementSibling.textContent=br.value; drawOverlay();};
+  const bs=$('brS'); if(bs)bs.oninput=()=>{brushStrength=+bs.value; bs.nextElementSibling.textContent=(+bs.value).toFixed(2);};
+  const tr=$('trR'); if(tr)tr.oninput=()=>{territoryRadius=+tr.value; tr.nextElementSibling.textContent=tr.value; drawOverlay();};
+}
+function updateHint(){
+  const map={inspect:'Hover to inspect every attribute of a cell.',select:'Click a cell or settlement.',
+    brush:'Drag to edit the active layer. Downstream layers recompute when you release.',
+    measure:'Click points to measure distance.',place:'Click to drop/select a settlement · Delete removes it.',
+    route:'Click waypoints for a trade route · Esc commits.',territory:'Paint political ownership · pick a faction.',
+    region:'Drag a box for regional statistics.',pan:'Drag to pan · wheel to zoom.'};
+  $('hint').textContent=map[activeTool]||'';
+}
+function showBusy(m){ $('busyMsg').textContent=m; $('busy').classList.add('show'); }
+function hideBusy(){ $('busy').classList.remove('show'); }
+
+// status perf ticker
+let _lastChunkRebuilds=0;
+setInterval(()=>{ $('stPerf').textContent=`pipeline ${lastPerf.ms.toFixed(1)}ms · ${lastPerf.ran} node · ${_lastChunkRebuilds}/${NCHUNK} chunks · ${W}×${H}`; },500);
+
+/* world param controls */
+function bindWorld(){
+  const lv=(id,fn)=>{const el=$(id); el.oninput=()=>{fn(+el.value); const s=$(id+'V'); if(s)s.textContent=el.value;};};
+  $('seed').onchange=()=>{World.meta.seed=+$('seed').value||1;};
+  $('reseed').onclick=()=>{World.meta.seed=(Math.random()*1e6)|0; $('seed').value=World.meta.seed;};
+  lv('seaLevel',v=>{World.meta.seaLevel=v; $('seaLevelV').textContent=v.toFixed(3).slice(1);});
+  lv('plates',v=>{World.meta.plates=v;});
+  lv('relief',v=>{World.meta.relief=v;});
+  lv('erodeAmt',v=>{World.meta.erodeLevel=v;});
+  $('mapKm').onchange=()=>{const km=+$('mapKm').value||12000; World.meta.kmPerCell=km/W; refreshScalebar();};
+  $('expScale').oninput=()=>{$('expScaleV').textContent=$('expScale').value+'×';};
+  $('btnExpMap').onclick=()=>exportMapPNG(+($('expScale').value||4));
+  $('btnExpLayer').onclick=()=>exportLayerPNG();
+  $('btnExpFeatures').onclick=()=>exportFeatures();
+  const restyle=()=>{ for(const id of ['biomes','hillshade']) LAYERMAP[id].dataDirty=true; needsRender=true; };
+  $('sunAz').oninput=()=>{World.meta.sunAz=+$('sunAz').value; $('sunAzV').textContent=$('sunAz').value+'°'; restyle();};
+  $('exag').oninput=()=>{World.meta.exag=+$('exag').value; $('exagV').textContent=$('exag').value; restyle();};
+  $('ao').oninput=()=>{World.meta.ao=+$('ao').value; $('aoV').textContent=(+$('ao').value).toFixed(2).slice(1); restyle();};
+  $('smoothChk').onchange=()=>{World.meta.smooth=$('smoothChk').checked; needsRender=true;};
+  $('resSel').onchange=()=>{ const w=+$('resSel').value; setResolution(w, w>>1); };
+  $('travelMode').onchange=()=>updatePlanner();
+  $('iconStyle').onchange=()=>{ World.meta.iconStyle=$('iconStyle').value; needsRender=true; };
+  $('markerScale').oninput=()=>{ World.meta.markerScale=+$('markerScale').value; $('markerScaleV').textContent=(+$('markerScale').value).toFixed(1); needsRender=true; };
+  $('iconFile').onchange=e=>{ const f=e.target.files[0]; if(f&&_iconTarget){ const fr=new FileReader();
+    fr.onload=()=>{ setIcon(_iconTarget,fr.result); buildIconSlots(); }; fr.readAsDataURL(f); } e.target.value=''; };
+  $('btnGen').onclick=()=>{ World.meta.seed=+$('seed').value||1; regenerate(false); };
+  const runErode=(label,fn)=>{ showBusy(label);
+    setTimeout(()=>{ fn(); buildLayerList(); needsRender=true; refreshInspector(lastCell); hideBusy(); },20); };
+  $('btnErode').onclick  =()=>runErode('Eroding (hydraulic)…', ()=>erodeTerrain(World.meta.erodeLevel*14000));
+  $('btnStream').onclick =()=>runErode('Carving river valleys…', ()=>streamErode(World.meta.erodeLevel*2));
+  $('btnGlacial').onclick=()=>runErode('Glacial carving…', ()=>glacialErode(World.meta.erodeLevel*2));
+  $('btnNew').onclick=()=>{ World.meta.seed=(Math.random()*1e6)|0; $('seed').value=World.meta.seed; regenerate(true); };
+  $('btnSave').onclick=saveProject; $('btnLoad').onclick=()=>$('fileLoad').click();
+  $('fileLoad').onchange=e=>{const f=e.target.files[0]; if(f)loadProject(f); e.target.value='';};
+}
+
+/* ---- 11. save / load ----------------------------------------------------- */
+function saveProject(){
+  // store params + sparse user overlays + vectors (raster is regenerable from seed/params)
+  const edits=[]; const c=World.cells;
+  for(let i=0;i<N;i++)if(c.elevDelta[i]!==0)edits.push([i,+c.elevDelta[i].toFixed(4)]);
+  const ero=[]; for(let i=0;i<N;i++)if(c.erosionDelta[i]!==0)ero.push([i,+c.erosionDelta[i].toFixed(4)]);
+  const bov=[]; for(let i=0;i<N;i++)if(c.biomeOverride[i]>=0)bov.push([i,c.biomeOverride[i]]);
+  const reg=[]; for(let i=0;i<N;i++)if(c.region[i])reg.push([i,c.region[i]]);
+  const doc={ format:'cartalith-world', version:13, meta:World.meta,
+    layers:LAYERS.map(l=>({id:l.id,visible:l.visible,opacity:l.opacity})),
+    elevDelta:edits, erosionDelta:ero, biomeOverride:bov, region:reg, annotations:World.vectors.annotations,
+    places:World.vectors.places, userRoutes:World.vectors.userRoutes, icons:World.icons };
+  const blob=new Blob([JSON.stringify(doc)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(World.meta.name||'world').replace(/\s+/g,'_')+'.cartalith.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function loadProject(file){
+  const fr=new FileReader();
+  fr.onload=()=>{ try{ const doc=JSON.parse(fr.result); if(doc.format!=='cartalith-world')throw 0;
+    Object.assign(World.meta,doc.meta);
+    $('seed').value=World.meta.seed; $('seaLevel').value=World.meta.seaLevel; $('seaLevelV').textContent=World.meta.seaLevel.toFixed(3).slice(1);
+    $('plates').value=World.meta.plates; $('platesV').textContent=World.meta.plates;
+    $('relief').value=World.meta.relief; $('reliefV').textContent=(+World.meta.relief).toFixed(1);
+    $('mapKm').value=Math.round(World.meta.kmPerCell*W);
+    showBusy('Loading world…');
+    setTimeout(()=>{
+      World.cells.elevDelta.fill(0); World.cells.erosionDelta.fill(0); World.cells.biomeOverride.fill(-1); World.cells.region.fill(0);
+      (doc.elevDelta||[]).forEach(([i,v])=>World.cells.elevDelta[i]=v);
+      (doc.erosionDelta||[]).forEach(([i,v])=>World.cells.erosionDelta[i]=v);
+      (doc.biomeOverride||[]).forEach(([i,b])=>World.cells.biomeOverride[i]=b);
+      (doc.region||[]).forEach(([i,f])=>World.cells.region[i]=f);
+      World.vectors.annotations=doc.annotations||[]; World.vectors.places=doc.places||[]; World.vectors.userRoutes=doc.userRoutes||[];
+      World.icons=doc.icons||{}; rebuildIcons(); buildIconSlots();
+      if(doc.meta&&doc.meta.iconStyle){$('iconStyle').value=doc.meta.iconStyle;} if(doc.meta&&doc.meta.markerScale){$('markerScale').value=doc.meta.markerScale;$('markerScaleV').textContent=(+doc.meta.markerScale).toFixed(1);}
+      markDirty('continents'); runGraph();
+      (doc.layers||[]).forEach(ls=>{const L=LAYERMAP[ls.id]; if(L){L.visible=ls.visible;L.opacity=ls.opacity;}});
+      buildLayerList(); needsRender=true; refreshScalebar(); hideBusy();
+    },20);
+  }catch(err){ alert('Not a Cartalith world file.'); } };
+  fr.readAsText(file);
+}
+
+/* ---- 11b. export (P4) ---------------------------------------------------- */
+const cellToLonLat=(x,y)=>[ (x+0.5)/W*360-180, lat(y) ]; // equirectangular world mapping
+function download(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+// composite the visible layer stack into a canvas at W*scale × H*scale (one PNG)
+function renderLayersToCanvas(scale,only){
+  const cnv=document.createElement('canvas'); cnv.width=W*scale; cnv.height=H*scale;
+  const cx=cnv.getContext('2d'); cx.fillStyle='#0c0a07'; cx.fillRect(0,0,cnv.width,cnv.height);
+  const v={scale, ox:0, oy:0};
+  for(const l of LAYERS){ if(only? l.id!==only : !(l.visible&&l.opacity>0)) continue; l.paint(cx,v); }
+  return cnv;
+}
+function exportMapPNG(scale){ const cnv=renderLayersToCanvas(scale); if(!cnv.toBlob){alert('PNG export needs a browser canvas.');return;}
+  cnv.toBlob(b=>download(b,(World.meta.name||'world').replace(/\s+/g,'_')+'_map.png')); }
+function exportLayerPNG(){ const L=LAYERMAP[activeLayer]; if(!L){return;} const cnv=renderLayersToCanvas(+($('expScale').value||4), activeLayer);
+  if(!cnv.toBlob){alert('PNG export needs a browser canvas.');return;} cnv.toBlob(b=>download(b,(World.meta.name||'world').replace(/\s+/g,'_')+'_'+activeLayer+'.png')); }
+// vectors → GeoJSON FeatureCollection (lon/lat), plus territory-area summary
+function buildFeatureCollection(){
+  const feats=[];
+  for(const p of World.vectors.places){ const[lon,la]=cellToLonLat(p.x,p.y);
+    feats.push({type:'Feature',geometry:{type:'Point',coordinates:[+lon.toFixed(3),+la.toFixed(3)]},
+      properties:{kind:'place',name:p.name,population:p.pop}}); }
+  for(const s of World.vectors.settlements){ const[lon,la]=cellToLonLat(s.x,s.y);
+    feats.push({type:'Feature',geometry:{type:'Point',coordinates:[+lon.toFixed(3),+la.toFixed(3)]},
+      properties:{kind:'settlement',name:s.name,population:s.pop,coastal:!!s.coastal}}); }
+  for(const rt of World.vectors.userRoutes){ const coords=rt.pts.map(([x,y])=>{const[lo,la]=cellToLonLat(x,y);return[+lo.toFixed(3),+la.toFixed(3)];});
+    feats.push({type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:{kind:'route',km:Math.round(rt.km)}}); }
+  for(const rd of World.vectors.roads){ const pts=rd.pts||rd; if(!pts||pts.length<2)continue;
+    const coords=pts.map(([x,y])=>{const[lo,la]=cellToLonLat(x,y);return[+lo.toFixed(3),+la.toFixed(3)];});
+    feats.push({type:'Feature',geometry:{type:'LineString',coordinates:coords},properties:{kind:rd.sea?'sea_route':'road'}}); }
+  // faction areas (cell counts → km²)
+  const area=new Array(FACTIONS.length).fill(0); for(let i=0;i<N;i++)if(World.cells.region[i])area[World.cells.region[i]]++;
+  const km2=World.meta.kmPerCell*World.meta.kmPerCell;
+  const factions=FACTIONS.map((f,i)=>({id:i,name:f[0],areaKm2:Math.round(area[i]*km2)})).filter(f=>f.id>0&&f.areaKm2>0);
+  return {type:'FeatureCollection',generator:'cartalith-world',world:World.meta.name,features:feats,factions};
+}
+function exportFeatures(){ const fc=buildFeatureCollection();
+  download(new Blob([JSON.stringify(fc,null,1)],{type:'application/geo+json'}),(World.meta.name||'world').replace(/\s+/g,'_')+'_features.geojson'); }
+
+/* ---- 12. init ------------------------------------------------------------ */
+function init(){
+  buildWorkspaces(); buildRail(); bindWorld();
+  fitView(); window.addEventListener('resize',()=>{fitView();refreshScalebar();drawOverlay();});
+  markDirty('continents'); runGraph();
+  setWorkspace('Atlas'); buildLayerList(); buildToolOpts(); updateHint(); refreshScalebar(); updateResLabel(); buildIconSlots();
+  // redraw overlay on render ticks that move the map
+  const _r=render; render=function(){_r(); drawOverlay();};
+  loop();
+}
+// Browser entry; under a no-DOM harness (node) we skip init() and expose the
+// pipeline for headless verification (see tests). One namespaced debug handle.
+if (typeof document !== 'undefined' && document.getElementById) init();
+if (typeof globalThis !== 'undefined')
+  globalThis.__CARTALITH__ = { World, runGraph, markDirty, classifyBiome, classifyBoundary, classifyKoppen, erodeTerrain, streamErode, glacialErode, priorityFill, fillLakes, buildTravelCost, buildRouteThrough, cellToLonLat, buildFeatureCollection, settleTier, pickVectorAt, buildVectorIndex, invalidateVectorIndex, terrainColor, landColor, seaColor, materialWeights, setResolution, getDims:()=>[W,H,N], planJourney, TRAVEL_MODES, settleTier, iconSlotForTier, ICON_SLOTS, setIcon, rdpSimplify, catmullRom, smoothPath, landComponents, mstRoads, LAYERMAP, FACTIONS, KOPPEN, BTYPE, NODES, NODE, view, W, H, idx, lat,
+    _test:{ CHUNK, get NCHUNK(){return NCHUNK;}, get CHX(){return CHX;}, get CHY(){return CHY;}, chunkDims:()=>[CHX,CHY,NCHUNK],
+      chunkRebuildCount(id){ _chunkRebuilds=0; LAYERMAP[id].ensure(); return _chunkRebuilds; } } };
+
+})();
+</script>
+</body>
+</html>

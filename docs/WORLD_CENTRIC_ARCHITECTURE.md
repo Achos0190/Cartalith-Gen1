@@ -114,7 +114,12 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
   (places/settlements as lon/lat points, routes as LineStrings, per-faction area summary). Tiered
   procedural settlement **symbols** (hamlet/town/city/metropolis). Save schema consolidated (v13).
   Deferred sub-item (architecturally optional): ZIP asset-pack import for sprite/texture packs.
-- **P5 — Performance:** worker-offloaded heavy nodes, R32F GPU layers, spatial indexing.
+- **P5 — Performance (v0.15 — core shipped):** **dirty-region chunked raster rendering** — each layer is
+  tiled into 32×32 chunks; a local brush/territory edit marks only the touched chunks dirty and `ensure()`
+  rebuilds just those (perf HUD shows N/total chunks), instead of rebuilding the whole W×H image. Plus a
+  uniform-grid **spatial index** for O(1) vector picking, and the already-present lazy/debounced downstream
+  recompute. Remaining (hardware-bound, browser-verified-only, like the engine's GPU/worker paths):
+  Web-Worker offload of heavy commands + R32F GPU layers.
 
 > **Command vs node.** Cheap, deterministic-from-params stages are auto-recomputing graph **nodes**
 > (continents…infrastructure). Expensive, iterative, partly-stochastic stages (erosion now; full
@@ -123,8 +128,17 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
 > contract — "expensive simulations produce cached datasets that become editable," never continuously
 > re-simulated.
 
-## 6. What v0.08 deliberately does NOT yet have
+## 6. Phase status (P1–P5 core complete)
 
-Full v0.07 feature parity (the mature route/politics/planner editor, the full erosion suite, asset
-compiler, LOD atlas). Those migrate in P2–P4. v0.08 is the **spine** — correct architecture first, then
-pour the existing tested capability into it without re-introducing the multi-app split.
+| Phase | Version | What landed |
+|-------|---------|-------------|
+| P1 — Foundation | v0.08 | World model · one renderer (layer stack) · one tool framework · dependency graph · workspaces · GIS UX (layer manager, inspector, measure, save/load) |
+| P2 — Engine science | v0.09–v0.12 | hydraulic erosion + endorheic lakes · structured typed tectonics (belts/trenches/arcs/rifts) · stream-power + glacial erosion kernels · weather-v2 advection + Köppen |
+| P3 — Content | v0.13 | Place / Route (least-cost) / Territory tools · politics, routes, places layers · all persisted |
+| P4 — Export & symbols | v0.14 | composite + per-layer PNG · GeoJSON features (lon/lat) + faction areas · tiered settlement symbols |
+| P5 — Performance | v0.15 | dirty-region chunked rasters · spatial vector index · lazy/debounced recompute |
+
+**Remaining (deliberately deferred, architecturally optional / hardware-bound):** ZIP sprite/texture
+asset-pack import; politics *timeline* (per-era slices) + journey planner depth; Web-Worker offload of
+heavy commands + R32F GPU layers (browser-verified-only, exactly as the `elevation_foundation` flags them).
+None of these change the world-centric architecture — they pour additional capability into the same spine.

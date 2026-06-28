@@ -103,8 +103,12 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
     field (trade easterlies / mid-lat westerlies / polar easterlies) drives **downwind moisture advection**
     (ocean saturates the airmass; orographic rainout + drying crossing land → rain shadows + dry interiors).
     A **Köppen** node (`classifyKoppen`, A/B/C/D/E + subtypes) renders as its own layer, with a Wind layer.
-- **P3 — Cartograph content:** routes/ways/places with traits & economics, politics-timeline layers,
-  journey planner — as vector layers + tools on the same World (no separate editor).
+- **P3 — Cartograph content (v0.13 — core shipped):** editable content as tools on the same World — a
+  **Place** tool (drop/select/Delete settlements → `vectors.places`), a **Route** tool (terrain-aware
+  least-cost trade routes via Dijkstra over a slope/water cost field, Esc commits → `vectors.userRoutes`),
+  and a **Territory** tool (paint political ownership per faction → `cells.region`). New Places / Trade
+  routes / Political-territory layers; all persist in the project save; Civilization workspace wired to
+  them. Follow-ups: settlement economics/traits, politics *timeline* (per-era slices), journey planner.
 - **P4 — Assets & export:** asset-pack module feeding splat/icons/symbols across every layer; save schema
   v10; tiled-LOD/atlas chunk store for very large worlds (chunked storage + dirty-region tiles).
 - **P5 — Performance:** worker-offloaded heavy nodes, R32F GPU layers, spatial indexing.

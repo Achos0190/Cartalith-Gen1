@@ -98,7 +98,11 @@ settlement seeding; least-cost (Dijkstra/MST) roads. Heavier engine science swap
     (Priority-Flood sink-fill → drainage area → `E = K·Aᵐ·Sⁿ / rock-resistance`, anti-ridge clamp →
     dendritic river valleys) and **glacial** (cold-gated abrasion → U-trough over-deepening). Both bake
     into `erosionDelta` and drive the cascade. `priorityFill` is now the shared flood routine (lakes +
-    stream routing). Next P2 nodes: weather-v2 winds, Köppen climate.
+    stream routing).
+  - **Weather + Köppen (v0.12 — P2 COMPLETE):** the climate node is now weather-v2 — a latitude-band wind
+    field (trade easterlies / mid-lat westerlies / polar easterlies) drives **downwind moisture advection**
+    (ocean saturates the airmass; orographic rainout + drying crossing land → rain shadows + dry interiors).
+    A **Köppen** node (`classifyKoppen`, A/B/C/D/E + subtypes) renders as its own layer, with a Wind layer.
 - **P3 — Cartograph content:** routes/ways/places with traits & economics, politics-timeline layers,
   journey planner — as vector layers + tools on the same World (no separate editor).
 - **P4 — Assets & export:** asset-pack module feeding splat/icons/symbols across every layer; save schema

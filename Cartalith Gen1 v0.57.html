@@ -608,7 +608,8 @@ details.acc[open]>summary{color:var(--accent)}
     <div id="civPanel" style="display:none">
       <div class="sec">
         <h2>Factions</h2>
-        <div id="civFactionPicker" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"></div>
+        <div id="civFactionPicker" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
+        <div class="hint" style="margin-bottom:6px;font-size:.75rem">Double-click a faction to rename it.</div>
         <div class="row"><label>Territory radius</label><input type="range" id="civTerRadius" min="1" max="20" value="5"><span class="val" id="civTerRadiusV">5</span></div>
       </div>
       <div class="sec">
@@ -639,6 +640,10 @@ details.acc[open]>summary{color:var(--accent)}
         <div id="civPlaceEditor"></div>
       </div>
       <div class="sec">
+        <h2>Routes</h2>
+        <div id="civRouteList"><div class="hint">No routes yet. Use <b>Auto-routes</b> or the <b>Route</b> tool.</div></div>
+      </div>
+      <div class="sec">
         <h2>Journey planner</h2>
         <div class="row"><label>Mode</label>
           <select id="civTravelMode" style="flex:1">
@@ -649,7 +654,7 @@ details.acc[open]>summary{color:var(--accent)}
           </select>
         </div>
         <canvas id="civProfileCv" width="220" height="48" style="width:100%;margin:4px 0;border-radius:4px;background:#14110c"></canvas>
-        <div id="civPlanner"><div class="hint">Draw a route with the Route tool, then commit it (press Esc or switch tool) to plan a journey.</div></div>
+        <div id="civPlanner"><div class="hint">Select a route above, or draw one with the Route tool and press Esc to commit.</div></div>
       </div>
       <div class="sec">
         <h2>Politics timeline</h2>
@@ -7641,11 +7646,13 @@ const CIV_BIOME_SPEED=[1,0.55,0.7,0.7,0.7,1.1,0.85,1.0,0.65,0.5,0.45,0.55,0.6,0.
 let civTerritory = null;      // Uint8Array(GW*GH) — faction index per cell
 let civTimeline  = [];        // [{year, data:[i,fid,...]}]
 let civYear      = 0;
-let civRoutes    = [];        // committed journey routes: [{pts:[[x,y],...], km}]
+let civRoutes    = [];        // committed journey routes: [{pts:[[x,y],...], km, sea, name}]
+let civFactionNames = CIV_FACTIONS.map(f=>f[0]); // editable faction names, index-matched to CIV_FACTIONS
 let _civWaypoints = [];       // in-progress route waypoints [x,y]
 let _civActiveFaction = 1;
 let _civTerRadius = 5;
 let _civSelectedPlace = null; // reference into state.places[]
+let _civSelectedRouteIdx = -1; // selected route index for planner panel
 let _civTool = 'inspect';     // 'inspect'|'place'|'territory'|'route'
 let _civPainting = false;
 
@@ -7734,23 +7741,26 @@ function drawCivLayer(){
     civCtx.putImageData(img,0,0);
   }
 
-  // 2. Committed journey routes (land = green dashed, sea = blue dashed)
+  // 2. Committed journey routes (land = green dashed, sea = blue dashed; selected = brighter)
   // rsc: scale line widths with GW so routes stay proportional at any resolution
   const rsc=Math.max(1,GW/512);
   civCtx.save(); civCtx.lineCap='round'; civCtx.lineJoin='round';
-  for(const rt of civRoutes){
-    if(!rt.pts||rt.pts.length<2) continue;
+  civRoutes.forEach((rt,ri)=>{
+    if(!rt.pts||rt.pts.length<2) return;
+    const sel=(ri===_civSelectedRouteIdx);
     civCtx.beginPath();
     rt.pts.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
     if(rt.sea){
-      civCtx.strokeStyle='rgba(10,30,60,.45)'; civCtx.lineWidth=3*rsc; civCtx.stroke();
-      civCtx.strokeStyle='rgba(40,160,220,.85)'; civCtx.setLineDash([4*rsc,3*rsc]); civCtx.lineWidth=1.6*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(10,30,60,.45)'; civCtx.lineWidth=(sel?5:3)*rsc; civCtx.stroke();
+      civCtx.strokeStyle=sel?'rgba(80,210,255,.98)':'rgba(40,160,220,.85)';
+      civCtx.setLineDash([4*rsc,3*rsc]); civCtx.lineWidth=(sel?2.5:1.6)*rsc; civCtx.stroke();
     } else {
-      civCtx.strokeStyle='rgba(30,20,10,.5)'; civCtx.lineWidth=2.5*rsc; civCtx.stroke();
-      civCtx.strokeStyle='rgba(140,200,100,.9)'; civCtx.setLineDash([3*rsc,2*rsc]); civCtx.lineWidth=1.3*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(30,20,10,.5)'; civCtx.lineWidth=(sel?4:2.5)*rsc; civCtx.stroke();
+      civCtx.strokeStyle=sel?'rgba(210,255,140,.98)':'rgba(140,200,100,.9)';
+      civCtx.setLineDash([3*rsc,2*rsc]); civCtx.lineWidth=(sel?2:1.3)*rsc; civCtx.stroke();
     }
     civCtx.setLineDash([]);
-  }
+  });
   // In-progress route preview
   if(_civWaypoints.length>=2){
     civCtx.beginPath();
@@ -7841,7 +7851,7 @@ function _civRenderPlaceEditor(){
   const settleOpts=CIV_SETTLEMENT_CLASSES.map(c=>`<option value="${c.key}"${!isPOI&&p.kind===c.key?' selected':''}>${c.glyph} ${c.label}</option>`).join('');
   const poiOpts=CIV_POI_TYPES.map(t=>`<option value="${t.key}"${isPOI&&p.kind===t.key?' selected':''}>${t.glyph} ${t.label}</option>`).join('');
   const traitHtml=CIV_TRAITS.map(t=>`<span class="pill${p.traits.includes(t.key)?' on':''}" data-trait="${t.key}">${t.glyph} ${t.label}</span>`).join('');
-  const facOpts=CIV_FACTIONS.map((f,i)=>`<option value="${i}"${p.faction===i?' selected':''}>${f[0]}</option>`).join('');
+  const facOpts=CIV_FACTIONS.map((f,i)=>`<option value="${i}"${p.faction===i?' selected':''}>${civFactionNames[i]||f[0]}</option>`).join('');
   host.innerHTML=`
     <div class="row"><label>Name</label><input id="_civPeName" type="text" style="flex:1" value="${(p.name||'').replace(/"/g,'&quot;')}"></div>
     <div class="row"><label>Category</label><select id="_civPeCat" style="flex:1">
@@ -7874,6 +7884,127 @@ function _civRenderPlaceEditor(){
     const idx=state.places.indexOf(p); if(idx>=0) state.places.splice(idx,1);
     _civSelectedPlace=null; _civRenderPlaceEditor(); renderNow();
   };
+}
+
+/* ---- route list & station spine ---- */
+
+/* Find settlements that lie close to a route path, ordered by their arc-length position.
+   Returns [{place, t}] where t ∈ [0,1] is arc-length fraction along the route. */
+function _civStationsAlongRoute(pts){
+  if(!pts||pts.length<2) return [];
+  const snapD=Math.max(8,GW/50); // snap radius in grid cells
+  const snapD2=snapD*snapD;
+  // compute cumulative arc-lengths
+  const cum=[0];
+  for(let k=1;k<pts.length;k++) cum.push(cum[k-1]+Math.hypot(pts[k][0]-pts[k-1][0],pts[k][1]-pts[k-1][1]));
+  const total=cum[cum.length-1];
+  if(total<1) return [];
+  const found=[];
+  for(const p of state.places){
+    if(CIV_POI_KEYS.has(p.kind)) continue; // skip POIs
+    let bestD2=snapD2, bestT=0;
+    for(let k=0;k<pts.length;k++){
+      const d2=(p.x-pts[k][0])**2+(p.y-pts[k][1])**2;
+      if(d2<bestD2){ bestD2=d2; bestT=cum[k]/total; }
+    }
+    if(bestD2<snapD2) found.push({place:p, t:bestT});
+  }
+  found.sort((a,b)=>a.t-b.t);
+  // de-duplicate: drop if another settlement is closer in t
+  const deduped=[];
+  for(const s of found){
+    if(!deduped.length||s.t-deduped[deduped.length-1].t>0.02) deduped.push(s);
+  }
+  return deduped;
+}
+
+/* Render the route list panel and update journey planner when route is selected */
+function _civRenderRouteList(){
+  const el=document.getElementById('civRouteList');
+  if(!el) return;
+  if(!civRoutes.length){
+    el.innerHTML='<div class="hint">No routes yet. Use <b>Auto-routes</b> or the <b>Route</b> tool.</div>';
+    return;
+  }
+  el.innerHTML='';
+  const mode=(document.getElementById('civTravelMode')||{}).value||'horse';
+  civRoutes.forEach((rt,ri)=>{
+    const sel=(ri===_civSelectedRouteIdx);
+    const name=rt.name||('Route '+(ri+1));
+    const typeIcon=rt.sea?'⛵':'🛤';
+    const kmStr=rt.km!=null?rt.km.toFixed(0)+' km':'';
+    const card=document.createElement('div');
+    card.style.cssText='border-radius:6px;padding:5px 8px;cursor:pointer;border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'var(--panel-darker)':'var(--panel)');
+    // Header row
+    const header=document.createElement('div');
+    header.style.cssText='display:flex;align-items:center;gap:6px;';
+    const typeSpan=document.createElement('span'); typeSpan.textContent=typeIcon; typeSpan.style.fontSize='12px';
+    const nameInput=document.createElement('input');
+    nameInput.type='text'; nameInput.value=name;
+    nameInput.style.cssText='flex:1;background:transparent;border:none;border-bottom:1px solid '+(sel?'var(--accent)':'transparent')+';color:var(--text);font-size:.85rem;font-weight:600;padding:1px 2px;outline:none;min-width:0';
+    nameInput.onclick=e=>e.stopPropagation();
+    nameInput.oninput=()=>{ rt.name=nameInput.value; };
+    nameInput.onfocus=()=>{ nameInput.style.borderBottomColor='var(--accent)'; };
+    nameInput.onblur=()=>{ nameInput.style.borderBottomColor='transparent'; };
+    const metaSpan=document.createElement('span');
+    metaSpan.style.cssText='font-size:.72rem;color:var(--muted);flex-shrink:0;';
+    metaSpan.textContent=kmStr;
+    const delBtn=document.createElement('button');
+    delBtn.textContent='×'; delBtn.title='Delete route';
+    delBtn.style.cssText='padding:0 5px;font-size:.9rem;border-color:var(--warn);flex-shrink:0;';
+    delBtn.onclick=e=>{ e.stopPropagation(); civRoutes.splice(ri,1); if(_civSelectedRouteIdx>=civRoutes.length) _civSelectedRouteIdx=-1; _civRenderRouteList(); _civUpdatePlanner(null); renderNow(); };
+    header.append(typeSpan, nameInput, metaSpan, delBtn);
+    card.appendChild(header);
+    // Station spine (only for selected)
+    if(sel){
+      const stations=_civStationsAlongRoute(rt.pts);
+      if(stations.length>=2){
+        const spine=document.createElement('div');
+        spine.style.cssText='margin-top:5px;padding-top:5px;border-top:1px dashed var(--border);';
+        let html='';
+        stations.forEach((s,si)=>{
+          const klass=CIV_SETTLEMENT_CLASSES.find(c=>c.key===(s.place.kind||'town'))||CIV_SETTLEMENT_CLASSES[2];
+          html+=`<div style="display:flex;align-items:center;gap:5px;font-size:.78rem;">
+            <span style="color:var(--accent)">${klass.glyph}</span>
+            <span style="font-weight:600">${s.place.name||'(unnamed)'}</span>
+            <span style="color:var(--muted);font-size:.68rem">${klass.label}</span>
+          </div>`;
+          if(si<stations.length-1){
+            const t0=stations[si].t, t1=stations[si+1].t;
+            const segKm=((t1-t0)*rt.km).toFixed(0);
+            const total=rt.pts.length;
+            const i0=Math.round(t0*(total-1)), i1=Math.round(t1*(total-1));
+            const segPts=rt.pts.slice(i0,i1+1);
+            const plan=_civPlanJourney(segPts,mode);
+            const legDays=plan?plan.days.toFixed(1):'?';
+            html+=`<div style="display:flex;align-items:center;gap:5px;padding:1px 0 1px 14px;color:var(--muted);font-size:.7rem;font-style:italic">
+              <span style="width:2px;background:var(--border);align-self:stretch"></span>
+              <span>${segKm} km · ${legDays} d</span>
+            </div>`;
+          }
+        });
+        spine.innerHTML=html;
+        card.appendChild(spine);
+      }
+      // Journey summary
+      const plan=_civPlanJourney(rt.pts,mode);
+      if(plan){
+        const dStr=plan.days<1?Math.round(plan.days*24)+' h':plan.days<60?plan.days.toFixed(1)+' days':(plan.days/30).toFixed(1)+' months';
+        const summ=document.createElement('div');
+        summ.style.cssText='margin-top:4px;font-size:.75rem;color:var(--muted);';
+        summ.textContent=`Total: ${plan.km.toFixed(0)} km · ${dStr} · ${plan.tMin.toFixed(0)}–${plan.tMax.toFixed(0)} °C`;
+        card.appendChild(summ);
+      }
+    }
+    card.addEventListener('click', ()=>{
+      _civSelectedRouteIdx=(sel?-1:ri);
+      _civRenderRouteList();
+      if(!sel) _civUpdatePlanner(rt.pts);
+      else _civUpdatePlanner(null);
+      drawCivLayer();
+    });
+    el.appendChild(card);
+  });
 }
 
 /* ---- journey planner ---- */
@@ -7929,7 +8060,7 @@ function _civUpdatePlanner(route){
   const plan=_civPlanJourney(route,mode);
   _civDrawProfile(plan);
   const el=document.getElementById('civPlanner'); if(!el) return;
-  if(!plan){ el.innerHTML='<div class="hint">Draw a route to plan a journey.</div>'; return; }
+  if(!plan){ el.innerHTML='<div class="hint">Select a route above, or draw one with the Route tool and press Esc to commit.</div>'; return; }
   const dStr=plan.days<1?Math.round(plan.days*24)+' h':plan.days<60?plan.days.toFixed(1)+' days':(plan.days/30).toFixed(1)+' months';
   el.innerHTML=`<div class="insp-row"><span class="k">Distance</span><span class="val">${plan.km.toFixed(0)} km</span></div>
     <div class="insp-row"><span class="k">Travel (${plan.mode})</span><span class="val">${dStr}</span></div>
@@ -8191,12 +8322,14 @@ function _civMstRoutes(places, isSea){
   const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
 
   // Build cost grid at downsampled resolution
+  // Sea routes: use 1e6 for land (not 60) so routes strongly prefer water.
+  // If no sea path exists (disconnected ports), dist stays Infinity → no MST edge → correct.
   let cost;
   if(isSea){
     cost=new Float32Array(RW*RH);
     for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
       const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-      cost[y*RW+x]=field[fy*GW+fx]<sea?1:60;
+      cost[y*RW+x]=field[fy*GW+fx]<sea?1:1e6;
     }
   } else {
     const dfld=new Float32Array(RW*RH);
@@ -8229,26 +8362,34 @@ function _civMstRoutes(places, isSea){
     for(let v=0;v<n;v++){
       if(inM[v]) continue;
       const d=results[u].dist[rp[v]];
-      if(d<best[v]){ best[v]=d; from[v]=u; }
+      if(isFinite(d)&&d<best[v]){ best[v]=d; from[v]=u; }
     }
   }
 
-  // Reconstruct paths from Dijkstra prev arrays
+  // Reconstruct paths from Dijkstra prev arrays, then smooth with Catmull-Rom
   const routes=[];
   for(const[a,b] of edges){
     const pa=places[a], pb=places[b], prev=results[a].prev;
-    const pts=[];
+    const raw=[];
     let ci=rp[b]; const si=rp[a]; let guard=RW*RH;
     while(ci!==si&&ci>=0&&guard-->0){
       const rx=ci%RW, ry=(ci/RW)|0;
-      pts.push([((rx+0.5)/sc)|0,((ry+0.5)/sc)|0]);
+      raw.push({x:(rx+0.5)/sc, y:(ry+0.5)/sc});
       const pv=prev[ci]; if(pv<0||pv===ci) break; ci=pv;
     }
-    pts.push([pa.x,pa.y]); pts.reverse();
-    if(pts[pts.length-1][0]!==pb.x||pts[pts.length-1][1]!==pb.y) pts.push([pb.x,pb.y]);
+    raw.push({x:pa.x,y:pa.y}); raw.reverse();
+    if(raw[raw.length-1].x!==pb.x||raw[raw.length-1].y!==pb.y) raw.push({x:pb.x,y:pb.y});
+    if(raw.length<2) continue;
+    // Smooth: RDP simplify then Catmull-Rom resample
+    const simplified=rdpSimplify(raw,1.5);
+    const smooth=catmullRomSample(simplified,3);
+    const pts=smooth.map(p=>[Math.round(p.x),Math.round(p.y)]);
     if(pts.length>1){
       const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
-      routes.push({pts,km,sea:!!isSea});
+      // Auto-name: "PlaceA → PlaceB" from endpoint settlements
+      const nameA=pa.name||'', nameB=pb.name||'';
+      const name=(nameA&&nameB)?nameA+' → '+nameB:(nameA||nameB||'');
+      routes.push({pts,km,sea:!!isSea,name});
     }
   }
   return routes;
@@ -8306,6 +8447,8 @@ function _civAutoRoutes(){
   const ports=state.places.filter(p=>p.traits&&p.traits.includes('port'));
   if(ports.length>=2) civRoutes.push(..._civMstRoutes(ports,true));
 
+  _civSelectedRouteIdx=-1;
+  _civRenderRouteList();
   renderNow();
 }
 
@@ -8354,23 +8497,23 @@ function _civDijkstraPath(sx,sy,ex,ey){
   const rsx=Math.min(RW-1,Math.round(sx*sc)), rsy=Math.min(RH-1,Math.round(sy*sc));
   const rex=Math.min(RW-1,Math.round(ex*sc)), rey=Math.min(RH-1,Math.round(ey*sc));
   const {prev}=roadDijkstra(cost,RW,RH,rsx,rsy,!!state.world);
-  const pts=[];
+  const raw=[];
   let ci=rey*RW+rex;
   const si=rsy*RW+rsx;
   let guard=RW*RH;
   while(ci!==si&&ci>=0&&guard-->0){
     const rx=ci%RW, ry=(ci/RW)|0;
-    pts.push([(rx+0.5)/sc|0, (ry+0.5)/sc|0]);
+    raw.push({x:(rx+0.5)/sc, y:(ry+0.5)/sc});
     const p=prev[ci];
     if(p<0||p===ci) break;
     ci=p;
   }
-  pts.push([sx,sy]);
-  pts.reverse();
-  // Always include the endpoint so routes reach their destination even when
-  // source and dest fall in the same downsampled cell.
-  if(pts.length<2||(pts[pts.length-1][0]!==ex||pts[pts.length-1][1]!==ey)) pts.push([ex,ey]);
-  return pts;
+  raw.push({x:sx,y:sy}); raw.reverse();
+  if(raw.length<2||(raw[raw.length-1].x!==ex||raw[raw.length-1].y!==ey)) raw.push({x:ex,y:ey});
+  // Smooth: RDP simplify then Catmull-Rom resample for natural curves
+  const simplified=rdpSimplify(raw,1.5);
+  const smooth=catmullRomSample(simplified,3);
+  return smooth.map(p=>[Math.round(p.x),Math.round(p.y)]);
 }
 
 /* Commit route on Esc or tool switch — Dijkstra-paths between consecutive waypoints */
@@ -8384,7 +8527,9 @@ function _civCommitRoute(){
       pts.push(...seg);
     }
     const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
-    civRoutes.push({pts,km});
+    civRoutes.push({pts,km,name:'',sea:false});
+    _civSelectedRouteIdx=civRoutes.length-1;
+    _civRenderRouteList();
     _civUpdatePlanner(pts);
   }
   _civWaypoints=[];
@@ -8409,8 +8554,9 @@ function _civSyncToState(){
   state.civ={
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
-    routes:civRoutes.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea})),
+    routes:civRoutes.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,name:r.name||''})),
     year:civYear,
+    factionNames:[...civFactionNames],
   };
 }
 function _civSyncFromState(){
@@ -8421,9 +8567,12 @@ function _civSyncFromState(){
     const d=c.territory; for(let k=0;k<d.length;k+=2) if(d[k]<civTerritory.length) civTerritory[d[k]]=d[k+1];
   } else { civTerritory=null; }
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
-  civRoutes=(c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea}));
+  civRoutes=(c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,name:r.name||''}));
   civYear=c.year||0;
+  if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];
   _civBuildTimelineUI();
+  _civBuildFactionPicker();
+  _civRenderRouteList();
 }
 
 /* Sync state.civ before export so it travels in params.json */
@@ -8452,9 +8601,10 @@ function _civSyncFromState(){
   generate=async function(){
     // Only clear if _imported flag is false (fresh procedural world)
     civTerritory=null; civRoutes=[]; civTimeline=[]; civYear=0;
+    _civSelectedRouteIdx=-1;
     state.civ={territory:[],timeline:[],routes:[],year:0};
     _civSelectedPlace=null; _civWaypoints=[];
-    _civRenderPlaceEditor(); _civBuildTimelineUI();
+    _civRenderPlaceEditor(); _civBuildTimelineUI(); _civRenderRouteList();
     const r=await _origGenerate.apply(this,arguments);
     drawCivLayer();
     return r;
@@ -8466,14 +8616,44 @@ function _civBuildFactionPicker(){
   const el=document.getElementById('civFactionPicker'); if(!el) return;
   el.innerHTML='';
   CIV_FACTIONS.slice(1).forEach((f,i)=>{
+    const fid=i+1;
+    const name=civFactionNames[fid]||f[0];
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;align-items:center;gap:2px';
     const btn=document.createElement('button');
-    btn.className='pill'+((_civActiveFaction===i+1)?' on':'');
+    btn.className='pill'+((_civActiveFaction===fid)?' on':'');
     btn.style.background=`rgb(${f[1].join(',')})`;
     btn.style.color='#fff'; btn.style.fontWeight='600';
-    btn.textContent=f[0];
-    btn.onclick=()=>{ _civActiveFaction=i+1; _civBuildFactionPicker(); };
-    el.appendChild(btn);
+    btn.textContent=name;
+    btn.title='Click to select · double-click to rename';
+    btn.onclick=()=>{ _civActiveFaction=fid; _civBuildFactionPicker(); };
+    btn.ondblclick=e=>{ e.stopPropagation(); _civRenameFaction(fid, name); };
+    wrap.appendChild(btn);
+    el.appendChild(wrap);
   });
+}
+
+/* Inline faction rename: swap the pill for an input, confirm on Enter/blur */
+function _civRenameFaction(fid, currentName){
+  const el=document.getElementById('civFactionPicker'); if(!el) return;
+  const btns=el.querySelectorAll('button');
+  const idx=fid-1;
+  if(idx<0||idx>=btns.length) return;
+  const btn=btns[idx];
+  const inp=document.createElement('input');
+  inp.type='text'; inp.value=currentName;
+  inp.style.cssText='font-size:.82rem;padding:3px 6px;border-radius:10px;border:1px solid var(--accent);width:90px;color:var(--text);background:var(--panel2);';
+  const confirm=()=>{
+    const v=inp.value.trim();
+    if(v) civFactionNames[fid]=v;
+    _civBuildFactionPicker();
+    // refresh place editor if open
+    if(_civSelectedPlace) _civRenderPlaceEditor();
+  };
+  inp.onkeydown=e=>{ if(e.key==='Enter') confirm(); if(e.key==='Escape') _civBuildFactionPicker(); };
+  inp.onblur=confirm;
+  btn.replaceWith(inp);
+  inp.focus(); inp.select();
 }
 
 function _civSetTool(tool){
@@ -8482,22 +8662,12 @@ function _civSetTool(tool){
   document.querySelectorAll('#civToolSeg button').forEach(b=>b.classList.toggle('on',b.dataset.civtool===tool));
 }
 
-/* clear civ layer when generate() runs a new world */
-{
-  const _origGenerate=generate;
-  generate=async function(){
-    civTerritory=null; civRoutes=[]; civTimeline=[]; civYear=0;
-    _civSelectedPlace=null; _civWaypoints=[];
-    _civRenderPlaceEditor(); _civBuildTimelineUI();
-    const r=await _origGenerate.apply(this,arguments);
-    drawCivLayer();
-    return r;
-  };
-}
+/* duplicate generate() wrapper removed — handled above in the persistence section */
 
 /* init wiring — runs after DOM is ready */
 (function(){
   _civBuildFactionPicker();
+  _civRenderRouteList();
 
   const terR=document.getElementById('civTerRadius');
   const terRV=document.getElementById('civTerRadiusV');
@@ -8523,15 +8693,16 @@ function _civSetTool(tool){
   if(buildR) buildR.onclick=()=>_civConnectRoads();
 
   const clearR=document.getElementById('civClearRoadsBtn');
-  if(clearR) clearR.onclick=()=>{ state.roads=null; civRoutes=[]; renderNow(); };
+  if(clearR) clearR.onclick=()=>{ state.roads=null; civRoutes=[]; _civSelectedRouteIdx=-1; _civRenderRouteList(); _civUpdatePlanner(null); renderNow(); };
 
   const clearP=document.getElementById('civClearPlacesBtn');
   if(clearP) clearP.onclick=()=>{ state.places=[]; state.roads=null; _civSelectedPlace=null; _civRenderPlaceEditor(); renderNow(); };
 
   const modeEl=document.getElementById('civTravelMode');
   if(modeEl) modeEl.onchange=()=>{
-    const last=civRoutes.length?civRoutes[civRoutes.length-1]:null;
-    if(last) _civUpdatePlanner(last.pts);
+    const sel=_civSelectedRouteIdx>=0?civRoutes[_civSelectedRouteIdx]:null;
+    if(sel) _civUpdatePlanner(sel.pts);
+    _civRenderRouteList(); // refresh station leg times
   };
 
   const addYearBtn=document.getElementById('civTlAddYearBtn');

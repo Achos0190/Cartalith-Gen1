@@ -140,6 +140,18 @@ details.acc[open]>summary::before{content:'▾  '}
 details.acc[open]>summary{color:var(--accent)}
 .sublabel-grp{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);margin:16px 0 7px;font-weight:600}
 .estimate{font-family:var(--mono);font-size:11px;color:var(--accent2);margin:6px 0 2px}
+/* ---- generate/explore sub-tab bars ---- */
+.subtab-bar{display:flex;border-bottom:2px solid var(--line);flex-shrink:0;background:var(--panel)}
+.subtab{flex:1;padding:9px 4px;background:transparent;border:0;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--dim);cursor:pointer;font:inherit;font-size:11px;letter-spacing:.04em;text-transform:uppercase;transition:color .12s;border-radius:0}
+.subtab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.subtab:hover:not(.on){color:var(--ink);border-color:transparent}
+/* ---- category-level accordions (Geology, Hydrology, etc.) ---- */
+details.cat-acc{border-bottom:1px solid var(--line)}
+details.cat-acc>summary{cursor:pointer;list-style:none;padding:11px 16px;color:var(--dim);font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;user-select:none;display:flex;align-items:center}
+details.cat-acc>summary::-webkit-details-marker{display:none}
+details.cat-acc>summary::before{content:'▸  ';color:var(--faint)}
+details.cat-acc[open]>summary::before{content:'▾  '}
+details.cat-acc[open]>summary{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -189,15 +201,25 @@ details.acc[open]>summary{color:var(--accent)}
 
   <aside>
     <div id="tabBar">
-      <button class="tab on" data-tab="world">World</button>
-      <button class="tab" data-tab="terrain">Terrain</button>
-      <button class="tab" data-tab="climate">Climate</button>
-      <button class="tab" data-tab="display">Display</button>
-      <button class="tab" data-tab="civ">Civ</button>
+      <button class="tab on" data-tab="generate">Generate</button>
+      <button class="tab" data-tab="explore">Explore</button>
+      <button class="tab" data-tab="edit">Edit</button>
       <button class="tab" data-tab="export">Export</button>
     </div>
 
-    <!-- ══ WORLD: Source, Planet, Scale, World Structure ══ -->
+    <!-- ══ GENERATE ══ -->
+    <div id="generatePanel">
+    <div class="subtab-bar" id="genSubBar">
+      <button class="subtab on" data-gsub="world">World</button>
+      <button class="subtab" data-gsub="civ">Civilization</button>
+    </div>
+
+    <!-- World sub-panel -->
+    <div id="genWorld">
+
+    <!-- GEOLOGY: Source, Planet, Scale, World Structure, Tectonics, Volcanism -->
+    <details class="cat-acc" open>
+    <summary>Geology</summary>
     <div id="worldPanel">
     <div class="sec">
       <h2>Source &amp; resolution</h2>
@@ -268,10 +290,8 @@ details.acc[open]>summary{color:var(--accent)}
       </div>
       <div class="hint">When enabled a Continentality field is generated first: continental plates settle in high-field zones, oceanic in low, and a large-scale elevation bias anchors the land/sea split. Continental interiors become drier. <b>Disabled (default):</b> existing random plate generation — identical to current behaviour. All tectonic sliders below remain editable as fine-tuning on top of whichever archetype is active.</div>
     </div>
-    </div><!-- end worldPanel -->
+    </div><!-- end worldPanel (Geology inner) -->
 
-    <!-- ══ TERRAIN: Tectonics, Volcanism, Erosion, Glacial, Coastal, Places, Sculpt ══ -->
-    <div id="terrainPanel" style="display:none">
     <div class="sec">
       <h2>Tectonics</h2>
       <div class="row"><label>Plates</label><input type="range" id="plates" min="4" max="40" step="1" value="14"><span class="val" id="platesV">14</span></div>
@@ -305,6 +325,12 @@ details.acc[open]>summary{color:var(--accent)}
       <div class="row"><label>Crater age</label><input type="range" id="crata" min="0" max="100" step="1" value="50"><span class="val" id="crataV">0.50</span></div>
       <div class="hint">Built into the world after mountain-building. Volcanoes cluster on plate boundaries (arcs &amp; rifts) with power-law sizes; impacts scatter by Poisson with D⁻² sizes. Both degrade with age. Re-erode to weather them.</div>
     </div>
+
+    </details><!-- end Geology cat-acc -->
+
+    <!-- HYDROLOGY: Erosion, Glacial, Coastal -->
+    <details class="cat-acc">
+    <summary>Hydrology</summary>
 
     <div class="sec">
       <h2>Erosion</h2>
@@ -374,68 +400,15 @@ details.acc[open]>summary{color:var(--accent)}
       <div class="hint">Three coastal processes in one pass. <b>Sea cliffs</b>: wave energy erodes exposed coastal cells and leaves steep cliff faces (run multiple times to carve retreating cliffs). <b>Estuaries</b>: high-flow river mouths near sea level are widened with an exponential taper — funnel-shaped inlets emerge where major rivers meet the coast. <b>Tidal marsh</b>: the narrow, flat intertidal band is roughened with organic micro-relief. Run after stream-power carve so river mouths are established.</div>
     </div>
 
-    <div class="sec">
-      <h2>Places &amp; roads</h2>
-      <label class="chk"><input type="checkbox" id="placeChk"> Add places (click the map to drop / remove a place)</label>
-      <div class="btnrow" style="margin-top:6px"><button class="accent" id="roadsBtn">Connect roads</button><button id="clearRoadsBtn">Clear roads</button><button id="clearPlacesBtn">Clear places</button></div>
-      <div class="hint">Designate places by clicking the map (enable <b>Add places</b> first). <b>Connect roads</b> draws terrain-aware least-cost roads between them — a minimum spanning tree that hugs valleys and mountain passes, avoids steep ground (slope²) and never crosses the sea (places on separate landmasses simply get no road). Akin to Cartalith's route lines.</div>
-    </div>
+    </details><!-- end Hydrology cat-acc -->
 
-    <div class="sec">
-      <h2>Feature brush (plotline)</h2>
-      <div class="sublabel">1. Pick feature &nbsp; 2. Draw a guide stroke on the map &nbsp; 3. Apply</div>
-      <div class="seg" id="featureSeg">
-        <button data-feat="mountainRange" class="on">Mtns</button>
-        <button data-feat="hills">Hills</button>
-        <button data-feat="ridge">Ridge</button>
-        <button data-feat="plateau">Plateau</button>
-        <button data-feat="river">River</button>
-        <button data-feat="canyon">Canyon</button>
-        <button data-feat="escarpment">Scarp</button>
-      </div>
-      <div class="row"><label>Width (radius)</label><input type="range" id="featRad" min="4" max="120" step="1" value="28"><span class="val" id="featRadV">28</span></div>
-      <div class="row"><label>Strength</label><input type="range" id="featStr" min="1" max="100" step="1" value="45"><span class="val" id="featStrV">0.45</span></div>
-      <div class="btnrow">
-        <button class="accent" id="guideBtn">Draw guide</button>
-        <button id="featApplyBtn" disabled>Apply</button>
-        <button id="featClearBtn">Clear</button>
-      </div>
-      <div class="hint" id="featHint">Tap <b>Draw guide</b>, then drag a freehand stroke on the terrain — the shaded tube shows the affected band. <b>Apply</b> synthesizes the feature along your line with fractal detail. Rivers carve downstream from the start of the stroke toward the end.</div>
-      <div id="featStats" style="font-size:10px;color:var(--fg2);margin-top:4px"></div>
-    </div>
+    <!-- CLIMATE: Climate & biomes, Weather -->
+    <details class="cat-acc">
+    <summary>Climate</summary>
 
-    <div class="sec">
-      <h2>Direct paint</h2>
-      <div class="sublabel">Drag on the terrain to sculpt in real time</div>
-      <div class="seg" id="brushSeg">
-        <button data-brush="raise" class="on">Raise</button>
-        <button data-brush="lower">Lower</button>
-        <button data-brush="smooth">Smooth</button>
-        <button data-brush="cliff">Cliff</button>
-        <button data-brush="ridge">Ridge</button>
-        <button data-brush="canyon">Canyon</button>
-        <button data-brush="mesa">Mesa</button>
-        <button data-brush="volcano">Volc.</button>
-        <button data-brush="water">Water</button>
-      </div>
-      <div class="row" style="margin-top:12px"><label>Radius</label><input type="range" id="brad" min="2" max="80" step="1" value="22"><span class="val" id="bradV">22</span></div>
-      <div class="row"><label>Strength</label><input type="range" id="bstr" min="1" max="100" step="1" value="35"><span class="val" id="bstrV">35%</span></div>
-      <label class="chk"><input type="checkbox" id="lodEditChk"> Edit LOD tiles (sculpt the refined detail)</label>
-      <div class="hint">Drag on the canvas to sculpt — only active in the <b>Terrain tab</b>. Pan with middle-drag, space-drag or mouse wheel. Disabled in debug views. <b>Cliff / Ridge / Canyon</b> follow drag direction. <b>Mesa / Volc.</b> stamp once on tap. <b>Water</b> deposits a lake filled to the clicked height. With <b>Edit LOD tiles</b> on, the same brush sculpts the refined Tiled-LOD detail; edits persist per tile, Ctrl-Z undoes.</div>
-    </div>
-
-    <div class="sec">
-      <h2>Undo</h2>
-      <div class="btnrow"><button id="undoBtn" disabled>Undo last operation</button></div>
-      <div class="hint" id="undoMem">Up to 5 steps saved in memory</div>
-    </div>
-    </div><!-- end terrainPanel -->
-
-    <!-- ══ CLIMATE: Climate & biomes, Weather ══ -->
-    <div id="climatePanel" style="display:none">
     <div class="sec">
       <h2>Climate &amp; biomes</h2>
-      <div class="sublabel">Latitude band this map spans (Region mode — see Map extent in World tab)</div>
+      <div class="sublabel">Latitude band this map spans (Region mode — see Map extent above)</div>
       <div class="row"><label>North edge</label><input type="range" id="latN" min="-90" max="90" step="1" value="55"><span class="val" id="latNV">55°</span></div>
       <div class="row"><label>South edge</label><input type="range" id="latS" min="-90" max="90" step="1" value="5"><span class="val" id="latSV">5°</span></div>
       <div class="sublabel">Temperature</div>
@@ -462,10 +435,234 @@ details.acc[open]>summary{color:var(--accent)}
       <div class="row"><label>Wind →</label><input type="range" id="windDir" min="0" max="360" step="5" value="0"><span class="val" id="windDirV">0°</span></div>
       <div class="hint">Moisture evaporates off the seas (more from warm water), rides the wind, and rains where air climbs terrain or saturates — windward coasts wet, lee interiors dry. <b>Planetary</b> wind = latitude belts (trades / westerlies / polar easterlies; belt count follows day length) bent by thermal lows and highs (pressure influence, Coriolis-deflected) — monsoon-style sea→land flow emerges where summer land runs hot. <b>Manual</b> = one fixed direction (Wind →, region only). Runs on click; more iterations push moisture deeper inland.</div>
     </div>
-    </div><!-- end climatePanel -->
 
-    <!-- ══ DISPLAY: Map view, Tiles & LOD, Map style, Asset pack ══ -->
-    <div id="displayPanel" style="display:none">
+    </details><!-- end Climate cat-acc -->
+
+    <!-- ECOLOGY: River and biome display controls -->
+    <details class="cat-acc">
+    <summary>Ecology</summary>
+    <div class="sec">
+      <label class="chk"><input type="checkbox" id="showRivers" checked> Show rivers in biome view</label>
+      <div class="row"><label>River density</label><input type="range" id="riverDensR" min="30" max="300" step="5" value="100"><span class="val" id="riverDensV">1.00×</span></div>
+      <div class="row"><label>Min stream order</label><input type="range" id="minOrderR" min="1" max="8" step="1" value="1"><span class="val" id="minOrderV">all</span></div>
+      <label class="chk"><input type="checkbox" id="sharpBiomes" checked> Sharper biome detail (finer ecotones)</label>
+      <label class="chk"><input type="checkbox" id="showLakes" checked> Show lakes as water (inland seas + deposited water)</label>
+      <div class="hint">River density scales the channel-initiation drainage area — higher = fewer, larger channels; lower = denser network. Min stream order hides small tributaries (order 1 = all). Sharper biomes adds a finer ecotone-jitter octave for resolution-revealing biome boundaries. Lakes appear as inland water bodies when water-body detection is enabled.</div>
+    </div>
+    </details><!-- end Ecology cat-acc -->
+
+    <!-- RESOURCES: Auto-derived affordance -->
+    <details class="cat-acc">
+    <summary>Resources</summary>
+    <div class="sec">
+      <div class="hint">Settlement suitability, resource potentials (copper, tin, iron, gold, salt, timber) and carrying capacity are computed automatically from the terrain and climate. View them in the <b>Debug overlay</b> (Edit → Map view) or click a settlement seed for details. All fields export with <b>Export .zip</b>.</div>
+    </div>
+    </details><!-- end Resources cat-acc -->
+
+    </div><!-- end genWorld -->
+
+    <!-- ══ CIVILIZATION sub-panel ══ -->
+    <div id="genCiv" style="display:none">
+
+    <!-- PEOPLES: Factions -->
+    <details class="cat-acc" open>
+    <summary>Peoples</summary>
+    <div class="sec">
+      <h2>Factions</h2>
+      <div id="civFactionPicker" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
+      <div class="hint" style="margin-bottom:6px;font-size:.75rem">Double-click a faction to rename it.</div>
+      <div class="row"><label>Territory radius</label><input type="range" id="civTerRadius" min="1" max="20" value="5"><span class="val" id="civTerRadiusV">5</span></div>
+    </div>
+    </details><!-- end Peoples cat-acc -->
+
+    <!-- SETTLEMENTS: Place tools and editor -->
+    <details class="cat-acc">
+    <summary>Settlements</summary>
+    <div class="sec">
+      <div class="sublabel">Tools</div>
+      <div class="seg sm" id="civToolSeg" style="flex-wrap:wrap">
+        <button data-civtool="inspect" class="on">Inspect</button>
+        <button data-civtool="info" title="Info — click map for settlement &amp; ecology details">🔍 Info</button>
+        <button data-civtool="place">Drop place</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px">
+        <button id="civAutoPopulateBtn" class="accent">Auto-populate world</button>
+        <button id="civClearPlacesBtn">Clear places</button>
+      </div>
+      <div class="hint"><b>Auto-populate world</b> places settlements based on terrain suitability and carrying capacity. Use <b>Drop place</b> to manually click the map and place individual settlements or POIs. <b>Inspect</b> lets you select and edit existing places. Click a place to open the editor below.</div>
+    </div>
+    <div class="sec" id="civPlaceEditorSec" style="display:none">
+      <h2>Selected place</h2>
+      <div id="civPlaceEditor"></div>
+    </div>
+    </details><!-- end Settlements cat-acc -->
+
+    <!-- ECONOMY: Territory painting -->
+    <details class="cat-acc">
+    <summary>Economy</summary>
+    <div class="sec">
+      <div class="sublabel">Territory</div>
+      <div class="seg sm" style="flex-wrap:wrap">
+        <button data-civtool="territory">Paint territory</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px">
+        <button id="civAutoPolityBtn">Auto-polity</button>
+        <button id="civClearTerrBtn">Clear territory</button>
+      </div>
+      <div class="hint"><b>Paint territory</b>: select a faction from <b>Peoples</b> then drag on the map to assign land. <b>Auto-polity</b> generates faction boundaries automatically from settlement locations and terrain. Navigate political eras in the Politics section.</div>
+    </div>
+    </details><!-- end Economy cat-acc -->
+
+    <!-- INFRASTRUCTURE: Ways & roads -->
+    <details class="cat-acc">
+    <summary>Infrastructure</summary>
+    <div class="sec">
+      <div class="sublabel">Manual way drawing</div>
+      <div class="seg sm" style="flex-wrap:wrap;margin-bottom:6px">
+        <button data-civtool="draw_way">Draw way</button>
+      </div>
+      <div class="row"><label>Way type</label>
+        <select id="civWayType" style="flex:1">
+          <option value="road">Road</option>
+          <option value="track">Track</option>
+          <option value="sea-lane">Sea lane</option>
+          <option value="ancient">Ancient route</option>
+        </select>
+      </div>
+      <div class="hint">Select a way type then click the map to add waypoints. Press <b>Esc</b> to commit the path — each segment routes through the terrain via Dijkstra least-cost pathfinding. Roads prefer valleys and passes; sea lanes cross open water.</div>
+      <div class="sublabel" style="margin-top:10px">Auto-generate</div>
+      <div class="btnrow">
+        <button id="civAutoRoutesBtn">Auto-routes</button>
+        <button id="civBuildRoadsBtn">Connect roads</button>
+      </div>
+      <div class="btnrow">
+        <button id="civClearRoadsBtn">Clear ways &amp; journeys</button>
+      </div>
+      <div class="hint"><b>Auto-routes</b> draws land &amp; sea ways between existing settlements. <b>Connect roads</b> builds a minimum spanning tree of terrain-aware paths between all placed settlements.</div>
+      <div id="civWayList"><div class="hint">No ways yet. Use <b>Auto-routes</b>, <b>Connect roads</b>, or draw one manually with the <b>Draw way</b> tool.</div></div>
+    </div>
+    </details><!-- end Infrastructure cat-acc -->
+
+    <!-- POLITICS: Timeline -->
+    <details class="cat-acc">
+    <summary>Politics</summary>
+    <div class="sec">
+      <h2>Politics timeline</h2>
+      <div class="row">
+        <input id="civTlYear" type="number" min="0" max="9999" value="100" style="width:70px">
+        <button id="civTlAddYearBtn" style="flex:1">Add year</button>
+      </div>
+      <div id="civTimelinePanel" style="margin-top:6px"></div>
+      <div class="hint">Each year stores a snapshot of the territory paint. Navigate years to edit independent political eras.</div>
+    </div>
+    </details><!-- end Politics cat-acc -->
+
+    </div><!-- end genCiv -->
+
+    </div><!-- end generatePanel -->
+
+    <!-- ══ EXPLORE ══ -->
+    <div id="explorePanel" style="display:none">
+    <div class="subtab-bar" id="expSubBar">
+      <button class="subtab on" data-esub="travel">Travel</button>
+      <button class="subtab" data-esub="atlas">Atlas</button>
+    </div>
+
+    <!-- Travel sub-panel -->
+    <div id="expTravel">
+
+    <div class="sec">
+      <div class="sublabel">Tools</div>
+      <div class="seg sm" style="flex-wrap:wrap">
+        <button data-civtool="route">Route</button>
+        <button data-civtool="info" title="Info — click map for settlement &amp; ecology details">🔍 Info</button>
+      </div>
+      <div class="hint">Draw a planned <b>Route</b> (journey) by clicking waypoints on the map, then press <b>Esc</b> to commit. The Journey planner below lets you set transport mode, terrain and group conditions.</div>
+    </div>
+
+    <div class="sec" id="civInfoSec" style="display:none">
+      <h2>🔍 Info</h2>
+      <div id="civInfoPanel"><div class="hint">Click the map to inspect a location.</div></div>
+    </div>
+
+    <div class="sec">
+      <h2>Journeys</h2>
+      <div id="civJourneyList"><div class="hint">No journeys yet. Draw one with the <b>Route</b> tool and press Esc to commit.</div></div>
+    </div>
+
+    <div class="sec" id="civPlannerSec" style="display:none">
+      <h2>Journey planner</h2>
+      <div class="row"><label>Transport</label>
+        <select id="civTransportMode" style="flex:1"></select>
+      </div>
+      <div class="row"><label>Terrain</label>
+        <select id="civTerrainType" style="flex:1"></select>
+      </div>
+      <div class="row"><label>Condition</label>
+        <select id="civCondition" style="flex:1"></select>
+      </div>
+      <div class="row"><label>Group size</label>
+        <input id="civGroupSize" type="number" min="1" max="10000" value="10" style="flex:1">
+        <span style="padding-left:4px;color:var(--muted);font-size:.8rem">people</span>
+      </div>
+      <canvas id="civProfileCv" width="220" height="48" style="width:100%;margin:4px 0;border-radius:4px;background:#14110c"></canvas>
+      <div id="civPlanner"><div class="hint">Select a journey above to plan it.</div></div>
+    </div>
+
+    </div><!-- end expTravel -->
+
+    <!-- Atlas sub-panel -->
+    <div id="expAtlas" style="display:none">
+
+    <div class="sec">
+      <h2>Tiles &amp; LOD</h2>
+      <div class="sublabel-grp">Live preview</div>
+      <label class="chk"><input type="checkbox" id="lodAutoChk" checked> Auto-detail on zoom (enter LOD when you zoom in)</label>
+      <label class="chk"><input type="checkbox" id="lodChk"> Tiled LOD view (zoom into amplified detail)</label>
+      <div class="row"><label>Zoom detail</label><input type="range" id="zoomDetailR" min="0" max="300" step="5" value="100"><span class="val" id="zoomDetailV">1.00×</span></div>
+      <div class="row"><label>Tile size</label>
+        <div class="seg sm" id="lodTileSeg" style="flex:1">
+          <button data-ts="512">512</button><button data-ts="1024" class="on">1K</button><button data-ts="2048">2K</button><button data-ts="4096">4K</button>
+        </div></div>
+      <div class="row"><label>LOD levels</label>
+        <select id="lodLevels" style="flex:1"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8" selected>8</option><option value="9">9</option><option value="10">10</option></select></div>
+      <div class="btnrow"><button id="lodRefineBtn">Refine detail (this view)</button></div>
+      <label class="chk"><input type="checkbox" id="lodBurnChk"> Burn river channels into tiles</label>
+      <label class="chk"><input type="checkbox" id="lodMicroChk"> Micro-erode tiles (slower, adds detail)</label>
+      <div class="hint"><b>Auto-detail on zoom</b> drops you into the tiled LOD view as you zoom in, so finer relief surfaces the closer you look. <b>Zoom detail</b> sets how pronounced the on-zoom procedural relief is (1× = legacy). <b>Refine detail</b> still force-amplifies the current view; never an 8K canvas.</div>
+
+      <div class="sublabel-grp">Export tile grid</div>
+      <div class="row"><label>Tiles X × Y</label>
+        <input type="number" id="refCols" min="1" max="8" step="1" value="2" style="flex:1;min-width:0">
+        <input type="number" id="refRows" min="1" max="8" step="1" value="2" style="flex:1;min-width:0"></div>
+      <div class="row"><label>Tile size</label>
+        <select id="refSize" style="flex:1"><option value="1024" selected>1024 px</option><option value="2048">2048 px</option><option value="4096">4096 px</option></select></div>
+      <label class="chk"><input type="checkbox" id="refGzip" checked> Compress heightmaps (gzip)</label>
+      <label class="chk"><input type="checkbox" id="lodShowGrid"> Show tile borders on the map</label>
+      <div class="estimate" id="tileSizeEst">~4 tiles · — MB</div>
+      <div class="btnrow"><button id="regionBtn">Select region</button><button class="accent" id="refineBtn" disabled>Refine &amp; export</button></div>
+      <div class="hint" id="refineNote">Drag a rectangle on the map, then <b>Refine &amp; export</b>: each tile is amplified from the coarse world in world-space (seam-free), packed as 16-bit height + a rendered PNG, with a schema-2 manifest. The grid (X×Y) and per-tile size are independent — tile pixels follow the selection's true shape, so non-square regions are never squished. The estimate above updates live.</div>
+
+      <details class="acc">
+        <summary>Atlas (IndexedDB bake)</summary>
+        <div class="btnrow" style="margin-top:8px"><button id="lodBakeBtn">Bake visible tiles → atlas</button><button id="lodClearAtlasBtn">Clear atlas</button></div>
+        <div class="btnrow"><button id="atlasExportBtn">Export atlas…</button></div>
+        <div class="hint" id="atlasStat">Atlas: —</div>
+        <div class="hint"><b>Bake</b> writes the refined tiles in view to a permanent IndexedDB atlas; baked chunks are served from the atlas instead of being regenerated (the chunk-debug overlay shows them green), and no detail refines beneath them. <b>Clear atlas</b> drops this world's bakes back to procedural. <b>Export atlas</b> round-trips this world's baked chunks to a portable <code>World/</code> ZIP (import via the <b>Import</b> menu in the header). Browser-only — needs IndexedDB.</div>
+      </details>
+      <details class="acc">
+        <summary>Chunk debug overlay</summary>
+        <div class="row" style="margin-top:8px"><label>Show</label><div class="seg sm" id="lodDbgSeg" style="flex:1"><button data-g="grid">Grid</button><button data-g="col">Colors</button><button data-g="lbl">Labels</button></div></div>
+      </details>
+    </div>
+
+    </div><!-- end expAtlas -->
+
+    </div><!-- end explorePanel -->
+
+    <!-- ══ EDIT ══ -->
+    <div id="editPanel" style="display:none">
+
     <div class="sec">
       <h2>Map view</h2>
       <div class="seg" id="modeSeg">
@@ -544,55 +741,58 @@ details.acc[open]>summary{color:var(--accent)}
       <div class="row"><label>Wave reach</label><input type="range" id="waveDistR" min="25" max="300" step="5" value="100"><span class="val" id="waveDistV">1.00×</span></div>
       <label class="chk"><input type="checkbox" id="waterAnimChk"> Animate water (flow map) — runs at ≤~1K working res</label>
       <label class="chk"><input type="checkbox" id="scaleBarChk" checked> Scale bar</label>
-      <div class="row"><label>River density</label><input type="range" id="riverDensR" min="30" max="300" step="5" value="100"><span class="val" id="riverDensV">1.00×</span></div>
-      <div class="row"><label>Min stream order</label><input type="range" id="minOrderR" min="1" max="8" step="1" value="1"><span class="val" id="minOrderV">all</span></div>
-      <label class="chk"><input type="checkbox" id="showRivers" checked> Show rivers in biome view</label>
-      <label class="chk"><input type="checkbox" id="sharpBiomes" checked> Sharper biome detail (finer ecotones)</label>
-      <label class="chk"><input type="checkbox" id="showLakes" checked> Show lakes as water (inland seas + deposited water)</label>
       <label class="chk"><input type="checkbox" id="multiSun"> Multi-sun lighting (softer, painterly relief)</label>
-      <div class="hint">Parchment multiplies a paper-fibre grain and warm tint into the map colours. The icon layer finds ridgelines and forest cover and draws mountain, hill and tree glyphs over the relief &mdash; largest peaks claim the range spine first. Wave lines add concentric foam contours hugging the shore. Rivers overlay the drainage network as blue channels on the biome view. All are render-only (PNG bakes/layer exports are unchanged) and work with zero assets.</div>
+      <div class="hint">Parchment multiplies a paper-fibre grain and warm tint into the map colours. The icon layer finds ridgelines and forest cover and draws mountain, hill and tree glyphs over the relief &mdash; largest peaks claim the range spine first. Wave lines add concentric foam contours hugging the shore. All are render-only (PNG bakes/layer exports are unchanged) and work with zero assets.</div>
     </div>
 
     <div class="sec">
-      <h2>Tiles &amp; LOD</h2>
-      <div class="sublabel-grp">Live preview</div>
-      <label class="chk"><input type="checkbox" id="lodAutoChk" checked> Auto-detail on zoom (enter LOD when you zoom in)</label>
-      <label class="chk"><input type="checkbox" id="lodChk"> Tiled LOD view (zoom into amplified detail)</label>
-      <div class="row"><label>Zoom detail</label><input type="range" id="zoomDetailR" min="0" max="300" step="5" value="100"><span class="val" id="zoomDetailV">1.00×</span></div>
-      <div class="row"><label>Tile size</label>
-        <div class="seg sm" id="lodTileSeg" style="flex:1">
-          <button data-ts="512">512</button><button data-ts="1024" class="on">1K</button><button data-ts="2048">2K</button><button data-ts="4096">4K</button>
-        </div></div>
-      <div class="row"><label>LOD levels</label>
-        <select id="lodLevels" style="flex:1"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8" selected>8</option><option value="9">9</option><option value="10">10</option></select></div>
-      <div class="btnrow"><button id="lodRefineBtn">Refine detail (this view)</button></div>
-      <label class="chk"><input type="checkbox" id="lodBurnChk"> Burn river channels into tiles</label>
-      <label class="chk"><input type="checkbox" id="lodMicroChk"> Micro-erode tiles (slower, adds detail)</label>
-      <div class="hint"><b>Auto-detail on zoom</b> drops you into the tiled LOD view as you zoom in, so finer relief surfaces the closer you look (and a Terrain-tab brush then paints detail non-destructively at that zoom — the macro map never aliases). <b>Zoom detail</b> sets how pronounced the on-zoom procedural relief is (1× = legacy). <b>Refine detail</b> still force-amplifies the current view; never an 8K canvas.</div>
+      <h2>Feature brush (plotline)</h2>
+      <div class="sublabel">1. Pick feature &nbsp; 2. Draw a guide stroke on the map &nbsp; 3. Apply</div>
+      <div class="seg" id="featureSeg">
+        <button data-feat="mountainRange" class="on">Mtns</button>
+        <button data-feat="hills">Hills</button>
+        <button data-feat="ridge">Ridge</button>
+        <button data-feat="plateau">Plateau</button>
+        <button data-feat="river">River</button>
+        <button data-feat="canyon">Canyon</button>
+        <button data-feat="escarpment">Scarp</button>
+      </div>
+      <div class="row"><label>Width (radius)</label><input type="range" id="featRad" min="4" max="120" step="1" value="28"><span class="val" id="featRadV">28</span></div>
+      <div class="row"><label>Strength</label><input type="range" id="featStr" min="1" max="100" step="1" value="45"><span class="val" id="featStrV">0.45</span></div>
+      <div class="btnrow">
+        <button class="accent" id="guideBtn">Draw guide</button>
+        <button id="featApplyBtn" disabled>Apply</button>
+        <button id="featClearBtn">Clear</button>
+      </div>
+      <div class="hint" id="featHint">Tap <b>Draw guide</b>, then drag a freehand stroke on the terrain — the shaded tube shows the affected band. <b>Apply</b> synthesizes the feature along your line with fractal detail. Rivers carve downstream from the start of the stroke toward the end.</div>
+      <div id="featStats" style="font-size:10px;color:var(--fg2);margin-top:4px"></div>
+    </div>
 
-      <div class="sublabel-grp">Export tile grid</div>
-      <div class="row"><label>Tiles X × Y</label>
-        <input type="number" id="refCols" min="1" max="8" step="1" value="2" style="flex:1;min-width:0">
-        <input type="number" id="refRows" min="1" max="8" step="1" value="2" style="flex:1;min-width:0"></div>
-      <div class="row"><label>Tile size</label>
-        <select id="refSize" style="flex:1"><option value="1024" selected>1024 px</option><option value="2048">2048 px</option><option value="4096">4096 px</option></select></div>
-      <label class="chk"><input type="checkbox" id="refGzip" checked> Compress heightmaps (gzip)</label>
-      <label class="chk"><input type="checkbox" id="lodShowGrid"> Show tile borders on the map</label>
-      <div class="estimate" id="tileSizeEst">~4 tiles · — MB</div>
-      <div class="btnrow"><button id="regionBtn">Select region</button><button class="accent" id="refineBtn" disabled>Refine &amp; export</button></div>
-      <div class="hint" id="refineNote">Drag a rectangle on the map, then <b>Refine &amp; export</b>: each tile is amplified from the coarse world in world-space (seam-free), packed as 16-bit height + a rendered PNG, with a schema-2 manifest. The grid (X×Y) and per-tile size are independent — tile pixels follow the selection's true shape, so non-square regions are never squished. The estimate above updates live.</div>
+    <div class="sec">
+      <h2>Direct paint</h2>
+      <div class="sublabel">Drag on the terrain to sculpt in real time</div>
+      <div class="seg" id="brushSeg">
+        <button data-brush="raise" class="on">Raise</button>
+        <button data-brush="lower">Lower</button>
+        <button data-brush="smooth">Smooth</button>
+        <button data-brush="cliff">Cliff</button>
+        <button data-brush="ridge">Ridge</button>
+        <button data-brush="canyon">Canyon</button>
+        <button data-brush="mesa">Mesa</button>
+        <button data-brush="volcano">Volc.</button>
+        <button data-brush="water">Water</button>
+      </div>
+      <div class="row" style="margin-top:12px"><label>Radius</label><input type="range" id="brad" min="2" max="80" step="1" value="22"><span class="val" id="bradV">22</span></div>
+      <div class="row"><label>Strength</label><input type="range" id="bstr" min="1" max="100" step="1" value="35"><span class="val" id="bstrV">35%</span></div>
+      <label class="chk"><input type="checkbox" id="lodEditChk"> Edit LOD tiles (sculpt the refined detail)</label>
+      <div class="hint">Drag on the canvas to sculpt — only active in the <b>Edit tab</b>. Pan with middle-drag, space-drag or mouse wheel. Disabled in debug views. <b>Cliff / Ridge / Canyon</b> follow drag direction. <b>Mesa / Volc.</b> stamp once on tap. <b>Water</b> deposits a lake filled to the clicked height. With <b>Edit LOD tiles</b> on, the same brush sculpts the refined Tiled-LOD detail; edits persist per tile, Ctrl-Z undoes.</div>
+    </div>
 
-      <details class="acc">
-        <summary>Atlas (IndexedDB bake)</summary>
-        <div class="btnrow" style="margin-top:8px"><button id="lodBakeBtn">Bake visible tiles → atlas</button><button id="lodClearAtlasBtn">Clear atlas</button></div>
-        <div class="btnrow"><button id="atlasExportBtn">Export atlas…</button></div>
-        <div class="hint" id="atlasStat">Atlas: —</div>
-        <div class="hint"><b>Bake</b> writes the refined tiles in view to a permanent IndexedDB atlas; baked chunks are served from the atlas instead of being regenerated (the chunk-debug overlay shows them green), and no detail refines beneath them. <b>Clear atlas</b> drops this world's bakes back to procedural. <b>Export atlas</b> round-trips this world's baked chunks to a portable <code>World/</code> ZIP (import via the <b>Import</b> menu in the header). Browser-only — needs IndexedDB.</div>
-      </details>
-      <details class="acc">
-        <summary>Chunk debug overlay</summary>
-        <div class="row" style="margin-top:8px"><label>Show</label><div class="seg sm" id="lodDbgSeg" style="flex:1"><button data-g="grid">Grid</button><button data-g="col">Colors</button><button data-g="lbl">Labels</button></div></div>
-      </details>
+    <div class="sec">
+      <h2>Places &amp; roads (terrain)</h2>
+      <label class="chk"><input type="checkbox" id="placeChk"> Add places (click the map to drop / remove a place)</label>
+      <div class="btnrow" style="margin-top:6px"><button class="accent" id="roadsBtn">Connect roads</button><button id="clearRoadsBtn">Clear roads</button><button id="clearPlacesBtn">Clear places</button></div>
+      <div class="hint">Designate terrain reference points by clicking the map (enable <b>Add places</b> first). <b>Connect roads</b> draws terrain-aware least-cost roads between them — a minimum spanning tree that hugs valleys and passes, avoids steep ground (slope²) and never crosses the sea. For civilization-layer roads use <b>Generate → Civilization → Infrastructure</b>.</div>
     </div>
 
     <div class="sec">
@@ -602,86 +802,16 @@ details.acc[open]>summary{color:var(--accent)}
       <div class="hint" id="packInfo">No pack loaded &mdash; mountains, trees and ground use built-in procedural art. <b>Import → Import asset pack</b> (header) loads a ZIP (<code>pack.json</code> or <code>pack.csv</code> + <code>textures/</code> &amp; <code>icons/</code> PNGs) to swap in your own. Empty slots stay procedural. See <code>docs/ASSET_PACK_FORMAT.md</code>.</div>
       <div id="packGrid"></div>
     </div>
-    </div><!-- end displayPanel -->
 
-    <!-- ══ CIV: Factions, Tools, Planner, Timeline ══ -->
-    <div id="civPanel" style="display:none">
-      <div class="sec">
-        <h2>Factions</h2>
-        <div id="civFactionPicker" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
-        <div class="hint" style="margin-bottom:6px;font-size:.75rem">Double-click a faction to rename it.</div>
-        <div class="row"><label>Territory radius</label><input type="range" id="civTerRadius" min="1" max="20" value="5"><span class="val" id="civTerRadiusV">5</span></div>
-      </div>
-      <div class="sec">
-        <h2>Tools</h2>
-        <div class="seg sm" id="civToolSeg" style="flex-wrap:wrap">
-          <button data-civtool="inspect" class="on">Inspect</button>
-          <button data-civtool="info" title="Info — click map for settlement &amp; ecology details">🔍</button>
-          <button data-civtool="place">Drop place</button>
-          <button data-civtool="territory">Paint territory</button>
-          <button data-civtool="route">Route</button>
-        </div>
-        <div class="btnrow" style="margin-top:6px">
-          <button id="civAutoPopulateBtn" class="accent">Auto-populate world</button>
-          <button id="civAutoRoutesBtn">Auto-routes</button>
-        </div>
-        <div class="btnrow">
-          <button id="civAutoPolityBtn">Auto-polity</button>
-          <button id="civClearTerrBtn">Clear territory</button>
-        </div>
-        <div class="btnrow">
-          <button id="civBuildRoadsBtn">Connect roads</button>
-          <button id="civClearRoadsBtn">Clear ways &amp; journeys</button>
-          <button id="civClearPlacesBtn">Clear places</button>
-        </div>
-        <div class="hint"><b>Auto-populate world</b> places settlements, then draws land &amp; sea <b>Ways</b> (infrastructure). <b>Auto-routes</b> re-generates ways for existing places. Draw a planned <b>Route</b> (journey) with the tool above and press Esc to commit — then open the Journey planner to set transport mode, terrain and conditions.</div>
-      </div>
-      <div class="sec" id="civPlaceEditorSec" style="display:none">
-        <h2>Selected place</h2>
-        <div id="civPlaceEditor"></div>
-      </div>
-      <div class="sec" id="civInfoSec" style="display:none">
-        <h2>🔍 Info</h2>
-        <div id="civInfoPanel"><div class="hint">Click the map to inspect a location.</div></div>
-      </div>
-      <div class="sec">
-        <h2>Ways &amp; Roads</h2>
-        <div id="civWayList"><div class="hint">No ways yet. Use <b>Auto-routes</b> or <b>Connect roads</b>.</div></div>
-      </div>
-      <div class="sec">
-        <h2>Journeys</h2>
-        <div id="civJourneyList"><div class="hint">No journeys yet. Draw one with the <b>Route</b> tool and press Esc to commit.</div></div>
-      </div>
-      <div class="sec" id="civPlannerSec" style="display:none">
-        <h2>Journey planner</h2>
-        <div class="row"><label>Transport</label>
-          <select id="civTransportMode" style="flex:1"></select>
-        </div>
-        <div class="row"><label>Terrain</label>
-          <select id="civTerrainType" style="flex:1"></select>
-        </div>
-        <div class="row"><label>Condition</label>
-          <select id="civCondition" style="flex:1"></select>
-        </div>
-        <div class="row"><label>Group size</label>
-          <input id="civGroupSize" type="number" min="1" max="10000" value="10" style="flex:1">
-          <span style="padding-left:4px;color:var(--muted);font-size:.8rem">people</span>
-        </div>
-        <canvas id="civProfileCv" width="220" height="48" style="width:100%;margin:4px 0;border-radius:4px;background:#14110c"></canvas>
-        <div id="civPlanner"><div class="hint">Select a journey above to plan it.</div></div>
-      </div>
-      <div class="sec">
-        <h2>Politics timeline</h2>
-        <div class="row">
-          <input id="civTlYear" type="number" min="0" max="9999" value="100" style="width:70px">
-          <button id="civTlAddYearBtn" style="flex:1">Add year</button>
-        </div>
-        <div id="civTimelinePanel" style="margin-top:6px"></div>
-        <div class="hint">Each year stores a snapshot of the territory paint. Navigate years to edit independent political eras.</div>
-      </div>
-    </div><!-- end civPanel -->
+    <div class="sec">
+      <h2>Undo</h2>
+      <div class="btnrow"><button id="undoBtn" disabled>Undo last operation</button></div>
+      <div class="hint" id="undoMem">Up to 5 steps saved in memory</div>
+    </div>
 
-    <!-- ══ EXPORT: Export image & project ══ -->
+    </div><!-- end editPanel -->
+
+    <!-- ══ EXPORT ══ -->
     <div id="exportPanel" style="display:none">
     <div class="sec">
       <h2>Export image &amp; project</h2>
@@ -698,7 +828,7 @@ details.acc[open]>summary{color:var(--accent)}
       <div class="hint" id="bakeNote">PNG keeps full detail — pick a size, then export.</div>
       <div class="btnrow" style="margin-top:8px"><button class="accent" id="exportBtn">Export .zip</button></div>
       <div class="row" id="bakeProgRow" style="display:none"><label>Baking</label><progress id="bakeProg" max="100" value="0"></progress><span class="val" id="bakeProgV">0%</span></div>
-      <div class="hint">One .zip with everything: the rendered map (PNG), raw 32-bit heightmap + temperature + rainfall, each layer as an image, and all parameters. Restore a saved world with <b>Import → Load project .zip</b> in the header. For tiled / 16K output use <b>Tiles → Export tile grid</b> in the Display tab.</div>
+      <div class="hint">One .zip with everything: the rendered map (PNG), raw 32-bit heightmap + temperature + rainfall, each layer as an image, and all parameters. Restore a saved world with <b>Import → Load project .zip</b> in the header. For tiled / 16K output use <b>Tiles → Export tile grid</b> in the Explore → Atlas tab.</div>
     </div>
     </div><!-- end exportPanel -->
 
@@ -4929,7 +5059,7 @@ function renderNow(){
    travelling shimmer over river cells on the polyOverlay canvas using the velocity field (or downhill
    gradient) and the two-stream crossfade (flowMapPhases) for seamless flow. Off by default ⇒ never runs. */
 let _waterAnimRAF=null, _waterAnimT0=0;
-function waterAnimActive(){ return !!(state.viz&&state.viz.waterAnim) && GW*GH<=400000 && _riverNet && _activeTab!=='terrain' && !regionSelMode && !guideDrawMode; }
+function waterAnimActive(){ return !!(state.viz&&state.viz.waterAnim) && GW*GH<=400000 && _riverNet && _activeTab!=='edit' && !regionSelMode && !guideDrawMode; }
 function stopWaterAnim(){ if(_waterAnimRAF){ cancelAnimationFrame(_waterAnimRAF); _waterAnimRAF=null; } const oc=document.getElementById('polyOverlay'); if(oc&&oc.width===GW&&oc.height===GH) oc.getContext('2d').clearRect(0,0,GW,GH); }
 function startWaterAnim(){ if(_waterAnimRAF||!waterAnimActive()) return; _waterAnimT0=performance.now(); _waterAnimRAF=requestAnimationFrame(waterAnimFrame); }
 function waterAnimFrame(){
@@ -5016,7 +5146,7 @@ function sculpt(gx,gy){
   render();
 }
 let painting=false;
-let _activeTab='world';   // which sidebar tab is open; freehand sculpt is gated to the Sculpt tab (v0.092)
+let _activeTab='generate';   // which sidebar tab is open; freehand sculpt is gated to the Edit tab (v0.092)
 
 /* ===================== plotline feature sculpt ===================== */
 /* transient guide-stroke state (invariant 6: never serialized) */
@@ -5331,7 +5461,7 @@ function renderRegionOverlay(){
 function renderBrushCursor(gx,gy){
   const oc=document.getElementById('polyOverlay'); if(!oc) return;
   const ctx=oc.getContext('2d'); ctx.clearRect(0,0,oc.width,oc.height);
-  if(_lodOn||state.debug!=='off'||_activeTab!=='terrain'||gx==null||regionSelMode||guideDrawMode) return;
+  if(_lodOn||state.debug!=='off'||_activeTab!=='edit'||gx==null||regionSelMode||guideDrawMode) return;
   const sx=oc.width/GW, sy=oc.height/GH, rad=state.radius, water=state.brush==='water';
   ctx.beginPath(); ctx.ellipse(gx*sx, gy*sy, rad*sx, rad*sy, 0, 0, 7);
   if(water){ ctx.fillStyle='rgba(90,170,235,0.16)'; ctx.fill(); ctx.strokeStyle='rgba(90,170,235,0.95)'; }
@@ -5346,7 +5476,7 @@ view.addEventListener('pointerdown',e=>{
   if(e.button===1||panMode||spaceDown){ panDrag={x:e.clientX,y:e.clientY,px:viewT.panX,py:viewT.panY}; view.setPointerCapture(e.pointerId); e.preventDefault(); return; }
   if(regionSelMode){ const[gx,gy]=evtToGrid(e); regionDrag={x0:gx,y0:gy,x1:gx,y1:gy}; view.setPointerCapture(e.pointerId); renderRegionOverlay(); return; }
   if(guideDrawMode){ const[gx,gy]=evtToGrid(e); guideCapturing=true; guideRaw=[{x:gx,y:gy}]; guidePts=[]; view.setPointerCapture(e.pointerId); renderGuideOverlay(); return; }
-  if(_lodOn||state.debug!=='off'||_activeTab!=='terrain')return; painting=true; view.setPointerCapture(e.pointerId); const[gx,gy]=evtToGrid(e); _prevGx=gx; _prevGy=gy; if(STAMP_BRUSHES.has(state.brush)){pushUndo();} sculpt(gx,gy); });   /* v0.092: freehand sculpt only in the Sculpt tab */
+  if(_lodOn||state.debug!=='off'||_activeTab!=='edit')return; painting=true; view.setPointerCapture(e.pointerId); const[gx,gy]=evtToGrid(e); _prevGx=gx; _prevGy=gy; if(STAMP_BRUSHES.has(state.brush)){pushUndo();} sculpt(gx,gy); });   /* v0.092: freehand sculpt only in the Edit tab */
 view.addEventListener('pointermove',e=>{
   if(panDrag){ viewT.panX=panDrag.px+(e.clientX-panDrag.x); viewT.panY=panDrag.py+(e.clientY-panDrag.y); applyView(); return; }
   if(regionDrag){ const[gx,gy]=evtToGrid(e); regionDrag.x1=gx; regionDrag.y1=gy; renderRegionOverlay(); return; }
@@ -5354,8 +5484,8 @@ view.addEventListener('pointermove',e=>{
     if(Math.hypot(gx-last.x,gy-last.y)>=0.5){ guideRaw.push({x:gx,y:gy}); renderGuideOverlay(); } return; }
   if(_lodOn||!painting)return; if(STAMP_BRUSHES.has(state.brush))return; const[gx,gy]=evtToGrid(e); sculpt(gx,gy); });
 /* v0.103: brush-radius cursor circle (Sculpt tab only) */
-view.addEventListener('pointermove',e=>{ if(_activeTab!=='terrain'||_lodOn||state.debug!=='off'||panDrag||regionSelMode||guideDrawMode){ return; } const[gx,gy]=evtToGrid(e); renderBrushCursor(gx,gy); });
-view.addEventListener('pointerleave',()=>{ if(_activeTab==='terrain') clearBrushCursor(); });
+view.addEventListener('pointermove',e=>{ if(_activeTab!=='edit'||_lodOn||state.debug!=='off'||panDrag||regionSelMode||guideDrawMode){ return; } const[gx,gy]=evtToGrid(e); renderBrushCursor(gx,gy); });
+view.addEventListener('pointerleave',()=>{ if(_activeTab==='edit') clearBrushCursor(); });
 view.addEventListener('pointerup',()=>{
   if(panDrag){ panDrag=null; return; }
   if(regionDrag){
@@ -7272,12 +7402,30 @@ document.getElementById('coastBtn').onclick=()=>{ pushUndo(); withBusy('shaping 
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
   const tp=b.dataset.tab; _activeTab=tp;
-  if(tp!=='terrain'){ painting=false; _prevGx=NaN; _prevGy=NaN; clearBrushCursor(); }   /* leaving Terrain tab cancels any in-progress freehand stroke + brush cursor */
-  ['worldPanel','terrainPanel','climatePanel','displayPanel','civPanel','exportPanel'].forEach(id=>{
+  if(tp!=='edit'){ painting=false; _prevGx=NaN; _prevGy=NaN; clearBrushCursor(); }   /* leaving Edit tab cancels any in-progress freehand stroke + brush cursor */
+  ['generatePanel','explorePanel','editPanel','exportPanel'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none';
   });
-  const showId={world:'worldPanel',terrain:'terrainPanel',climate:'climatePanel',display:'displayPanel',civ:'civPanel',export:'exportPanel'}[tp];
+  const showId={generate:'generatePanel',explore:'explorePanel',edit:'editPanel',export:'exportPanel'}[tp];
   if(showId){ const el=document.getElementById(showId); if(el) el.style.display='block'; }
+}));
+
+/* ---- Generate sub-tab switching (World / Civilization) ---- */
+document.querySelectorAll('#genSubBar .subtab').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#genSubBar .subtab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
+  const sub=b.dataset.gsub;
+  const gw=document.getElementById('genWorld'), gc=document.getElementById('genCiv');
+  if(gw) gw.style.display=(sub==='world'?'':'none');
+  if(gc) gc.style.display=(sub==='civ'?'':'none');
+}));
+
+/* ---- Explore sub-tab switching (Travel / Atlas) ---- */
+document.querySelectorAll('#expSubBar .subtab').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#expSubBar .subtab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
+  const sub=b.dataset.esub;
+  const et=document.getElementById('expTravel'), ea=document.getElementById('expAtlas');
+  if(et) et.style.display=(sub==='travel'?'':'none');
+  if(ea) ea.style.display=(sub==='atlas'?'':'none');
 }));
 
 /* ---- plotline feature brush ---- */
@@ -7444,7 +7592,7 @@ updateTileSizeEst();
 view.addEventListener('pointerdown',e=>{ if(!(_lodOn && !guideDrawMode)) return;
   /* v0.133: zoom-aware unified brush — in LOD mode a Sculpt-tab brush edits tiles non-destructively
      (no separate "Edit LOD tiles" step); pan happens via the ✋ toggle / space-drag / middle-drag. */
-  const wantEdit=_lodEdit || (_activeTab==='terrain' && !panMode && !spaceDown && e.button===0 && state.brush!=='water');
+  const wantEdit=_lodEdit || (_activeTab==='edit' && !panMode && !spaceDown && e.button===0 && state.brush!=='water');
   if(wantEdit){ view.setPointerCapture(e.pointerId); _lodEditing=true; const g=evtToGrid(e); lodEditBegin(g[0],g[1]); if(editTileAt(g[0],g[1])) renderNow(); }
   else { const r=view.getBoundingClientRect(); _lodPan={x:e.clientX,y:e.clientY,cx:_lodCx,cy:_lodCy,rw:r.width||GW,rh:r.height||GH}; view.style.cursor='grabbing'; } });
 view.addEventListener('pointermove',e=>{ if(!_lodOn) return;
@@ -7715,6 +7863,7 @@ let civWays      = [];          // auto-generated road/sea network [{pts,km,sea,
 let civJourneys  = [];          // user-planned routes [{pts,km,sea,name,mode,terrain,condition,groupSize}]
 let civFactionNames = CIV_FACTIONS.map(f=>f[0]);
 let _civWaypoints = [];         // in-progress route waypoints [x,y]
+let _civWayWaypoints = [];      // in-progress manual way (infrastructure) waypoints [x,y]
 let _civActiveFaction = 1;
 let _civTerRadius = 5;
 let _civSelectedPlace = null;
@@ -7813,15 +7962,24 @@ function drawCivLayer(){
   // 2a. Ways — green (land) / blue (sea) dashed infrastructure
   civWays.forEach(rt=>{
     if(!rt.pts||rt.pts.length<2) return;
+    const wtype=rt.type||(rt.sea?'sea-lane':'road');
     civCtx.beginPath();
     rt.pts.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
-    if(rt.sea){
+    if(wtype==='sea-lane'){
       civCtx.strokeStyle='rgba(10,30,60,.4)'; civCtx.lineWidth=2.5*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(30,130,200,.7)';
       civCtx.setLineDash([4*rsc,3*rsc]); civCtx.lineWidth=1.4*rsc; civCtx.stroke();
-    } else {
+    } else if(wtype==='track'){
+      civCtx.strokeStyle='rgba(30,20,10,.35)'; civCtx.lineWidth=1.8*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(100,120,60,.75)';
+      civCtx.setLineDash([2*rsc,3*rsc]); civCtx.lineWidth=1.0*rsc; civCtx.stroke();
+    } else if(wtype==='ancient'){
+      civCtx.strokeStyle='rgba(20,10,5,.35)'; civCtx.lineWidth=1.8*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(120,110,100,.65)';
+      civCtx.setLineDash([4*rsc,2*rsc]); civCtx.lineWidth=1.1*rsc; civCtx.stroke();
+    } else { // road (default)
       civCtx.strokeStyle='rgba(30,20,10,.4)'; civCtx.lineWidth=2*rsc; civCtx.stroke();
-      civCtx.strokeStyle='rgba(120,180,90,.75)';
+      civCtx.strokeStyle='rgba(160,100,60,.75)';
       civCtx.setLineDash([3*rsc,2*rsc]); civCtx.lineWidth=1.2*rsc; civCtx.stroke();
     }
     civCtx.setLineDash([]);
@@ -7845,6 +8003,17 @@ function drawCivLayer(){
     for(const[x,y] of _civWaypoints){
       civCtx.beginPath(); civCtx.arc(x+.5,y+.5,2.5*rsc,0,Math.PI*2);
       civCtx.fillStyle='#d8b878'; civCtx.fill();
+    }
+  }
+  // 2d. In-progress draw_way preview
+  if(_civWayWaypoints.length){
+    civCtx.beginPath();
+    _civWayWaypoints.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
+    civCtx.strokeStyle='rgba(180,140,80,.9)'; civCtx.lineWidth=1.5*rsc;
+    civCtx.setLineDash([3*rsc,3*rsc]); civCtx.stroke(); civCtx.setLineDash([]);
+    for(const[x,y] of _civWayWaypoints){
+      civCtx.beginPath(); civCtx.arc(x+.5,y+.5,3*rsc,0,Math.PI*2);
+      civCtx.fillStyle='#e8c060'; civCtx.fill();
     }
   }
   civCtx.restore();
@@ -7965,11 +8134,13 @@ function _civRenderPlaceEditor(){
 /* ---- ways list (auto MST road/sea infrastructure) ---- */
 function _civRenderWayList(){
   const el=document.getElementById('civWayList'); if(!el) return;
-  if(!civWays.length){ el.innerHTML='<div class="hint">No ways yet. Use <b>Auto-routes</b> or <b>Connect roads</b>.</div>'; return; }
+  if(!civWays.length){ el.innerHTML='<div class="hint">No ways yet. Use <b>Draw way</b>, <b>Auto-routes</b>, or <b>Connect roads</b>.</div>'; return; }
   el.innerHTML='';
+  const _wayTypeIcons={road:'🛤',track:'🌿','sea-lane':'⛵',ancient:'🏚'};
   civWays.forEach((rt,ri)=>{
     const name=rt.name||('Way '+(ri+1));
-    const typeIcon=rt.sea?'⛵':'🛤';
+    const wtype=rt.type||(rt.sea?'sea-lane':'road');
+    const typeIcon=_wayTypeIcons[wtype]||'🛤';
     const kmStr=rt.km!=null?rt.km.toFixed(0)+' km':'';
     const card=document.createElement('div');
     card.style.cssText='border-radius:5px;padding:4px 8px;border:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:5px;font-size:.8rem;';
@@ -8548,18 +8719,19 @@ function _civAutoWorld(){
 
 /* ---- canvas pointer events for civ tools ---- */
 view.addEventListener('pointerdown',e=>{
-  if(_activeTab!=='civ') return; // only act in Civ tab
+  if(!(_activeTab==='generate'||_activeTab==='explore')) return; // only act in Generate/Explore tabs
   const[gx,gy]=evtToGrid(e);
   if(gx==null) return;
   if(_civTool==='place'){ _civDropPlace(gx,gy); }
   else if(_civTool==='territory'){ view.setPointerCapture(e.pointerId); _civPainting=true; _civPaintTerritoryAt(gx,gy); }
   else if(_civTool==='route'){ _civWaypoints.push([gx,gy]); drawCivLayer(); }
+  else if(_civTool==='draw_way'){ _civWayWaypoints.push([gx,gy]); drawCivLayer(); }
   else if(_civTool==='inspect'){ _civSelectPlaceAt(gx,gy); }
   else if(_civTool==='info'){ _civInfoAt(gx,gy); }
 });
 
 view.addEventListener('pointermove',e=>{
-  if(_activeTab!=='civ') return;
+  if(!(_activeTab==='generate'||_activeTab==='explore')) return;
   if(_civPainting&&_civTool==='territory'){
     const[gx,gy]=evtToGrid(e);
     if(gx!=null) _civPaintTerritoryAt(gx,gy);
@@ -8624,10 +8796,32 @@ function _civCommitRoute(){
   drawCivLayer();
 }
 
-/* Listen for Esc to commit route */
+/* Commit an in-progress manual way (Infrastructure) */
+function _civCommitWay(){
+  if(_civWayWaypoints.length>=2){
+    const pts=[];
+    for(let k=0;k<_civWayWaypoints.length-1;k++){
+      const[sx,sy]=_civWayWaypoints[k],[ex,ey]=_civWayWaypoints[k+1];
+      const seg=_civDijkstraPath(sx,sy,ex,ey);
+      if(k>0) seg.shift();
+      pts.push(...seg);
+    }
+    const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
+    const wayType=document.getElementById('civWayType')?.value||'road';
+    const sea=(wayType==='sea-lane');
+    civWays.push({pts,km,sea,type:wayType,manual:true,name:''});
+    _civRenderWayList();
+  }
+  _civWayWaypoints=[];
+  drawCivLayer();
+}
+
+/* Listen for Esc to commit route or way */
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'&&_activeTab==='civ'&&_civTool==='route') _civCommitRoute();
-  if(e.key==='Delete'&&_activeTab==='civ'&&_civSelectedPlace){
+  const civActive=(_activeTab==='generate'||_activeTab==='explore');
+  if(e.key==='Escape'&&civActive&&_civTool==='route') _civCommitRoute();
+  if(e.key==='Escape'&&civActive&&_civTool==='draw_way') _civCommitWay();
+  if(e.key==='Delete'&&civActive&&_civSelectedPlace){
     const idx=state.places.indexOf(_civSelectedPlace); if(idx>=0) state.places.splice(idx,1);
     _civSelectedPlace=null; _civRenderPlaceEditor(); renderNow();
   }
@@ -8642,7 +8836,7 @@ function _civSyncToState(){
   state.civ={
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
-    ways:civWays.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,name:r.name||''})),
+    ways:civWays.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''})),
     journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10})),
     year:civYear,
     factionNames:[...civFactionNames],
@@ -8657,7 +8851,7 @@ function _civSyncFromState(){
   } else { civTerritory=null; }
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
   // backwards compat: old saves used c.routes — treat them as ways
-  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,name:r.name||''}));
+  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''}));
   civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];
@@ -8697,7 +8891,7 @@ function _civSyncFromState(){
     civTerritory=null; civWays=[]; civJourneys=[]; civTimeline=[]; civYear=0;
     _civSelectedJourneyIdx=-1;
     state.civ={territory:[],timeline:[],ways:[],journeys:[],year:0};
-    _civSelectedPlace=null; _civWaypoints=[];
+    _civSelectedPlace=null; _civWaypoints=[]; _civWayWaypoints=[];
     _civRenderPlaceEditor(); _civBuildTimelineUI(); _civRenderWayList(); _civRenderJourneyList(); _civUpdatePlannerPanel();
     const r=await _origGenerate.apply(this,arguments);
     drawCivLayer();
@@ -8753,7 +8947,8 @@ function _civRenameFaction(fid, currentName){
 function _civSetTool(tool){
   _civTool=tool;
   if(tool!=='route') _civCommitRoute();
-  document.querySelectorAll('#civToolSeg button').forEach(b=>b.classList.toggle('on',b.dataset.civtool===tool));
+  if(tool!=='draw_way') _civCommitWay();
+  document.querySelectorAll('[data-civtool]').forEach(b=>b.classList.toggle('on',b.dataset.civtool===tool));
   const infoSec=document.getElementById('civInfoSec');
   if(infoSec) infoSec.style.display=(tool==='info'?'':'none');
 }
@@ -8770,7 +8965,7 @@ function _civSetTool(tool){
   const terRV=document.getElementById('civTerRadiusV');
   if(terR){ terR.addEventListener('input',()=>{ _civTerRadius=+terR.value; if(terRV)terRV.textContent=terR.value; }); }
 
-  document.querySelectorAll('#civToolSeg button').forEach(b=>{
+  document.querySelectorAll('[data-civtool]').forEach(b=>{
     b.addEventListener('click',()=>_civSetTool(b.dataset.civtool));
   });
 

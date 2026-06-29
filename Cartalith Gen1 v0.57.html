@@ -8034,23 +8034,37 @@ view.addEventListener('pointerup',e=>{
   if(_civPainting){ _civPainting=false; }
 });
 
-/* ---- Dijkstra route between two grid cells ---- */
+/* ---- Dijkstra route between two grid cells ----
+ * Mirrors buildRoadsOp: downsample cost grid to ≤384px so pathfinding
+ * stays fast at any working resolution, then scale the path back up. */
 function _civDijkstraPath(sx,sy,ex,ey){
   const sea=state.seaLevel||0.42;
-  const cost=buildTravelCost(field,GW,GH,sea);
-  const {prev}=roadDijkstra(cost,GW,GH,sx,sy,!!state.world);
+  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+  const dfld=new Float32Array(RW*RH);
+  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+    dfld[y*RW+x]=field[fy*GW+fx];
+  }
+  const cost=buildTravelCost(dfld,RW,RH,sea);
+  const rsx=Math.min(RW-1,Math.round(sx*sc)), rsy=Math.min(RH-1,Math.round(sy*sc));
+  const rex=Math.min(RW-1,Math.round(ex*sc)), rey=Math.min(RH-1,Math.round(ey*sc));
+  const {prev}=roadDijkstra(cost,RW,RH,rsx,rsy,!!state.world);
   const pts=[];
-  let ci=ey*GW+ex;
-  const si=sy*GW+sx;
-  let guard=GW*GH;
+  let ci=rey*RW+rex;
+  const si=rsy*RW+rsx;
+  let guard=RW*RH;
   while(ci!==si&&ci>=0&&guard-->0){
-    pts.push([ci%GW,(ci/GW)|0]);
+    const rx=ci%RW, ry=(ci/RW)|0;
+    pts.push([(rx+0.5)/sc|0, (ry+0.5)/sc|0]);
     const p=prev[ci];
     if(p<0||p===ci) break;
     ci=p;
   }
   pts.push([sx,sy]);
   pts.reverse();
+  // Always include the endpoint so routes reach their destination even when
+  // source and dest fall in the same downsampled cell.
+  if(pts.length<2||(pts[pts.length-1][0]!==ex||pts[pts.length-1][1]!==ey)) pts.push([ex,ey]);
   return pts;
 }
 

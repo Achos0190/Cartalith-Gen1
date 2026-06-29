@@ -54,7 +54,7 @@ function makeCanvas(id){
 }
 
 const __els = new Map();
-const CANVAS_IDS = new Set(['view', 'polyOverlay']);
+const CANVAS_IDS = new Set(['view', 'polyOverlay', 'overlay']);
 
 global.document = {
   getElementById(id){

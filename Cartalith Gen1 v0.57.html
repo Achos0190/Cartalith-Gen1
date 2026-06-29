@@ -620,15 +620,19 @@ details.acc[open]>summary{color:var(--accent)}
           <button data-civtool="route">Route</button>
         </div>
         <div class="btnrow" style="margin-top:6px">
+          <button id="civAutoPopulateBtn" class="accent">Auto-populate world</button>
+          <button id="civAutoRoutesBtn">Auto-routes</button>
+        </div>
+        <div class="btnrow">
           <button id="civAutoPolityBtn">Auto-polity</button>
           <button id="civClearTerrBtn">Clear territory</button>
         </div>
         <div class="btnrow">
           <button id="civBuildRoadsBtn">Connect roads</button>
-          <button id="civClearRoadsBtn">Clear roads</button>
+          <button id="civClearRoadsBtn">Clear routes</button>
           <button id="civClearPlacesBtn">Clear places</button>
         </div>
-        <div class="hint">Paint faction territory, drop named places, or draw routes. <b>Auto-polity</b> assigns settlements to factions via least-cost Voronoi. <b>Connect roads</b> builds a terrain-aware minimum spanning tree between your dropped places.</div>
+        <div class="hint"><b>Auto-populate world</b> places named settlements from terrain suitability, then draws land &amp; sea routes. <b>Auto-routes</b> re-generates routes for existing places. <b>Auto-polity</b> assigns settlements to factions. Paint territory, drop custom places, or draw manual routes with the tools above.</div>
       </div>
       <div class="sec" id="civPlaceEditorSec" style="display:none">
         <h2>Selected place</h2>
@@ -7664,42 +7668,45 @@ function getCivTerritory(){
 /* ---- drawing helpers ---- */
 function _civDrawSettlementPin(ctx,px,py,place,selected){
   const klass=CIV_SETTLEMENT_CLASSES.find(c=>c.key===(place.kind||'town'))||CIV_SETTLEMENT_CLASSES[2];
-  const sz=4+klass.rank;
+  const sc=Math.max(1,GW/512);   // scales with working resolution so icons stay the same screen size at any GW
+  const sz=(4+klass.rank)*sc;
   const col=place.faction?CIV_FACTIONS[place.faction]?.[1]||[200,180,130]:[200,180,130];
   ctx.save();
-  ctx.beginPath(); ctx.arc(px,py,sz+1,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(px,py,sz+sc,0,Math.PI*2);
   ctx.fillStyle='rgba(12,10,7,.7)'; ctx.fill();
   ctx.beginPath(); ctx.arc(px,py,sz,0,Math.PI*2);
   ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`; ctx.fill();
-  if(selected){ ctx.lineWidth=1.5; ctx.strokeStyle='#ffe090'; ctx.stroke(); }
+  if(selected){ ctx.lineWidth=1.5*sc; ctx.strokeStyle='#ffe090'; ctx.stroke(); }
   // glyph
-  ctx.fillStyle='#fff'; ctx.font=`${Math.max(8,sz+2)}px sans-serif`;
+  ctx.fillStyle='#fff'; ctx.font=`${Math.max(8,sz+2*sc)|0}px sans-serif`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(klass.glyph,px,py);
   // label
   if(place.name){
-    ctx.font=`600 ${Math.max(9,sz+1)}px sans-serif`;
+    ctx.font=`600 ${Math.max(9,(sz+sc))|0}px sans-serif`;
     ctx.textBaseline='bottom'; ctx.textAlign='center';
-    ctx.lineWidth=2.5; ctx.strokeStyle='rgba(8,6,4,.85)';
-    ctx.strokeText(place.name,px,py-sz-2);
-    ctx.fillStyle='#f6ecd4'; ctx.fillText(place.name,px,py-sz-2);
+    ctx.lineWidth=2.5*sc; ctx.strokeStyle='rgba(8,6,4,.85)';
+    ctx.strokeText(place.name,px,py-sz-2*sc);
+    ctx.fillStyle='#f6ecd4'; ctx.fillText(place.name,px,py-sz-2*sc);
   }
   ctx.restore();
 }
 
 function _civDrawPoiPin(ctx,px,py,place,selected){
   const poi=CIV_POI_TYPES.find(t=>t.key===(place.kind||'other'))||CIV_POI_TYPES[7];
+  const sc=Math.max(1,GW/512);
+  const r=5*sc;
   ctx.save();
-  ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2);
   ctx.fillStyle='rgba(12,10,7,.7)'; ctx.fill();
   ctx.fillStyle=selected?'#ffe090':'#d8c080';
-  ctx.font='9px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=`${(9*sc)|0}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(poi.glyph,px,py);
   if(place.name){
-    ctx.font='600 9px sans-serif'; ctx.textBaseline='bottom';
-    ctx.lineWidth=2; ctx.strokeStyle='rgba(8,6,4,.85)';
-    ctx.strokeText(place.name,px,py-7);
-    ctx.fillStyle='#f6ecd4'; ctx.fillText(place.name,px,py-7);
+    ctx.font=`600 ${(9*sc)|0}px sans-serif`; ctx.textBaseline='bottom';
+    ctx.lineWidth=2*sc; ctx.strokeStyle='rgba(8,6,4,.85)';
+    ctx.strokeText(place.name,px,py-r-sc);
+    ctx.fillStyle='#f6ecd4'; ctx.fillText(place.name,px,py-r-sc);
   }
   ctx.restore();
 }
@@ -7727,23 +7734,30 @@ function drawCivLayer(){
     civCtx.putImageData(img,0,0);
   }
 
-  // 2. Committed journey routes
+  // 2. Committed journey routes (land = green dashed, sea = blue dashed)
+  // rsc: scale line widths with GW so routes stay proportional at any resolution
+  const rsc=Math.max(1,GW/512);
   civCtx.save(); civCtx.lineCap='round'; civCtx.lineJoin='round';
   for(const rt of civRoutes){
     if(!rt.pts||rt.pts.length<2) continue;
     civCtx.beginPath();
     rt.pts.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
-    civCtx.strokeStyle='rgba(30,20,10,.5)'; civCtx.lineWidth=2.5; civCtx.stroke();
-    civCtx.strokeStyle='rgba(140,200,100,.9)'; civCtx.setLineDash([3,2]); civCtx.lineWidth=1.3; civCtx.stroke();
+    if(rt.sea){
+      civCtx.strokeStyle='rgba(10,30,60,.45)'; civCtx.lineWidth=3*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(40,160,220,.85)'; civCtx.setLineDash([4*rsc,3*rsc]); civCtx.lineWidth=1.6*rsc; civCtx.stroke();
+    } else {
+      civCtx.strokeStyle='rgba(30,20,10,.5)'; civCtx.lineWidth=2.5*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(140,200,100,.9)'; civCtx.setLineDash([3*rsc,2*rsc]); civCtx.lineWidth=1.3*rsc; civCtx.stroke();
+    }
     civCtx.setLineDash([]);
   }
   // In-progress route preview
   if(_civWaypoints.length>=2){
     civCtx.beginPath();
     _civWaypoints.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
-    civCtx.strokeStyle='rgba(220,160,80,.8)'; civCtx.lineWidth=1.5; civCtx.stroke();
+    civCtx.strokeStyle='rgba(220,160,80,.8)'; civCtx.lineWidth=1.5*rsc; civCtx.stroke();
     for(const[x,y] of _civWaypoints){
-      civCtx.beginPath(); civCtx.arc(x+.5,y+.5,2.5,0,Math.PI*2);
+      civCtx.beginPath(); civCtx.arc(x+.5,y+.5,2.5*rsc,0,Math.PI*2);
       civCtx.fillStyle='#d8b878'; civCtx.fill();
     }
   }
@@ -7787,7 +7801,9 @@ function _civEnsurePlaceDefaults(p){
 
 function _civDropPlace(gx,gy){
   // Check if near an existing place → remove it instead
-  let nearest=null, nd=25;
+  // Proximity radius scales with GW so clicking works at any resolution
+  const _civPickR2=Math.max(25,(GW/50)*(GW/50));
+  let nearest=null, nd=_civPickR2;
   for(const p of state.places){
     const d=(p.x-gx)*(p.x-gx)+(p.y-gy)*(p.y-gy);
     if(d<nd){ nd=d; nearest=p; }
@@ -7803,7 +7819,8 @@ function _civDropPlace(gx,gy){
 }
 
 function _civSelectPlaceAt(gx,gy){
-  let nearest=null, nd=100;
+  const _civPickR2=Math.max(100,(GW/50)*(GW/50));
+  let nearest=null, nd=_civPickR2;
   for(const p of state.places){
     const d=(p.x-gx)*(p.x-gx)+(p.y-gy)*(p.y-gy);
     if(d<nd){ nd=d; nearest=p; }
@@ -8011,6 +8028,294 @@ function _civConnectRoads(){
   renderNow();
 }
 
+/* =====================================================================
+ * AUTO-POPULATE: settlement placement, naming & routing
+ * ================================================================== */
+
+/* Seeded PRNG (Mulberry32) */
+function _civRng(seed){
+  let s=(seed>>>0)||1;
+  return function(){
+    s+=0x6D2B79F5; let t=s;
+    t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61);
+    return ((t^t>>>14)>>>0)/4294967296;
+  };
+}
+
+/* Fantasy name generator */
+const _SYL=['ar','bel','cor','dun','el','far','gol','hal','ith','kor',
+  'lan','mor','nor','os','par','quel','ral','sen','tor','ul',
+  'val','wyn','yr','zan','aer','bri','cas','dor','eth','fen',
+  'gal','hur','ire','kar','las','mel','nar','osh','pre','ris',
+  'syl','tur','vol','war','xan','yel','zel'];
+const _SFX=['','','','heim','ford','burg','ton','vale','moor',
+  'fell','wick','stead','holt','crest','mere','haven'];
+
+function _civSettleName(rng){
+  const n=2+((rng()*3)|0);
+  let s=''; for(let i=0;i<n;i++) s+=_SYL[(rng()*_SYL.length)|0];
+  const sfx=_SFX[(rng()*_SFX.length)|0];
+  return s[0].toUpperCase()+s.slice(1)+sfx;
+}
+
+/* Check if a full-res cell is within R cells of water */
+function _civIsCoastal(gx,gy,R){
+  const sea=state.seaLevel||0.42;
+  for(let dy=-R;dy<=R;dy++) for(let dx=-R;dx<=R;dx++){
+    if(dx*dx+dy*dy>R*R) continue;
+    const nx=((gx+dx)+GW)%GW, ny=gy+dy;
+    if(ny<0||ny>=GH) continue;
+    if(field[ny*GW+nx]<sea) return true;
+  }
+  return false;
+}
+
+/* Auto-place settlements from terrain suitability (greedy suppression, downsampled) */
+function _civAutoPopulate(){
+  const sea=state.seaLevel||0.42;
+  const rng=_civRng((state.seed||12345)*31337+999);
+
+  // Downsample to ≤256px for performance
+  const RW=Math.min(GW,256), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+  const suit=new Float32Array(RW*RH);
+  const comp=new Int32Array(RW*RH).fill(-1);
+
+  // Compute suitability at downsampled resolution
+  for(let ry=0;ry<RH;ry++) for(let rx=0;rx<RW;rx++){
+    const gx=Math.min(GW-1,((rx+0.5)/sc)|0), gy=Math.min(GH-1,((ry+0.5)/sc)|0);
+    const gi=gy*GW+gx;
+    if(field[gi]<sea){ suit[ry*RW+rx]=-1; continue; }
+    const h=(field[gi]-sea)/(1-sea);
+    if(h>0.70){ suit[ry*RW+rx]=-1; continue; }
+    const flow=flowField?flowField[gi]:0;
+    const temp=tempField?tempField[gi]:15;
+    const rain=rainField?rainField[gi]:0.5;
+    const elevScore=Math.max(0,1-Math.abs(h-0.06)*5);
+    const tempScore=Math.max(0,1-Math.abs(temp-14)/22);
+    const rainScore=Math.min(1,rain*3);
+    const flowScore=Math.min(1,Math.log1p(flow*GW*GH*0.01)*0.3);
+    suit[ry*RW+rx]=Math.max(0,0.3*elevScore+0.25*tempScore+0.2*rainScore+0.25*flowScore);
+  }
+
+  // BFS flood fill for land components
+  const wrapX=!!state.world;
+  const dx4=[1,-1,0,0], dy4=[0,0,1,-1];
+  let nComp=0;
+  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+    if(suit[y*RW+x]<0||comp[y*RW+x]>=0) continue;
+    const id=nComp++;
+    const q=[y*RW+x]; comp[y*RW+x]=id;
+    while(q.length){
+      const ci=q.pop(), cx=ci%RW, cy=(ci/RW)|0;
+      for(let d=0;d<4;d++){
+        let nx=cx+dx4[d], ny=cy+dy4[d];
+        if(wrapX) nx=(nx+RW)%RW; else if(nx<0||nx>=RW) continue;
+        if(ny<0||ny>=RH) continue;
+        const ni=ny*RW+nx;
+        if(suit[ni]<0||comp[ni]>=0) continue;
+        comp[ni]=id; q.push(ni);
+      }
+    }
+  }
+
+  // Sort land candidates by suitability, greedy suppression
+  const order=[];
+  for(let i=0;i<RW*RH;i++) if(suit[i]>0.2) order.push(i);
+  order.sort((a,b)=>suit[b]-suit[a]);
+
+  const maxPlaces=Math.min(40,Math.max(8,(GW*GH/65536*20)|0));
+  const suppR=Math.max(5,(RW/22)|0);
+  const taken=new Uint8Array(RW*RH);
+  const candidates=[];
+
+  for(let k=0;k<order.length&&candidates.length<maxPlaces;k++){
+    const ri=order[k]; if(taken[ri]) continue;
+    const rx=ri%RW, ry=(ri/RW)|0;
+    const gx=Math.min(GW-1,((rx+0.5)/sc)|0), gy=Math.min(GH-1,((ry+0.5)/sc)|0);
+    candidates.push({gx,gy,suit:suit[ri],contId:comp[ri]});
+    for(let dy=-suppR;dy<=suppR;dy++) for(let dx=-suppR;dx<=suppR;dx++){
+      if(dx*dx+dy*dy>suppR*suppR) continue;
+      let nx=rx+dx, ny=ry+dy;
+      if(wrapX) nx=(nx+RW)%RW; else if(nx<0||nx>=RW) continue;
+      if(ny<0||ny>=RH) continue;
+      taken[ny*RW+nx]=1;
+    }
+  }
+
+  // Classify: first per continent = capital; global top-4 = city; top-12 = town; rest hamlet/village
+  const contFirst={};
+  for(const c of candidates) if(contFirst[c.contId]===undefined) contFirst[c.contId]=c;
+
+  const factionCount=CIV_FACTIONS.length-1;
+  const contFaction={};
+  let fi=1;
+  for(const cid in contFirst){ contFaction[cid]=fi; fi=fi%factionCount+1; }
+
+  const coastR=Math.max(6,(GW/60)|0);
+  const newPlaces=[];
+  candidates.forEach((c,rank)=>{
+    const isCapital=contFirst[c.contId]===c;
+    const isCity=!isCapital&&rank<4;
+    const isTown=!isCapital&&!isCity&&rank<12;
+    const isVillage=!isCapital&&!isCity&&!isTown&&rank<24;
+    const kind=isCapital?'capital':isCity?'city':isTown?'town':isVillage?'village':'hamlet';
+    const h=(field[c.gy*GW+c.gx]-sea)/(1-sea);
+    const coastal=_civIsCoastal(c.gx,c.gy,coastR);
+    const traits=[];
+    if(coastal) traits.push('port');
+    if(h>0.55) traits.push('mining');
+    if(h>0.62) traits.push('fortified');
+    if(isCapital||isCity) traits.push('trade_hub');
+    const faction=contFaction[c.contId]||1;
+    const basePop=isCapital?15000:isCity?6000:isTown?1500:isVillage?400:120;
+    const pop=Math.round(basePop*(0.7+c.suit*0.8)*(0.8+rng()*0.4));
+    newPlaces.push({
+      x:c.gx, y:c.gy,
+      name:_civSettleName(rng),
+      kind, klass:kind, category:'settlement',
+      faction, pop, traits,
+    });
+  });
+
+  state.places=newPlaces;
+  _civSelectedPlace=null;
+  _civRenderPlaceEditor();
+  renderNow();
+}
+
+/* Prim's MST routes over a list of places using a pre-built cost grid.
+ * isSea=true → water cost 1 / land cost 60; else → terrain travel cost. */
+function _civMstRoutes(places, isSea){
+  const n=places.length; if(n<2) return [];
+  const sea=state.seaLevel||0.42;
+  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+
+  // Build cost grid at downsampled resolution
+  let cost;
+  if(isSea){
+    cost=new Float32Array(RW*RH);
+    for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+      cost[y*RW+x]=field[fy*GW+fx]<sea?1:60;
+    }
+  } else {
+    const dfld=new Float32Array(RW*RH);
+    for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+      dfld[y*RW+x]=field[fy*GW+fx];
+    }
+    cost=buildTravelCost(dfld,RW,RH,sea);
+  }
+
+  // Map places to downsampled indices
+  const rp=places.map(p=>Math.min(RH-1,Math.round(p.y*sc))*RW+Math.min(RW-1,Math.round(p.x*sc)));
+
+  // Dijkstra from each place
+  const results=rp.map(ri=>{
+    const rx=ri%RW, ry=(ri/RW)|0;
+    return roadDijkstra(cost,RW,RH,rx,ry,!!state.world);
+  });
+
+  // Prim's MST using Dijkstra dist values
+  const inM=new Uint8Array(n), best=new Float32Array(n).fill(Infinity), from=new Int32Array(n).fill(-1);
+  best[0]=0;
+  const edges=[];
+  for(let it=0;it<n;it++){
+    let u=-1, bd=Infinity;
+    for(let i=0;i<n;i++) if(!inM[i]&&best[i]<bd){ bd=best[i]; u=i; }
+    if(u<0||bd===Infinity) break;
+    inM[u]=1;
+    if(from[u]>=0) edges.push([from[u],u]);
+    for(let v=0;v<n;v++){
+      if(inM[v]) continue;
+      const d=results[u].dist[rp[v]];
+      if(d<best[v]){ best[v]=d; from[v]=u; }
+    }
+  }
+
+  // Reconstruct paths from Dijkstra prev arrays
+  const routes=[];
+  for(const[a,b] of edges){
+    const pa=places[a], pb=places[b], prev=results[a].prev;
+    const pts=[];
+    let ci=rp[b]; const si=rp[a]; let guard=RW*RH;
+    while(ci!==si&&ci>=0&&guard-->0){
+      const rx=ci%RW, ry=(ci/RW)|0;
+      pts.push([((rx+0.5)/sc)|0,((ry+0.5)/sc)|0]);
+      const pv=prev[ci]; if(pv<0||pv===ci) break; ci=pv;
+    }
+    pts.push([pa.x,pa.y]); pts.reverse();
+    if(pts[pts.length-1][0]!==pb.x||pts[pts.length-1][1]!==pb.y) pts.push([pb.x,pb.y]);
+    if(pts.length>1){
+      const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
+      routes.push({pts,km,sea:!!isSea});
+    }
+  }
+  return routes;
+}
+
+/* Generate land routes (per continent MST) + sea routes (port MST) */
+function _civAutoRoutes(){
+  if(!state.places.length){ alert('Auto-populate the world first.'); return; }
+  civRoutes=[];
+  const sea=state.seaLevel||0.42;
+
+  // Group settlements by land component (downsampled BFS)
+  const RW=Math.min(GW,256), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+  const isLand=new Uint8Array(RW*RH);
+  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+    isLand[y*RW+x]=field[fy*GW+fx]>sea?1:0;
+  }
+  const comp=new Int32Array(RW*RH).fill(-1);
+  const wrapX=!!state.world;
+  const dx4=[1,-1,0,0], dy4=[0,0,1,-1];
+  let nComp=0;
+  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+    if(!isLand[y*RW+x]||comp[y*RW+x]>=0) continue;
+    const id=nComp++;
+    const q=[y*RW+x]; comp[y*RW+x]=id;
+    while(q.length){
+      const ci=q.pop(), cx=ci%RW, cy=(ci/RW)|0;
+      for(let d=0;d<4;d++){
+        let nx=cx+dx4[d], ny=cy+dy4[d];
+        if(wrapX) nx=(nx+RW)%RW; else if(nx<0||nx>=RW) continue;
+        if(ny<0||ny>=RH) continue;
+        const ni=ny*RW+nx;
+        if(!isLand[ni]||comp[ni]>=0) continue;
+        comp[ni]=id; q.push(ni);
+      }
+    }
+  }
+
+  // Land MST per continent
+  const byCont={};
+  for(const p of state.places){
+    if(field[p.y*GW+p.x]<sea) continue;
+    const rx=Math.min(RW-1,Math.round(p.x*sc)), ry=Math.min(RH-1,Math.round(p.y*sc));
+    const cid=comp[ry*RW+rx]; if(cid<0) continue;
+    if(!byCont[cid]) byCont[cid]=[];
+    byCont[cid].push(p);
+  }
+  for(const cid in byCont){
+    const grp=byCont[cid]; if(grp.length<2) continue;
+    civRoutes.push(..._civMstRoutes(grp,false));
+  }
+
+  // Sea routes: port settlements only
+  const ports=state.places.filter(p=>p.traits&&p.traits.includes('port'));
+  if(ports.length>=2) civRoutes.push(..._civMstRoutes(ports,true));
+
+  renderNow();
+}
+
+/* One-click world: populate settlements + generate routes.
+ * Territory painting (Auto-polity) is a separate deliberate step due to cost. */
+function _civAutoWorld(){
+  _civAutoPopulate();
+  _civAutoRoutes();
+}
+
 /* ---- canvas pointer events for civ tools ---- */
 view.addEventListener('pointerdown',e=>{
   if(_activeTab!=='civ') return; // only act in Civ tab
@@ -8104,7 +8409,7 @@ function _civSyncToState(){
   state.civ={
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
-    routes:civRoutes.map(r=>({pts:r.pts,km:r.km})),
+    routes:civRoutes.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea})),
     year:civYear,
   };
 }
@@ -8116,7 +8421,7 @@ function _civSyncFromState(){
     const d=c.territory; for(let k=0;k<d.length;k+=2) if(d[k]<civTerritory.length) civTerritory[d[k]]=d[k+1];
   } else { civTerritory=null; }
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
-  civRoutes=(c.routes||[]).map(r=>({pts:r.pts,km:r.km}));
+  civRoutes=(c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea}));
   civYear=c.year||0;
   _civBuildTimelineUI();
 }
@@ -8202,6 +8507,12 @@ function _civSetTool(tool){
     b.addEventListener('click',()=>_civSetTool(b.dataset.civtool));
   });
 
+  const autoPopulate=document.getElementById('civAutoPopulateBtn');
+  if(autoPopulate) autoPopulate.onclick=()=>_civAutoWorld();
+
+  const autoRoutes=document.getElementById('civAutoRoutesBtn');
+  if(autoRoutes) autoRoutes.onclick=()=>_civAutoRoutes();
+
   const autoP=document.getElementById('civAutoPolityBtn');
   if(autoP) autoP.onclick=()=>{ _civAutoPolity(); };
 
@@ -8212,7 +8523,7 @@ function _civSetTool(tool){
   if(buildR) buildR.onclick=()=>_civConnectRoads();
 
   const clearR=document.getElementById('civClearRoadsBtn');
-  if(clearR) clearR.onclick=()=>{ state.roads=null; renderNow(); };
+  if(clearR) clearR.onclick=()=>{ state.roads=null; civRoutes=[]; renderNow(); };
 
   const clearP=document.getElementById('civClearPlacesBtn');
   if(clearP) clearP.onclick=()=>{ state.places=[]; state.roads=null; _civSelectedPlace=null; _civRenderPlaceEditor(); renderNow(); };

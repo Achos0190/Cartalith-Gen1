@@ -74,7 +74,8 @@
   .hint{font-size:11px;color:var(--faint);line-height:1.5;margin-top:8px}
   .sublabel{font-size:11px;color:var(--dim);margin:12px 0 5px;font-weight:600}
   .file{display:none}
-  .pill{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+  .pill{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:1px 7px;cursor:pointer;user-select:none}
+  .pill.on{background:var(--accent);color:#18191a;border-color:var(--accent)}
   label.chk{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--dim);font-size:12px;margin:9px 0}
   progress{flex:1;height:8px;border:0;border-radius:4px;background:var(--panel2);accent-color:var(--accent);overflow:hidden}
   progress::-webkit-progress-bar{background:var(--panel2);border-radius:4px}
@@ -217,6 +218,14 @@ details.cat-acc[open]>summary{color:var(--accent)}
     <!-- World sub-panel -->
     <div id="genWorld">
 
+<!-- COMMIT TERRAIN: bake the rendered map so civ interactions don't retrigger the full pipeline -->
+<div class="sec" id="civBakeSec">
+  <div class="btnrow">
+    <button id="civBakeBtn" class="accent" title="Renders and locks in the terrain so settlement/road placement doesn't retrigger the terrain pipeline.">🗺 Commit terrain</button>
+    <button id="civUnbakeBtn" style="display:none" title="Clear the terrain bake and restore live rendering.">↺ Live mode</button>
+  </div>
+  <div class="hint" id="civBakeHint">Commit the terrain before placing settlements to avoid slow re-renders on every click.</div>
+</div>
     <!-- GEOLOGY: Source, Planet, Scale, World Structure, Tectonics, Volcanism -->
     <details class="cat-acc" open>
     <summary>Geology</summary>
@@ -483,7 +492,21 @@ details.cat-acc[open]>summary{color:var(--accent)}
       <div class="seg sm" id="civToolSeg" style="flex-wrap:wrap">
         <button data-civtool="inspect" class="on">Inspect</button>
         <button data-civtool="info" title="Info — click map for settlement &amp; ecology details">🔍 Info</button>
-        <button data-civtool="place">Drop place</button>
+        <button data-civtool="place">Drop settlement</button>
+        <button data-civtool="place_poi">Drop POI</button>
+      </div>
+      <div class="row" id="civPoiTypeRow" style="display:none">
+        <label>POI type</label>
+        <select id="civPoiKind" style="flex:1">
+          <option value="ruin">⊕ Ruin</option>
+          <option value="landmark">◈ Landmark</option>
+          <option value="mountain_peak">▲ Peak</option>
+          <option value="named_forest">♧ Forest</option>
+          <option value="battlefield">⊗ Battlefield</option>
+          <option value="shrine">✧ Shrine</option>
+          <option value="cave">◐ Cave</option>
+          <option value="other">◆ Other</option>
+        </select>
       </div>
       <div class="btnrow" style="margin-top:6px">
         <button id="civAutoPopulateBtn" class="accent">Auto-populate world</button>
@@ -8027,9 +8050,39 @@ function drawCivLayer(){
 }
 
 /* ---- monkey-patch renderNow to add civ layer ---- */
+let _civBakedTerrain = null;   // ImageData snapshot of the terrain; when set, replaces the EF pipeline render
+let _civBakeRN = null;         // reference to the original renderNow (captured at monkey-patch time)
 {
-  const _prev=renderNow;
-  renderNow=function(){ _prev(); drawCivLayer(); };
+  _civBakeRN = renderNow;
+  renderNow=function(){
+    if(_civBakedTerrain){ vctx.putImageData(_civBakedTerrain,0,0); }
+    else { _civBakeRN(); }
+    drawCivLayer();
+  };
+}
+
+function _civCommitTerrain(){
+  _civBakeRN(); // render terrain fresh via the full EF pipeline
+  _civBakedTerrain = vctx.getImageData(0,0,GW,GH);
+  drawCivLayer();
+  _civUpdateBakeUI();
+}
+
+function _civClearBake(){
+  _civBakedTerrain = null;
+  renderNow(); // re-render live
+  _civUpdateBakeUI();
+}
+
+function _civUpdateBakeUI(){
+  const btn=document.getElementById('civBakeBtn');
+  const ubtn=document.getElementById('civUnbakeBtn');
+  const hint=document.getElementById('civBakeHint');
+  if(btn) btn.textContent=_civBakedTerrain ? '🗺 Re-commit terrain' : '🗺 Commit terrain';
+  if(ubtn) ubtn.style.display=_civBakedTerrain ? '' : 'none';
+  if(hint) hint.textContent=_civBakedTerrain
+    ? '✓ Terrain committed. Civ interactions are fast. Re-commit after any terrain edits.'
+    : 'Commit the terrain before placing settlements to avoid slow re-renders on every click.';
 }
 
 /* ---- territory painting ---- */
@@ -8055,19 +8108,32 @@ function _civEnsurePlaceDefaults(p){
 }
 
 function _civDropPlace(gx,gy){
-  // Check if near an existing place → remove it instead
-  // Proximity radius scales with GW so clicking works at any resolution
+  if(gx<0||gx>=GW||gy<0||gy>=GH) return;
+  const sea=state.seaLevel||0.42;
+  // If clicking near an existing place → select it (inspect) instead of deleting
   const _civPickR2=Math.max(25,(GW/50)*(GW/50));
   let nearest=null, nd=_civPickR2;
   for(const p of state.places){
     const d=(p.x-gx)*(p.x-gx)+(p.y-gy)*(p.y-gy);
     if(d<nd){ nd=d; nearest=p; }
   }
-  if(nearest){ state.places.splice(state.places.indexOf(nearest),1);
-    if(_civSelectedPlace===nearest){ _civSelectedPlace=null; _civRenderPlaceEditor(); }
-    renderNow(); return;
-  }
+  if(nearest){ _civSelectedPlace=nearest; _civRenderPlaceEditor(); drawCivLayer(); return; }
+  // Don't place on water or lake cells
+  if(field[gy*GW+gx]<sea) return;
+  const wb=currentWaterBodies && currentWaterBodies();
+  if(wb && wb[gy*GW+gx]!==0) return;
   const p={x:gx,y:gy,name:'',kind:'town',faction:_civActiveFaction,pop:1000,traits:[]};
+  state.places.push(p);
+  _civSelectedPlace=p; _civRenderPlaceEditor();
+  renderNow();
+}
+
+function _civDropPOI(gx,gy){
+  const kind=document.getElementById('civPoiKind')?.value||'other';
+  const sea=state.seaLevel||0.42;
+  if(gx<0||gx>=GW||gy<0||gy>=GH) return;
+  if(field[gy*GW+gx]<sea) return; // don't place on water
+  const p={x:gx,y:gy,name:'',kind,faction:0,traits:[]};
   state.places.push(p);
   _civSelectedPlace=p; _civRenderPlaceEditor();
   renderNow();
@@ -8395,33 +8461,32 @@ function _civBuildTimelineUI(){
 function _civAutoPolity(){
   if(!state.places.length) return;
   const sea=state.seaLevel||0.42;
-  // Build travel cost using EF's function
   const cost=buildTravelCost(field,GW,GH,sea);
   const terr=getCivTerritory(); terr.fill(0);
-  // Assign each place to a faction (cycle through non-unclaimed factions)
-  const facs=CIV_FACTIONS.slice(1); // exclude 'Unclaimed'
+  const facs=CIV_FACTIONS.slice(1);
   state.places.forEach((p,i)=>{ if(!p.faction) p.faction=(i%facs.length)+1; });
-  // Voronoi expansion: multi-source Dijkstra, one source per place
   const dist=new Float32Array(GW*GH).fill(Infinity);
   const fac=new Uint8Array(GW*GH);
-  // Simple min-heap
-  const heap=[]; const push=(i,d)=>{ heap.push({i,d}); heap.sort((a,b)=>a.d-b.d); }; const pop=()=>heap.shift();
+  /* Binary min-heap — O(log n) push/pop vs the previous O(n log n) sort */
+  const hd=[], hi=[];
+  function hpush(idx,d){ const k=hd.length; hd.push(d); hi.push(idx); let c=k; while(c>0){const p=(c-1)>>1;if(hd[p]<=hd[c])break;[hd[c],hd[p]]=[hd[p],hd[c]];[hi[c],hi[p]]=[hi[p],hi[c]];c=p;} }
+  function hpop(){ const top=hi[0],n=hd.length-1; hd[0]=hd[n];hi[0]=hi[n];hd.pop();hi.pop(); let c=0; for(;;){let s=c,l=2*c+1,r=l+1;if(l<hd.length&&hd[l]<hd[s])s=l;if(r<hd.length&&hd[r]<hd[s])s=r;if(s===c)break;[hd[c],hd[s]]=[hd[s],hd[c]];[hi[c],hi[s]]=[hi[s],hi[c]];c=s;}return top; }
   for(const p of state.places){
     if(p.x<0||p.x>=GW||p.y<0||p.y>=GH) continue;
     const i=p.y*GW+p.x;
-    if(dist[i]>0){ dist[i]=0; fac[i]=(p.faction||1); push(i,0); }
+    if(dist[i]>0){ dist[i]=0; fac[i]=(p.faction||1); hpush(i,0); }
   }
   const NB=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
-  const MAX_REACH=GW*0.3;
-  while(heap.length){
-    const {i,d}=pop(); if(d>dist[i]||d>MAX_REACH) continue;
+  const MAX_REACH=GW*0.35;
+  while(hd.length){
+    const i=hpop(); const d=dist[i]; if(d>MAX_REACH) continue;
     const x=i%GW, y=(i/GW)|0;
     for(const[dx,dy,w]of NB){
       const nx=x+dx, ny=y+dy; if(nx<0||nx>=GW||ny<0||ny>=GH) continue;
       const j=ny*GW+nx;
-      if(field[j]<sea) continue; // skip water
+      if(field[j]<sea) continue;
       const nd=d+w*(cost[j]||1);
-      if(nd<dist[j]){ dist[j]=nd; fac[j]=fac[i]; push(j,nd); }
+      if(nd<dist[j]){ dist[j]=nd; fac[j]=fac[i]; hpush(j,nd); }
     }
   }
   for(let i=0;i<GW*GH;i++) if(dist[i]<=MAX_REACH&&fac[i]) terr[i]=fac[i];
@@ -8518,9 +8583,10 @@ function _civAutoPopulate(){
   }
 
   // Build candidates from EF seeds (already sorted by score desc, full-res coords).
+  const _autoWb=currentWaterBodies ? currentWaterBodies() : null;
   const candidates=seeds.slice(0,maxPlaces).map(s=>({
     x:s.x,y:s.y,suit:s.score,contId:comp[s.y*GW+s.x]
-  })).filter(c=>c.contId>=0);
+  })).filter(c=>c.contId>=0 && (!_autoWb || _autoWb[c.y*GW+c.x]===0));
 
   // Classify: first per continent = capital; global top-4 = city; top-12 = town; rest hamlet/village
   const contFirst={};
@@ -8726,6 +8792,7 @@ view.addEventListener('pointerdown',e=>{
   else if(_civTool==='territory'){ view.setPointerCapture(e.pointerId); _civPainting=true; _civPaintTerritoryAt(gx,gy); }
   else if(_civTool==='route'){ _civWaypoints.push([gx,gy]); drawCivLayer(); }
   else if(_civTool==='draw_way'){ _civWayWaypoints.push([gx,gy]); drawCivLayer(); }
+  else if(_civTool==='place_poi'){ _civDropPOI(gx,gy); }
   else if(_civTool==='inspect'){ _civSelectPlaceAt(gx,gy); }
   else if(_civTool==='info'){ _civInfoAt(gx,gy); }
 });
@@ -8892,6 +8959,7 @@ function _civSyncFromState(){
     _civSelectedJourneyIdx=-1;
     state.civ={territory:[],timeline:[],ways:[],journeys:[],year:0};
     _civSelectedPlace=null; _civWaypoints=[]; _civWayWaypoints=[];
+    _civBakedTerrain=null; _civUpdateBakeUI();
     _civRenderPlaceEditor(); _civBuildTimelineUI(); _civRenderWayList(); _civRenderJourneyList(); _civUpdatePlannerPanel();
     const r=await _origGenerate.apply(this,arguments);
     drawCivLayer();
@@ -8951,6 +9019,8 @@ function _civSetTool(tool){
   document.querySelectorAll('[data-civtool]').forEach(b=>b.classList.toggle('on',b.dataset.civtool===tool));
   const infoSec=document.getElementById('civInfoSec');
   if(infoSec) infoSec.style.display=(tool==='info'?'':'none');
+  const poiRow=document.getElementById('civPoiTypeRow');
+  if(poiRow) poiRow.style.display=(tool==='place_poi'?'':'none');
 }
 
 /* duplicate generate() wrapper removed — handled above in the persistence section */
@@ -8989,6 +9059,11 @@ function _civSetTool(tool){
 
   const clearP=document.getElementById('civClearPlacesBtn');
   if(clearP) clearP.onclick=()=>{ state.places=[]; state.roads=null; _civSelectedPlace=null; _civRenderPlaceEditor(); renderNow(); };
+
+  const civBakeBtn=document.getElementById('civBakeBtn');
+  if(civBakeBtn) civBakeBtn.onclick=()=>_civCommitTerrain();
+  const civUnbakeBtn=document.getElementById('civUnbakeBtn');
+  if(civUnbakeBtn) civUnbakeBtn.onclick=()=>_civClearBake();
 
   const addYearBtn=document.getElementById('civTlAddYearBtn');
   if(addYearBtn) addYearBtn.onclick=()=>{

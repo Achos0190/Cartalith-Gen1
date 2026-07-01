@@ -479,7 +479,8 @@ details.cat-acc[open]>summary{color:var(--accent)}
     <div class="sec">
       <h2>Factions</h2>
       <div id="civFactionPicker" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px"></div>
-      <div class="hint" style="margin-bottom:6px;font-size:.75rem">Double-click a faction to rename it.</div>
+      <div class="btnrow" style="margin-bottom:6px"><button id="civAddFactionBtn">+ Add faction</button><button id="civRemoveFactionBtn">− Remove last</button></div>
+      <div class="hint" style="margin-bottom:6px;font-size:.75rem">Double-click a faction to rename it. <b>Add faction</b> appends a new polity with a distinct colour; <b>Remove last</b> drops the most recently added one (settlements/territory using it revert to Unclaimed).</div>
       <div class="row"><label>Territory radius</label><input type="range" id="civTerRadius" min="1" max="20" value="5"><span class="val" id="civTerRadiusV">5</span></div>
     </div>
     </details><!-- end Peoples cat-acc -->
@@ -552,7 +553,8 @@ details.cat-acc[open]>summary{color:var(--accent)}
           <option value="ancient">Ancient route</option>
         </select>
       </div>
-      <div class="hint">Select a way type then click the map to add waypoints. Press <b>Esc</b> to commit the path — each segment routes through the terrain via Dijkstra least-cost pathfinding. Roads prefer valleys and passes; sea lanes cross open water.</div>
+      <div class="btnrow" style="margin-top:6px"><button id="civCommitWayBtn">✓ Commit way</button></div>
+      <div class="hint">Select a way type then click the map to add waypoints, then tap <b>✓ Commit way</b> (desktop: Esc also works) to finish — each segment routes through the terrain via Dijkstra least-cost pathfinding. Roads prefer valleys and passes; sea lanes cross open water.</div>
       <div class="sublabel" style="margin-top:10px">Auto-generate</div>
       <div class="btnrow">
         <button id="civAutoRoutesBtn">Auto-routes</button>
@@ -586,13 +588,6 @@ details.cat-acc[open]>summary{color:var(--accent)}
 
     <!-- ══ EXPLORE ══ -->
     <div id="explorePanel" style="display:none">
-    <div class="subtab-bar" id="expSubBar">
-      <button class="subtab on" data-esub="travel">Travel</button>
-      <button class="subtab" data-esub="atlas">Atlas</button>
-    </div>
-
-    <!-- Travel sub-panel -->
-    <div id="expTravel">
 
     <div class="sec">
       <div class="sublabel">Tools</div>
@@ -600,7 +595,8 @@ details.cat-acc[open]>summary{color:var(--accent)}
         <button data-civtool="route">Route</button>
         <button data-civtool="info" title="Info — click map for settlement &amp; ecology details">🔍 Info</button>
       </div>
-      <div class="hint">Draw a planned <b>Route</b> (journey) by clicking waypoints on the map, then press <b>Esc</b> to commit. The Journey planner below lets you set transport mode, terrain and group conditions.</div>
+      <div class="btnrow" id="civRouteCommitRow" style="margin-top:6px"><button id="civCommitRouteBtn">✓ Commit route</button></div>
+      <div class="hint">Draw a planned <b>Route</b> (journey) by clicking waypoints on the map, then tap <b>✓ Commit route</b> (desktop: Esc also works) to finish. The Journey planner below lets you set transport mode, terrain and group conditions.</div>
     </div>
 
     <div class="sec" id="civInfoSec" style="display:none">
@@ -610,7 +606,7 @@ details.cat-acc[open]>summary{color:var(--accent)}
 
     <div class="sec">
       <h2>Journeys</h2>
-      <div id="civJourneyList"><div class="hint">No journeys yet. Draw one with the <b>Route</b> tool and press Esc to commit.</div></div>
+      <div id="civJourneyList"><div class="hint">No journeys yet. Draw one with the <b>Route</b> tool and tap <b>✓ Commit route</b>.</div></div>
     </div>
 
     <div class="sec" id="civPlannerSec" style="display:none">
@@ -631,55 +627,6 @@ details.cat-acc[open]>summary{color:var(--accent)}
       <canvas id="civProfileCv" width="220" height="48" style="width:100%;margin:4px 0;border-radius:4px;background:#14110c"></canvas>
       <div id="civPlanner"><div class="hint">Select a journey above to plan it.</div></div>
     </div>
-
-    </div><!-- end expTravel -->
-
-    <!-- Atlas sub-panel -->
-    <div id="expAtlas" style="display:none">
-
-    <div class="sec">
-      <h2>Tiles &amp; LOD</h2>
-      <div class="sublabel-grp">Live preview</div>
-      <label class="chk"><input type="checkbox" id="lodAutoChk" checked> Auto-detail on zoom (enter LOD when you zoom in)</label>
-      <label class="chk"><input type="checkbox" id="lodChk"> Tiled LOD view (zoom into amplified detail)</label>
-      <div class="row"><label>Zoom detail</label><input type="range" id="zoomDetailR" min="0" max="300" step="5" value="100"><span class="val" id="zoomDetailV">1.00×</span></div>
-      <div class="row"><label>Tile size</label>
-        <div class="seg sm" id="lodTileSeg" style="flex:1">
-          <button data-ts="512">512</button><button data-ts="1024" class="on">1K</button><button data-ts="2048">2K</button><button data-ts="4096">4K</button>
-        </div></div>
-      <div class="row"><label>LOD levels</label>
-        <select id="lodLevels" style="flex:1"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8" selected>8</option><option value="9">9</option><option value="10">10</option></select></div>
-      <div class="btnrow"><button id="lodRefineBtn">Refine detail (this view)</button></div>
-      <label class="chk"><input type="checkbox" id="lodBurnChk"> Burn river channels into tiles</label>
-      <label class="chk"><input type="checkbox" id="lodMicroChk"> Micro-erode tiles (slower, adds detail)</label>
-      <div class="hint"><b>Auto-detail on zoom</b> drops you into the tiled LOD view as you zoom in, so finer relief surfaces the closer you look. <b>Zoom detail</b> sets how pronounced the on-zoom procedural relief is (1× = legacy). <b>Refine detail</b> still force-amplifies the current view; never an 8K canvas.</div>
-
-      <div class="sublabel-grp">Export tile grid</div>
-      <div class="row"><label>Tiles X × Y</label>
-        <input type="number" id="refCols" min="1" max="8" step="1" value="2" style="flex:1;min-width:0">
-        <input type="number" id="refRows" min="1" max="8" step="1" value="2" style="flex:1;min-width:0"></div>
-      <div class="row"><label>Tile size</label>
-        <select id="refSize" style="flex:1"><option value="1024" selected>1024 px</option><option value="2048">2048 px</option><option value="4096">4096 px</option></select></div>
-      <label class="chk"><input type="checkbox" id="refGzip" checked> Compress heightmaps (gzip)</label>
-      <label class="chk"><input type="checkbox" id="lodShowGrid"> Show tile borders on the map</label>
-      <div class="estimate" id="tileSizeEst">~4 tiles · — MB</div>
-      <div class="btnrow"><button id="regionBtn">Select region</button><button class="accent" id="refineBtn" disabled>Refine &amp; export</button></div>
-      <div class="hint" id="refineNote">Drag a rectangle on the map, then <b>Refine &amp; export</b>: each tile is amplified from the coarse world in world-space (seam-free), packed as 16-bit height + a rendered PNG, with a schema-2 manifest. The grid (X×Y) and per-tile size are independent — tile pixels follow the selection's true shape, so non-square regions are never squished. The estimate above updates live.</div>
-
-      <details class="acc">
-        <summary>Atlas (IndexedDB bake)</summary>
-        <div class="btnrow" style="margin-top:8px"><button id="lodBakeBtn">Bake visible tiles → atlas</button><button id="lodClearAtlasBtn">Clear atlas</button></div>
-        <div class="btnrow"><button id="atlasExportBtn">Export atlas…</button></div>
-        <div class="hint" id="atlasStat">Atlas: —</div>
-        <div class="hint"><b>Bake</b> writes the refined tiles in view to a permanent IndexedDB atlas; baked chunks are served from the atlas instead of being regenerated (the chunk-debug overlay shows them green), and no detail refines beneath them. <b>Clear atlas</b> drops this world's bakes back to procedural. <b>Export atlas</b> round-trips this world's baked chunks to a portable <code>World/</code> ZIP (import via the <b>Import</b> menu in the header). Browser-only — needs IndexedDB.</div>
-      </details>
-      <details class="acc">
-        <summary>Chunk debug overlay</summary>
-        <div class="row" style="margin-top:8px"><label>Show</label><div class="seg sm" id="lodDbgSeg" style="flex:1"><button data-g="grid">Grid</button><button data-g="col">Colors</button><button data-g="lbl">Labels</button></div></div>
-      </details>
-    </div>
-
-    </div><!-- end expAtlas -->
 
     </div><!-- end explorePanel -->
 
@@ -819,6 +766,55 @@ details.cat-acc[open]>summary{color:var(--accent)}
     </div>
 
     <div class="sec">
+      <h2>Civilization layer</h2>
+      <div class="row"><label>Settlement icons &amp; labels</label><input type="range" id="civIconScaleR" min="20" max="250" step="5" value="100"><span class="val" id="civIconScaleV">1.00×</span></div>
+      <div class="row"><label>Way line width</label><input type="range" id="civWayScaleR" min="20" max="250" step="5" value="100"><span class="val" id="civWayScaleV">1.00×</span></div>
+      <div class="hint">Settlement pins, POI markers and their labels stay a roughly constant on-screen size at any zoom level — this slider is a further multiplier on top of that. <b>Way line width</b> scales the road/track/sea-lane strokes drawn by the Civilization layer (Generate → Civilization → Infrastructure), independently of the reference roads above.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Tiles &amp; LOD</h2>
+      <div class="sublabel-grp">Live preview</div>
+      <label class="chk"><input type="checkbox" id="lodAutoChk" checked> Auto-detail on zoom (enter LOD when you zoom in)</label>
+      <label class="chk"><input type="checkbox" id="lodChk"> Tiled LOD view (zoom into amplified detail)</label>
+      <div class="row"><label>Zoom detail</label><input type="range" id="zoomDetailR" min="0" max="300" step="5" value="100"><span class="val" id="zoomDetailV">1.00×</span></div>
+      <div class="row"><label>Tile size</label>
+        <div class="seg sm" id="lodTileSeg" style="flex:1">
+          <button data-ts="512">512</button><button data-ts="1024" class="on">1K</button><button data-ts="2048">2K</button><button data-ts="4096">4K</button>
+        </div></div>
+      <div class="row"><label>LOD levels</label>
+        <select id="lodLevels" style="flex:1"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8" selected>8</option><option value="9">9</option><option value="10">10</option></select></div>
+      <div class="btnrow"><button id="lodRefineBtn">Refine detail (this view)</button></div>
+      <label class="chk"><input type="checkbox" id="lodBurnChk"> Burn river channels into tiles</label>
+      <label class="chk"><input type="checkbox" id="lodMicroChk"> Micro-erode tiles (slower, adds detail)</label>
+      <div class="hint"><b>Auto-detail on zoom</b> drops you into the tiled LOD view as you zoom in, so finer relief surfaces the closer you look. <b>Zoom detail</b> sets how pronounced the on-zoom procedural relief is (1× = legacy). <b>Refine detail</b> still force-amplifies the current view; never an 8K canvas.</div>
+
+      <div class="sublabel-grp">Export tile grid</div>
+      <div class="row"><label>Tiles X × Y</label>
+        <input type="number" id="refCols" min="1" max="8" step="1" value="2" style="flex:1;min-width:0">
+        <input type="number" id="refRows" min="1" max="8" step="1" value="2" style="flex:1;min-width:0"></div>
+      <div class="row"><label>Tile size</label>
+        <select id="refSize" style="flex:1"><option value="1024" selected>1024 px</option><option value="2048">2048 px</option><option value="4096">4096 px</option></select></div>
+      <label class="chk"><input type="checkbox" id="refGzip" checked> Compress heightmaps (gzip)</label>
+      <label class="chk"><input type="checkbox" id="lodShowGrid"> Show tile borders on the map</label>
+      <div class="estimate" id="tileSizeEst">~4 tiles · — MB</div>
+      <div class="btnrow"><button id="regionBtn">Select region</button><button class="accent" id="refineBtn" disabled>Refine &amp; export</button></div>
+      <div class="hint" id="refineNote">Drag a rectangle on the map, then <b>Refine &amp; export</b>: each tile is amplified from the coarse world in world-space (seam-free), packed as 16-bit height + a rendered PNG, with a schema-2 manifest. The grid (X×Y) and per-tile size are independent — tile pixels follow the selection's true shape, so non-square regions are never squished. The estimate above updates live.</div>
+
+      <details class="acc">
+        <summary>Atlas (IndexedDB bake)</summary>
+        <div class="btnrow" style="margin-top:8px"><button id="lodBakeBtn">Bake visible tiles → atlas</button><button id="lodClearAtlasBtn">Clear atlas</button></div>
+        <div class="btnrow"><button id="atlasExportBtn">Export atlas…</button></div>
+        <div class="hint" id="atlasStat">Atlas: —</div>
+        <div class="hint"><b>Bake</b> writes the refined tiles in view to a permanent IndexedDB atlas; baked chunks are served from the atlas instead of being regenerated (the chunk-debug overlay shows them green), and no detail refines beneath them. <b>Clear atlas</b> drops this world's bakes back to procedural. <b>Export atlas</b> round-trips this world's baked chunks to a portable <code>World/</code> ZIP (import via the <b>Import</b> menu in the header). Browser-only — needs IndexedDB.</div>
+      </details>
+      <details class="acc">
+        <summary>Chunk debug overlay</summary>
+        <div class="row" style="margin-top:8px"><label>Show</label><div class="seg sm" id="lodDbgSeg" style="flex:1"><button data-g="grid">Grid</button><button data-g="col">Colors</button><button data-g="lbl">Labels</button></div></div>
+      </details>
+    </div>
+
+    <div class="sec">
       <h2>Asset pack</h2>
       <div class="btnrow"><button id="packClearBtn">Clear pack</button></div>
       <div class="row"><label>Texture strength</label><input type="range" id="splat" min="0" max="100" step="1" value="70"><span class="val" id="splatV">0.70</span></div>
@@ -939,7 +935,7 @@ const state = {
   showRivers: true,
   carveRivers: true,   /* v0.145: carve real valleys in generate() by default (off → bit-identical to v0.144) */
   places: [], roads: null,   /* v0.128: designated places + their road network — persistent data (saved with the project, unlike the transient _placeMode tool) */
-  viz:{ parchment:0, icons:false, waves:false, waveDist:1, zoomDetail:1, scaleBar:true, splat:0.7, sharpBiomes:true, showLakes:true, multiSun:false, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0, contours:0, ink:0, hachure:0, watercolor:0, cel:0, crosshatch:0, stipple:0, sepia:0, risograph:0, pointillism:0, waterAnim:false, riverDensity:1, minRiverOrder:1 },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome + v0.108 Painter NPR contours/ink/hachure/watercolor + v0.129 cel/crosshatch/stipple + v0.131 sepia/risograph/pointillism (all default 0 = off; blueprint removed v0.141) */
+  viz:{ parchment:0, icons:false, waves:false, waveDist:1, zoomDetail:1, scaleBar:true, splat:0.7, sharpBiomes:true, showLakes:true, multiSun:false, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0, contours:0, ink:0, hachure:0, watercolor:0, cel:0, crosshatch:0, stipple:0, sepia:0, risograph:0, pointillism:0, waterAnim:false, riverDensity:1, minRiverOrder:1, civIconScale:1, civWayScale:1 },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome + v0.108 Painter NPR contours/ink/hachure/watercolor + v0.129 cel/crosshatch/stipple + v0.131 sepia/risograph/pointillism (all default 0 = off; blueprint removed v0.141); civIconScale/civWayScale: user-adjustable civ-layer settlement/label and way line-width multipliers (both default 1) */
   climate:{ latN:55, latS:5, equatorTemp:30, poleTemp:-25, lapseRate:6.5, rainK:1.0, rainDep:0.35, oceanHum:1.0, windDir:0, windMode:'auto', pressK:0.6, zonalK:0.5, bulkEvap:true, seasons:false, maxRainMm:3000, currents:false, currentK:1.0, albedo:0, evap:0.12, ocean:1.0, wIters:70 }   /* L6: ice-albedo cooling feedback (0 = off → bit-identical) */
 };
 
@@ -7156,7 +7152,7 @@ async function exportZip(){
 }
 async function loadZip(file){ showBusy('loading…');
   try{ const z=unzipStore(await file.arrayBuffer()); if(!z['params.json']) throw new Error('not an Elevation Foundation save');
-    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); state.velo=Object.assign({iters:60,strength:0.5,meander:0.6},state.velo||{}); if(state.lodMaxLevel==null)state.lodMaxLevel=8; if(typeof state.lodAuto!=='boolean')state.lodAuto=true; if(!Array.isArray(state.places))state.places=[]; if(state.roads===undefined)state.roads=null; if(typeof state.showRivers!=='boolean')state.showRivers=true; if(typeof state.carveRivers!=='boolean')state.carveRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; if(state.debugOpacity==null)state.debugOpacity=1; state.viz=Object.assign({parchment:0,icons:false,waves:false,waveDist:1,zoomDetail:1,scaleBar:true,splat:0.7,sharpBiomes:true,showLakes:true,multiSun:false,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0,contours:0,ink:0,hachure:0,watercolor:0,cel:0,crosshatch:0,stipple:0,sepia:0,risograph:0,pointillism:0,waterAnim:false,riverDensity:1,minRiverOrder:1},state.viz||{}); delete state.viz.smoothRivers; delete state.viz.blueprint; if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.faultBlock==null)state.tect.faultBlock=0.6; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
+    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); state.velo=Object.assign({iters:60,strength:0.5,meander:0.6},state.velo||{}); if(state.lodMaxLevel==null)state.lodMaxLevel=8; if(typeof state.lodAuto!=='boolean')state.lodAuto=true; if(!Array.isArray(state.places))state.places=[]; if(state.roads===undefined)state.roads=null; if(typeof state.showRivers!=='boolean')state.showRivers=true; if(typeof state.carveRivers!=='boolean')state.carveRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; if(state.debugOpacity==null)state.debugOpacity=1; state.viz=Object.assign({parchment:0,icons:false,waves:false,waveDist:1,zoomDetail:1,scaleBar:true,splat:0.7,sharpBiomes:true,showLakes:true,multiSun:false,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0,contours:0,ink:0,hachure:0,watercolor:0,cel:0,crosshatch:0,stipple:0,sepia:0,risograph:0,pointillism:0,waterAnim:false,riverDensity:1,minRiverOrder:1,civIconScale:1,civWayScale:1},state.viz||{}); delete state.viz.smoothRivers; delete state.viz.blueprint; if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.faultBlock==null)state.tect.faultBlock=0.6; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
     if(z['heightmap.f32']){ const fa=new Float32Array(z['heightmap.f32'].buffer); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }
     else if(z['heightmap_rg16.bin']){ const fa=unpackHeight16(z['heightmap_rg16.bin'],GW*GH); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }   /* portable 16-bit fallback */
     if(z['temperature.f32']){ const fa=new Float32Array(z['temperature.f32'].buffer); tempField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else computeTemperature();
@@ -7208,7 +7204,7 @@ function syncUI(){ suspendRender=true;
   v('bioBlend',Math.round(state.bioBlend*100)); lab('bioBlendV',state.bioBlend.toFixed(2)); v('brad',state.radius); lab('bradV',state.radius);
   v('bstr',Math.round(state.strength*100)); lab('bstrV',Math.round(state.strength*100)+'%'); const sh=document.getElementById('shadeOnHypso'); if(sh)sh.checked=state.shadeHypso;
   { const dao=state.debugOpacity==null?1:state.debugOpacity; v('dbgOpacity',Math.round(dao*100)); lab('dbgOpacityV',Math.round(dao*100)+'%'); }   /* v0.110 */
-  { const vz=state.viz||{parchment:0,icons:false,waves:false,scaleBar:true}; v('parch',Math.round((vz.parchment||0)*100)); lab('parchV',vz.parchment>0?vz.parchment.toFixed(2):'off'); v('aoR',Math.round((vz.ao||0)*100)); lab('aoV',vz.ao>0?vz.ao.toFixed(2):'off'); v('crestR',Math.round((vz.crest||0)*100)); lab('crestV',vz.crest>0?vz.crest.toFixed(2):'off'); v('rockR',Math.round((vz.rockSlope||0)*100)); lab('rockV',vz.rockSlope>0?vz.rockSlope.toFixed(2):'off'); v('texR',Math.round((vz.texture||0)*100)); lab('texV',vz.texture>0?vz.texture.toFixed(2):'off'); v('minorR',Math.round((vz.minorStreams||0)*100)); lab('minorV',vz.minorStreams>0?vz.minorStreams.toFixed(2):'off'); { const rd=vz.riverDensity==null?1:vz.riverDensity; v('riverDensR',Math.round(rd*100)); lab('riverDensV',rd.toFixed(2)+'×'); const mo=vz.minRiverOrder==null?1:vz.minRiverOrder; v('minOrderR',mo); lab('minOrderV',mo>1?('≥ '+mo):'all'); } v('ridgeR',Math.round((vz.ridgedRelief||0)*100)); lab('ridgeV',vz.ridgedRelief>0?vz.ridgedRelief.toFixed(2):'off'); v('contoursR',Math.round((vz.contours||0)*100)); lab('contoursV',vz.contours>0?vz.contours.toFixed(2):'off'); v('inkR',Math.round((vz.ink||0)*100)); lab('inkV',vz.ink>0?vz.ink.toFixed(2):'off'); v('hachureR',Math.round((vz.hachure||0)*100)); lab('hachureV',vz.hachure>0?vz.hachure.toFixed(2):'off'); v('watercolorR',Math.round((vz.watercolor||0)*100)); lab('watercolorV',vz.watercolor>0?vz.watercolor.toFixed(2):'off'); v('celR',Math.round((vz.cel||0)*100)); lab('celV',vz.cel>0?vz.cel.toFixed(2):'off'); v('crosshatchR',Math.round((vz.crosshatch||0)*100)); lab('crosshatchV',vz.crosshatch>0?vz.crosshatch.toFixed(2):'off'); v('stippleR',Math.round((vz.stipple||0)*100)); lab('stippleV',vz.stipple>0?vz.stipple.toFixed(2):'off'); const ic=document.getElementById('iconsChk'); if(ic)ic.checked=!!vz.icons; const wc=document.getElementById('wavesChk'); if(wc)wc.checked=!!vz.waves; { const wd=vz.waveDist==null?1:vz.waveDist; v('waveDistR',Math.round(wd*100)); lab('waveDistV',wd.toFixed(2)+'×'); } const wa=document.getElementById('waterAnimChk'); if(wa)wa.checked=!!vz.waterAnim; const sb=document.getElementById('scaleBarChk'); if(sb)sb.checked=vz.scaleBar!==false; const sp=document.getElementById('splat'); if(sp){ sp.value=Math.round((vz.splat==null?0.7:vz.splat)*100); const spv=document.getElementById('splatV'); if(spv)spv.textContent=(vz.splat==null?0.7:vz.splat).toFixed(2); } } { const se=document.getElementById('seasons'); if(se)se.checked=!!state.climate.seasons; } { const cu=document.getElementById('currents'); if(cu)cu.checked=!!state.climate.currents; }
+  { const vz=state.viz||{parchment:0,icons:false,waves:false,scaleBar:true}; v('parch',Math.round((vz.parchment||0)*100)); lab('parchV',vz.parchment>0?vz.parchment.toFixed(2):'off'); v('aoR',Math.round((vz.ao||0)*100)); lab('aoV',vz.ao>0?vz.ao.toFixed(2):'off'); v('crestR',Math.round((vz.crest||0)*100)); lab('crestV',vz.crest>0?vz.crest.toFixed(2):'off'); v('rockR',Math.round((vz.rockSlope||0)*100)); lab('rockV',vz.rockSlope>0?vz.rockSlope.toFixed(2):'off'); v('texR',Math.round((vz.texture||0)*100)); lab('texV',vz.texture>0?vz.texture.toFixed(2):'off'); v('minorR',Math.round((vz.minorStreams||0)*100)); lab('minorV',vz.minorStreams>0?vz.minorStreams.toFixed(2):'off'); { const rd=vz.riverDensity==null?1:vz.riverDensity; v('riverDensR',Math.round(rd*100)); lab('riverDensV',rd.toFixed(2)+'×'); const mo=vz.minRiverOrder==null?1:vz.minRiverOrder; v('minOrderR',mo); lab('minOrderV',mo>1?('≥ '+mo):'all'); } v('ridgeR',Math.round((vz.ridgedRelief||0)*100)); lab('ridgeV',vz.ridgedRelief>0?vz.ridgedRelief.toFixed(2):'off'); v('contoursR',Math.round((vz.contours||0)*100)); lab('contoursV',vz.contours>0?vz.contours.toFixed(2):'off'); v('inkR',Math.round((vz.ink||0)*100)); lab('inkV',vz.ink>0?vz.ink.toFixed(2):'off'); v('hachureR',Math.round((vz.hachure||0)*100)); lab('hachureV',vz.hachure>0?vz.hachure.toFixed(2):'off'); v('watercolorR',Math.round((vz.watercolor||0)*100)); lab('watercolorV',vz.watercolor>0?vz.watercolor.toFixed(2):'off'); v('celR',Math.round((vz.cel||0)*100)); lab('celV',vz.cel>0?vz.cel.toFixed(2):'off'); v('crosshatchR',Math.round((vz.crosshatch||0)*100)); lab('crosshatchV',vz.crosshatch>0?vz.crosshatch.toFixed(2):'off'); v('stippleR',Math.round((vz.stipple||0)*100)); lab('stippleV',vz.stipple>0?vz.stipple.toFixed(2):'off'); const ic=document.getElementById('iconsChk'); if(ic)ic.checked=!!vz.icons; const wc=document.getElementById('wavesChk'); if(wc)wc.checked=!!vz.waves; { const wd=vz.waveDist==null?1:vz.waveDist; v('waveDistR',Math.round(wd*100)); lab('waveDistV',wd.toFixed(2)+'×'); } const wa=document.getElementById('waterAnimChk'); if(wa)wa.checked=!!vz.waterAnim; const sb=document.getElementById('scaleBarChk'); if(sb)sb.checked=vz.scaleBar!==false; const sp=document.getElementById('splat'); if(sp){ sp.value=Math.round((vz.splat==null?0.7:vz.splat)*100); const spv=document.getElementById('splatV'); if(spv)spv.textContent=(vz.splat==null?0.7:vz.splat).toFixed(2); } { const cis=vz.civIconScale==null?1:vz.civIconScale; v('civIconScaleR',Math.round(cis*100)); lab('civIconScaleV',cis.toFixed(2)+'×'); const cws=vz.civWayScale==null?1:vz.civWayScale; v('civWayScaleR',Math.round(cws*100)); lab('civWayScaleV',cws.toFixed(2)+'×'); } } { const se=document.getElementById('seasons'); if(se)se.checked=!!state.climate.seasons; } { const cu=document.getElementById('currents'); if(cu)cu.checked=!!state.climate.currents; }
   const segOn=(sel,fn)=>document.querySelectorAll(sel+' button').forEach(b=>b.classList.toggle('on',fn(b)));
   segOn('#resSeg',b=>+b.dataset.w===state.resW); segOn('#extentSeg',b=>(b.dataset.world==='1')===state.world); segOn('#modeSeg',b=>b.dataset.mode===state.mode); segOn('#debugSeg',b=>b.dataset.d===state.debug); segOn('#brushSeg',b=>b.dataset.brush===state.brush);
   segOn('#windModeSeg',b=>b.dataset.wm===(cl.windMode||'auto'));
@@ -7270,6 +7266,8 @@ bind('texR',e=>{ state.viz.texture=+e.target.value/100; document.getElementById(
 bind('minorR',e=>{ state.viz.minorStreams=+e.target.value/100; document.getElementById('minorV').textContent=state.viz.minorStreams>0?state.viz.minorStreams.toFixed(2):'off'; render(); });   /* R3 minor channels */
 bind('riverDensR',e=>{ state.viz.riverDensity=+e.target.value/100; document.getElementById('riverDensV').textContent=state.viz.riverDensity.toFixed(2)+'×'; _riverNet=null; render(); });   /* v0.137 R1: slope-area channel density (1× = legacy) */
 bind('minOrderR',e=>{ state.viz.minRiverOrder=+e.target.value|0; document.getElementById('minOrderV').textContent=state.viz.minRiverOrder>1?('≥ '+state.viz.minRiverOrder):'all'; render(); });   /* v0.137 R2: hide low-order streams in Flow/Strahler views */
+bind('civIconScaleR',e=>{ state.viz.civIconScale=+e.target.value/100; document.getElementById('civIconScaleV').textContent=state.viz.civIconScale.toFixed(2)+'×'; if(typeof drawCivLayer==='function') drawCivLayer(); });   /* user multiplier on top of the zoom-compensated settlement/POI icon+label size */
+bind('civWayScaleR',e=>{ state.viz.civWayScale=+e.target.value/100; document.getElementById('civWayScaleV').textContent=state.viz.civWayScale.toFixed(2)+'×'; if(typeof drawCivLayer==='function') drawCivLayer(); });   /* user multiplier on top of the zoom-compensated civ-layer way line width */
 bind('ridgeR',e=>{ state.viz.ridgedRelief=+e.target.value/100; document.getElementById('ridgeV').textContent=state.viz.ridgedRelief>0?state.viz.ridgedRelief.toFixed(2):'off'; render(); });   /* R4 ridged relief */
 bind('sdfCoastR', e=>{ state.viz.sdfCoast =+e.target.value/100; document.getElementById('sdfCoastV').textContent =state.viz.sdfCoast >0?state.viz.sdfCoast.toFixed(2):'off';  render(); });   /* v0.096 SDF coastlines */
 bind('sdfRiversR',e=>{ state.viz.sdfRivers=+e.target.value/100; document.getElementById('sdfRiversV').textContent=state.viz.sdfRivers>0?state.viz.sdfRivers.toFixed(2):'off'; render(); });   /* v0.096 SDF river bands */
@@ -7442,15 +7440,6 @@ document.querySelectorAll('#genSubBar .subtab').forEach(b=>b.addEventListener('c
   if(gc) gc.style.display=(sub==='civ'?'':'none');
 }));
 
-/* ---- Explore sub-tab switching (Travel / Atlas) ---- */
-document.querySelectorAll('#expSubBar .subtab').forEach(b=>b.addEventListener('click',()=>{
-  document.querySelectorAll('#expSubBar .subtab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
-  const sub=b.dataset.esub;
-  const et=document.getElementById('expTravel'), ea=document.getElementById('expAtlas');
-  if(et) et.style.display=(sub==='travel'?'':'none');
-  if(ea) ea.style.display=(sub==='atlas'?'':'none');
-}));
-
 /* ---- plotline feature brush ---- */
 document.querySelectorAll('#featureSeg button').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('#featureSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
@@ -7549,6 +7538,11 @@ function applyView(){
       : 'translate('+viewT.panX+'px,'+viewT.panY+'px) scale('+viewT.scale+')';
   }
   updateScaleBar();
+  /* Civ-layer icons/labels/ways are sized with an inverse-zoom compensation (_civZoomK) so
+     they read as a roughly constant, legible screen size instead of blurrily inheriting the
+     raw CSS scale — that only works if the civ canvas is actually redrawn on every zoom/pan
+     step (cheap: it only iterates state.places/civWays, never the GW×GH grid). */
+  if(!_lodOn && typeof drawCivLayer==='function' && typeof state!=='undefined' && state.places) drawCivLayer();
 }
 function zoomAt(cx,cy,k){ /* zoom about client point (cx,cy), keeping it fixed on screen */
   if(!canvasStack) return;
@@ -7781,7 +7775,11 @@ GW=state.resW; GH=gridH(GW); allocate(); withBusy('generating…',generate);
      ===================================================================== -->
 <script>
 /* ---- constants ---- */
-const CIV_FACTIONS=[
+/* User-adaptable faction count: CIV_FACTIONS is mutable (index 0 = 'Unclaimed', fixed) —
+   _civAddFaction/_civRemoveFaction grow/shrink it; _civFactionColor deterministically colours
+   any index beyond the hand-picked base palette so appended factions stay visually distinct
+   without needing a colour picker. */
+let CIV_FACTIONS=[
   ['Unclaimed',[60,60,60]],
   ['Aurelia',[206,84,72]],
   ['Veldmark',[86,156,96]],
@@ -7790,6 +7788,33 @@ const CIV_FACTIONS=[
   ['Mirelle',[166,96,186]],
   ['Draumr League',[80,176,184]]
 ];
+function _civFactionColor(i){
+  // golden-angle hue rotation ⇒ maximally spread, deterministic per index, never repeats nearby hues
+  const h=(i*137.508)%360, s=0.55, l=0.5;
+  const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+  let r,g,b;
+  if(h<60){r=c;g=x;b=0;} else if(h<120){r=x;g=c;b=0;} else if(h<180){r=0;g=c;b=x;}
+  else if(h<240){r=0;g=x;b=c;} else if(h<300){r=x;g=0;b=c;} else {r=c;g=0;b=x;}
+  return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)];
+}
+function _civAddFaction(){
+  const i=CIV_FACTIONS.length;
+  const name='Faction '+i;
+  CIV_FACTIONS.push([name,_civFactionColor(i)]);
+  civFactionNames.push(name);
+  _civBuildFactionPicker();
+}
+function _civRemoveFaction(){
+  if(CIV_FACTIONS.length<=2) return;   // keep Unclaimed + at least 1 faction
+  const idx=CIV_FACTIONS.length-1;
+  // reassign anything using the removed faction back to Unclaimed rather than leaving a dangling index
+  for(const p of state.places) if(p.faction===idx) p.faction=0;
+  const terr=civTerritory;
+  if(terr) for(let i=0;i<terr.length;i++) if(terr[i]===idx) terr[i]=0;
+  if(_civActiveFaction===idx) _civActiveFaction=Math.max(1,idx-1);
+  CIV_FACTIONS.pop(); civFactionNames.pop();
+  _civBuildFactionPicker(); drawCivLayer();
+}
 const CIV_SETTLEMENT_CLASSES=[
   {key:'hamlet',    label:'Hamlet',     glyph:'⌂', rank:0},
   {key:'village',   label:'Village',    glyph:'●', rank:1},
@@ -7911,10 +7936,21 @@ function getCivTerritory(){
 }
 
 /* ---- drawing helpers ---- */
+/* Inverse of the current CSS zoom (viewT.scale), clamped so icons/labels/ways stay
+   comfortably sized (never vanish at extreme zoom-in, never dominate at extreme zoom-out)
+   while still shrinking-in-canvas-space as you zoom in so the ON-SCREEN size — after the CSS
+   transform multiplies it back out — stays roughly constant, like a conventional map pin. */
+function _civZoomK(){
+  const z=(typeof viewT!=='undefined'&&viewT&&viewT.scale)?viewT.scale:1;
+  return 1/Math.max(0.35,Math.min(5,z));
+}
+function _civIconScale(){ return (state.viz&&state.viz.civIconScale!=null)?state.viz.civIconScale:1; }
+function _civWayScale(){ return (state.viz&&state.viz.civWayScale!=null)?state.viz.civWayScale:1; }
+
 function _civDrawSettlementPin(ctx,px,py,place,selected,opts){
   opts=opts||{};
   const klass=CIV_SETTLEMENT_CLASSES.find(c=>c.key===(place.kind||'town'))||CIV_SETTLEMENT_CLASSES[2];
-  const sc=Math.max(1,GW/512);   // scales with working resolution so icons stay the same screen size at any GW
+  const sc=Math.max(1,GW/512)*_civZoomK()*_civIconScale();   // resolution + zoom + user scale, so icons stay a comfortable screen size at any zoom
   const sz=(4+klass.rank)*sc;
   const col=place.faction?CIV_FACTIONS[place.faction]?.[1]||[200,180,130]:[200,180,130];
   ctx.save();
@@ -7941,7 +7977,7 @@ function _civDrawSettlementPin(ctx,px,py,place,selected,opts){
 function _civDrawPoiPin(ctx,px,py,place,selected,opts){
   opts=opts||{};
   const poi=CIV_POI_TYPES.find(t=>t.key===(place.kind||'other'))||CIV_POI_TYPES[7];
-  const sc=Math.max(1,GW/512);
+  const sc=Math.max(1,GW/512)*_civZoomK()*_civIconScale();
   const r=5*sc;
   ctx.save();
   ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2);
@@ -7995,7 +8031,13 @@ function drawCivLayer(){
   }
 
   // 2. Ways + Journeys
-  const rsc=Math.max(1,GW/512);
+  // rsc used to be resolution-only (Math.max(1,GW/512)), which — combined with the wide base
+  // widths below — read as "big and crude" at typical resolutions, and never adapted to zoom
+  // (drawCivLayer only reran on regenerate/pan/zoom via applyView's hook, not continuously) so
+  // lines stayed a fixed canvas-pixel width that got blurrier and chunkier the further you
+  // zoomed in. Base widths are now roughly 60% of their old values (finer by default) and rsc
+  // folds in inverse-zoom + a user-facing "Way width" slider (state.viz.civWayScale).
+  const rsc=Math.max(1,GW/512)*_civZoomK()*_civWayScale();
   civCtx.save(); civCtx.lineCap='round'; civCtx.lineJoin='round';
   // 2a. Ways — road hierarchy with LOD filtering
   civWays.forEach(rt=>{
@@ -8006,29 +8048,29 @@ function drawCivLayer(){
     civCtx.beginPath();
     rt.pts.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
     if(wtype==='sea-lane'){
-      civCtx.strokeStyle='rgba(10,30,60,.4)'; civCtx.lineWidth=2.5*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(10,30,60,.4)'; civCtx.lineWidth=1.5*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(30,130,200,.7)';
-      civCtx.setLineDash([4*rsc,3*rsc]); civCtx.lineWidth=1.4*rsc; civCtx.stroke();
+      civCtx.setLineDash([2.6*rsc,2*rsc]); civCtx.lineWidth=0.85*rsc; civCtx.stroke();
     } else if(wtype==='highway'){
       // Primary trade corridor — thick solid ochre
-      civCtx.strokeStyle='rgba(20,10,5,.55)'; civCtx.lineWidth=3.8*rsc; civCtx.stroke();
-      civCtx.strokeStyle='rgba(210,145,55,.98)'; civCtx.setLineDash([]); civCtx.lineWidth=2.4*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(20,10,5,.55)'; civCtx.lineWidth=2.3*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(210,145,55,.98)'; civCtx.setLineDash([]); civCtx.lineWidth=1.45*rsc; civCtx.stroke();
     } else if(wtype==='regional'){
       // Regional road — medium solid amber
-      civCtx.strokeStyle='rgba(25,14,5,.45)'; civCtx.lineWidth=3.0*rsc; civCtx.stroke();
-      civCtx.strokeStyle='rgba(178,118,52,.88)'; civCtx.setLineDash([]); civCtx.lineWidth=1.9*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(25,14,5,.45)'; civCtx.lineWidth=1.8*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(178,118,52,.88)'; civCtx.setLineDash([]); civCtx.lineWidth=1.15*rsc; civCtx.stroke();
     } else if(wtype==='track'){
-      civCtx.strokeStyle='rgba(30,20,10,.35)'; civCtx.lineWidth=1.8*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(30,20,10,.35)'; civCtx.lineWidth=1.1*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(100,120,60,.75)';
-      civCtx.setLineDash([2*rsc,3*rsc]); civCtx.lineWidth=1.0*rsc; civCtx.stroke();
+      civCtx.setLineDash([1.3*rsc,2*rsc]); civCtx.lineWidth=0.6*rsc; civCtx.stroke();
     } else if(wtype==='ancient'){
-      civCtx.strokeStyle='rgba(20,10,5,.35)'; civCtx.lineWidth=1.8*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(20,10,5,.35)'; civCtx.lineWidth=1.1*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(120,110,100,.65)';
-      civCtx.setLineDash([4*rsc,2*rsc]); civCtx.lineWidth=1.1*rsc; civCtx.stroke();
+      civCtx.setLineDash([2.5*rsc,1.3*rsc]); civCtx.lineWidth=0.65*rsc; civCtx.stroke();
     } else { // road (default)
-      civCtx.strokeStyle='rgba(30,20,10,.4)'; civCtx.lineWidth=2*rsc; civCtx.stroke();
+      civCtx.strokeStyle='rgba(30,20,10,.4)'; civCtx.lineWidth=1.2*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(160,100,60,.75)';
-      civCtx.setLineDash([3*rsc,2*rsc]); civCtx.lineWidth=1.2*rsc; civCtx.stroke();
+      civCtx.setLineDash([1.8*rsc,1.3*rsc]); civCtx.lineWidth=0.7*rsc; civCtx.stroke();
     }
     civCtx.setLineDash([]);
   });
@@ -8071,7 +8113,7 @@ function drawCivLayer(){
   //    lower tiers lose their label — but never their pin glyph — on collision).
   const tierRankDraw={capital:0,city:1,town:2,village:3,hamlet:4};
   const sortedForDraw=state.places.slice().sort((a,b)=>(tierRankDraw[a.kind]||3)-(tierRankDraw[b.kind]||3));
-  const lsc=Math.max(1,GW/512);
+  const lsc=Math.max(1,GW/512)*_civZoomK()*_civIconScale();
   const LGRID_S=8*lsc;   // label-occupancy grid cell size (canvas px), scales with working resolution
   const lgW=Math.max(1,Math.ceil(GW/LGRID_S)), lgH=Math.max(1,Math.ceil(GH/LGRID_S));
   const lblOcc=new Uint8Array(lgW*lgH);
@@ -8413,7 +8455,28 @@ function _civUpdatePlannerPanel(){
 /* ---- info tool ---- */
 function _civInfoAt(gx,gy){
   const el=document.getElementById('civInfoPanel'); if(!el) return;
+  gx=Math.round(gx); gy=Math.round(gy);
+  if(gx<0||gx>=GW||gy<0||gy>=GH) return;
+  const ci=gy*GW+gx;
   let html='';
+  // Terrain actually under the cursor — read the exact clicked cell, never a "nearest node"
+  // (previously this info panel only reported the nearest SETTLEMENT / nearest ECOREGION
+  // CENTROID, so clicking open sea near a forest region reported the forest's data — wrong).
+  if(typeof currentCartBiome==='function'){
+    const cb=currentCartBiome();
+    const bIdx=cb[ci];
+    const biomeName=(typeof CART_BIOMES!=='undefined'&&CART_BIOMES[bIdx-1])||'Unknown';
+    const tC=(typeof tempField!=='undefined'&&tempField)?tempField[ci]:null;
+    const rr=(typeof rainField!=='undefined'&&rainField)?rainField[ci]:null;
+    const elevPct=field?Math.round(Math.max(0,(field[ci]-(state.seaLevel||0.42)))/(1-(state.seaLevel||0.42))*100):null;
+    html+=`<div style="margin-bottom:7px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+      <div style="font-size:.72rem;font-weight:700;letter-spacing:.04em;color:var(--muted);margin-bottom:3px">TERRAIN HERE</div>
+      <div class="insp-row"><span class="k">Type</span><span class="val">${biomeName}</span></div>
+      ${tC!=null?`<div class="insp-row"><span class="k">Temperature</span><span class="val">${tC.toFixed(1)}°C</span></div>`:''}
+      ${rr!=null?`<div class="insp-row"><span class="k">Rainfall</span><span class="val">${(rr*100).toFixed(0)}%</span></div>`:''}
+      ${(bIdx!==14&&bIdx!==15&&elevPct!=null)?`<div class="insp-row"><span class="k">Elevation</span><span class="val">${elevPct}% above sea</span></div>`:''}
+    </div>`;
+  }
   // Settlement info — find nearest within a generous radius
   const pickR2=Math.max(400,(GW/35)*(GW/35));
   let nearestPlace=null, nd=pickR2;
@@ -8445,14 +8508,20 @@ function _civInfoAt(gx,gy){
       }catch(e){}
     }
   }
-  // Ecology — nearest ecoregion centroid
+  // Ecology — the ecoregion that actually CONTAINS the clicked cell (regionId raster is
+  // indexed 1:1 with wld.regions, per buildEcoregions), not the nearest region centroid —
+  // a click on open water or a too-small/dropped region correctly shows no ecology at all
+  // instead of borrowing the nearest unrelated land region's data.
   if(typeof currentWildlife==='function'){
     const wld=currentWildlife();
-    if(wld&&wld.regions&&wld.regions.length){
-      let nearReg=null, nrd=Infinity;
-      for(const reg of wld.regions){ if(reg.cx==null) continue; const d=(reg.cx-gx)**2+(reg.cy-gy)**2; if(d<nrd){nrd=d;nearReg=reg;} }
+    if(wld&&wld.regionId&&wld.regions&&wld.regions.length){
+      const rid=wld.regionId[ci];
+      const nearReg=(rid>=0&&rid<wld.regions.length)?wld.regions[rid]:null;
       if(nearReg){
-        const biomeName=(typeof CART_BIOMES!=='undefined'&&CART_BIOMES[nearReg.biome])||('Biome '+nearReg.biome);
+        // CART_BIOMES is 1-based (index 0 = unpainted); nearReg.biome is the raw 1-based
+        // cartBiome value, so the lookup needs the -1 offset — without it this showed the
+        // WRONG biome name (off by one) even after fixing the "nearest region" bug above.
+        const biomeName=(typeof CART_BIOMES!=='undefined'&&CART_BIOMES[nearReg.biome-1])||('Biome '+nearReg.biome);
         const richStr=nearReg.richness!=null?nearReg.richness.toFixed(0)+' spp.':'—';
         const nppStr=nearReg.nppn!=null?(nearReg.nppn*100).toFixed(0)+'%':'—';
         const areaStr=nearReg.areaKm2!=null?nearReg.areaKm2.toFixed(0)+' km²':'—';
@@ -8852,14 +8921,19 @@ function _civMstRoutes(places, isSea){
   const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
 
   // Build cost grid at downsampled resolution
-  // Sea routes: use 1e6 for land (not 60) so routes strongly prefer water.
+  // Sea routes: land is genuinely IMPASSABLE (Infinity), not merely expensive — an
+  // expensive-but-finite land cost let Dijkstra cut across jagged downsampled coastline
+  // pixels when it was cheaper than the long way around, and the Catmull-Rom smoothing
+  // then exaggerated those land-cutting zigzags into visible nonsensical loops. Forcing
+  // land to Infinity keeps the path strictly on water; snapToFinite (below) is what makes
+  // a land-based port reachable at all.
   // If no sea path exists (disconnected ports), dist stays Infinity → no MST edge → correct.
   let cost;
   if(isSea){
     cost=new Float32Array(RW*RH);
     for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
       const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-      cost[y*RW+x]=field[fy*GW+fx]<sea?1:1e6;
+      cost[y*RW+x]=field[fy*GW+fx]<sea?1:Infinity;
     }
   } else {
     const dfld=new Float32Array(RW*RH);
@@ -8870,11 +8944,11 @@ function _civMstRoutes(places, isSea){
     cost=buildTravelCost(dfld,RW,RH,sea);
   }
 
-  // Snap a downsampled (rx,ry) to the nearest cell with finite cost.
-  // Needed when a coastal settlement rounds to a water cell in the downsampled grid.
+  // Snap a downsampled (rx,ry) to the nearest cell with finite cost — e.g. a coastal
+  // settlement (always on land) snapped to the nearest water cell for sea-lane pathfinding.
   function snapToFinite(rx,ry){
     if(cost[ry*RW+rx]<Infinity) return ry*RW+rx;
-    for(let r=1;r<=6;r++)
+    for(let r=1;r<=10;r++)
       for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
         const nx=Math.min(RW-1,Math.max(0,rx+dx)), ny=Math.min(RH-1,Math.max(0,ry+dy));
         if(cost[ny*RW+nx]<Infinity) return ny*RW+nx;
@@ -9380,10 +9454,17 @@ function _civIterativeAutoWorld(passes){
 }
 
 /* ---- canvas pointer events for civ tools ---- */
+/* evtToGrid returns FRACTIONAL grid coords (client px / canvas px * GW). Every civ tool
+   below ultimately indexes a typed array (field[gy*GW+gx], wb[...], terr[...]) with these —
+   and a fractional typed-array index silently reads/writes undefined instead of throwing, which
+   made e.g. _civDropPlace's `wb[gy*GW+gx]!==0` water-check true for virtually every real click
+   (undefined!==0), permanently blocking manual placement. Round once here so every consumer
+   downstream gets clean integer cell coordinates. */
 view.addEventListener('pointerdown',e=>{
   if(!(_activeTab==='generate'||_activeTab==='explore')) return; // only act in Generate/Explore tabs
-  const[gx,gy]=evtToGrid(e);
-  if(gx==null) return;
+  const[gx0,gy0]=evtToGrid(e);
+  if(gx0==null) return;
+  const gx=Math.round(gx0), gy=Math.round(gy0);
   if(_civTool==='place'){ _civDropPlace(gx,gy); }
   else if(_civTool==='territory'){ view.setPointerCapture(e.pointerId); _civPainting=true; _civPaintTerritoryAt(gx,gy); }
   else if(_civTool==='route'){ _civWaypoints.push([gx,gy]); drawCivLayer(); }
@@ -9397,7 +9478,7 @@ view.addEventListener('pointermove',e=>{
   if(!(_activeTab==='generate'||_activeTab==='explore')) return;
   if(_civPainting&&_civTool==='territory'){
     const[gx,gy]=evtToGrid(e);
-    if(gx!=null) _civPaintTerritoryAt(gx,gy);
+    if(gx!=null) _civPaintTerritoryAt(Math.round(gx),Math.round(gy));
   }
 });
 
@@ -9518,6 +9599,10 @@ function _civSyncFromState(){
   civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];
+  // A saved project may have had factions added beyond the default 7 — extend CIV_FACTIONS
+  // (deterministic colours) to match, or trim it back down if it somehow has more.
+  while(CIV_FACTIONS.length<civFactionNames.length) CIV_FACTIONS.push([civFactionNames[CIV_FACTIONS.length]||('Faction '+CIV_FACTIONS.length),_civFactionColor(CIV_FACTIONS.length)]);
+  while(CIV_FACTIONS.length>Math.max(civFactionNames.length,2)) CIV_FACTIONS.pop();
   _civBuildTimelineUI();
   _civBuildFactionPicker();
   _civRenderWayList();
@@ -9631,12 +9716,26 @@ function _civSetTool(tool){
   const terRV=document.getElementById('civTerRadiusV');
   if(terR){ terR.addEventListener('input',()=>{ _civTerRadius=+terR.value; if(terRV)terRV.textContent=terR.value; }); }
 
+  const addFacBtn=document.getElementById('civAddFactionBtn');
+  if(addFacBtn) addFacBtn.onclick=()=>_civAddFaction();
+  const rmFacBtn=document.getElementById('civRemoveFactionBtn');
+  if(rmFacBtn) rmFacBtn.onclick=()=>{ if(confirm('Remove the last faction? Any settlements/territory using it will revert to Unclaimed.')) _civRemoveFaction(); };
+
   document.querySelectorAll('[data-civtool]').forEach(b=>{
     b.addEventListener('click',()=>_civSetTool(b.dataset.civtool));
   });
 
   const autoPopulate=document.getElementById('civAutoPopulateBtn');
   if(autoPopulate) autoPopulate.onclick=()=>_civAutoWorld();
+
+  /* On-screen commit buttons for the Route/Draw-way waypoint tools — the ESC key doesn't
+     reliably exist on tablets/phones (no keyboard, or ESC/back exits the browser/tab instead
+     of reaching this page's keydown listener), so these are the primary way to finish a path
+     on touch devices; ESC still works too on desktop. */
+  const commitRouteBtn=document.getElementById('civCommitRouteBtn');
+  if(commitRouteBtn) commitRouteBtn.onclick=()=>_civCommitRoute();
+  const commitWayBtn=document.getElementById('civCommitWayBtn');
+  if(commitWayBtn) commitWayBtn.onclick=()=>_civCommitWay();
 
   const autoRoutes=document.getElementById('civAutoRoutesBtn');
   if(autoRoutes) autoRoutes.onclick=()=>_civAutoRoutes();

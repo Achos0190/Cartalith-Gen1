@@ -514,6 +514,10 @@ details.cat-acc[open]>summary{color:var(--accent)}
         <button id="civClearPlacesBtn">Clear places</button>
       </div>
       <div class="hint"><b>Auto-populate world</b> places settlements based on terrain suitability and carrying capacity. Use <b>Drop place</b> to manually click the map and place individual settlements or POIs. <b>Inspect</b> lets you select and edit existing places. Click a place to open the editor below.</div>
+      <details class="acc" style="margin-top:8px">
+        <summary>All settlements (<span id="civSettlementCount">0</span>)</summary>
+        <div id="civSettlementList" style="margin-top:8px"></div>
+      </details>
     </div>
     <div class="sec" id="civPlaceEditorSec" style="display:none">
       <h2>Selected place</h2>
@@ -7557,6 +7561,27 @@ function zoomAt(cx,cy,k){ /* zoom about client point (cx,cy), keeping it fixed o
 }
 function resetView(){ viewT.scale=1; viewT.panX=0; viewT.panY=0; applyView(); }
 function viewCenter(){ const w=document.querySelector('.canvas-wrap'); if(!w) return [0,0]; const r=w.getBoundingClientRect(); return [r.left+r.width/2, r.top+r.height/2]; }
+/* Pan (and, if zoomed out too far to see the target clearly, zoom in a little) so grid
+   coordinate (gx,gy) lands at the centre of the viewport — the "move viewer here" jump used
+   by the settlement list. Reuses zoomAt's transform math: canvasStack's rect, minus the
+   current pan, gives the untransformed layout origin; dividing rect size by scale gives the
+   untransformed (scale=1) content size, so a grid coordinate's content-space position is
+   (gx/GW)*natW, (gy/GH)*natH — from there we solve panX/panY so that content point renders
+   at the viewport centre under the (possibly bumped-up) target scale. */
+function _civMoveViewTo(gx,gy){
+  if(_lodOn){ _lodOn=false; const lc=document.getElementById('lodChk'); if(lc) lc.checked=false; }
+  if(!canvasStack) return;
+  const r=canvasStack.getBoundingClientRect();
+  const trueLeft=r.left-viewT.panX, trueTop=r.top-viewT.panY;
+  const natW=r.width/viewT.scale, natH=r.height/viewT.scale;
+  const contentX=(gx/GW)*natW, contentY=(gy/GH)*natH;
+  const targetScale=Math.min(8,Math.max(viewT.scale,2.2));
+  const[ccx,ccy]=viewCenter();
+  viewT.panX=ccx-trueLeft-contentX*targetScale;
+  viewT.panY=ccy-trueTop-contentY*targetScale;
+  viewT.scale=targetScale;
+  applyView();
+}
 /* mobile button overlay (unchanged UX: buttons stay mobile-only) */
 const isMobile=(navigator.maxTouchPoints>1)||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 if(isMobile){ const zo=document.getElementById('zoomOverlay'); if(zo)zo.style.display='flex'; }
@@ -8254,6 +8279,7 @@ function _civSelectPlaceAt(gx,gy){
 
 /* ---- place editor ---- */
 function _civRenderPlaceEditor(){
+  _civRenderSettlementList();   /* keep the overview list in sync with every place mutation that already refreshes this editor */
   const sec=document.getElementById('civPlaceEditorSec');
   const host=document.getElementById('civPlaceEditor');
   if(!sec||!host) return;
@@ -8298,6 +8324,63 @@ function _civRenderPlaceEditor(){
     const idx=state.places.indexOf(p); if(idx>=0) state.places.splice(idx,1);
     _civSelectedPlace=null; _civRenderPlaceEditor(); renderNow();
   };
+}
+
+/* ---- settlement overview list (collapsible; move-viewer/edit/delete per row) ----
+   state.places is shared with the EF "Places & roads (terrain)" reference-point tool
+   (bare {x,y} entries, no .kind), so this filters to CIV_SETTLE_KEYS the same way
+   drawCivLayer distinguishes settlements from POIs, naturally excluding both POIs and
+   terrain reference points. */
+function _civRenderSettlementList(){
+  const el=document.getElementById('civSettlementList');
+  const countEl=document.getElementById('civSettlementCount');
+  if(!el) return;
+  const settlements=state.places.filter(p=>p.kind&&CIV_SETTLE_KEYS.has(p.kind));
+  if(countEl) countEl.textContent=settlements.length;
+  if(!settlements.length){
+    el.innerHTML='<div class="hint">No settlements yet. Use <b>Auto-populate world</b> or the <b>Drop settlement</b> tool.</div>';
+    return;
+  }
+  const sorted=settlements.slice().sort((a,b)=>{
+    const ra=(CIV_SETTLEMENT_CLASSES.find(c=>c.key===a.kind)||{rank:0}).rank;
+    const rb=(CIV_SETTLEMENT_CLASSES.find(c=>c.key===b.kind)||{rank:0}).rank;
+    if(ra!==rb) return rb-ra;               // higher tier (capital) first
+    return (b.pop||0)-(a.pop||0);            // then by population, descending
+  });
+  el.innerHTML='';
+  for(const p of sorted){
+    const klass=CIV_SETTLEMENT_CLASSES.find(c=>c.key===p.kind)||CIV_SETTLEMENT_CLASSES[2];
+    const sel=(p===_civSelectedPlace);
+    const col=p.faction?(CIV_FACTIONS[p.faction]?.[1]||[200,180,130]):[110,110,110];
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:5px;border-radius:5px;padding:4px 6px;margin-bottom:3px;cursor:pointer;font-size:.8rem;'
+      +'border:1px solid '+(sel?'var(--accent)':'var(--border)')+';background:'+(sel?'var(--panel-darker)':'var(--panel)')+';';
+    const sw=document.createElement('span'); sw.title=civFactionNames[p.faction]||CIV_FACTIONS[p.faction]?.[0]||'Unclaimed';
+    sw.style.cssText='width:9px;height:9px;border-radius:50%;flex-shrink:0;background:rgb('+col.join(',')+')';
+    const glyph=document.createElement('span'); glyph.textContent=klass.glyph; glyph.title=klass.label;
+    glyph.style.cssText='flex-shrink:0;width:14px;text-align:center';
+    const nameSpan=document.createElement('span'); nameSpan.textContent=p.name||'(unnamed)';
+    nameSpan.style.cssText='flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0';
+    const popSpan=document.createElement('span'); popSpan.textContent=p.pop?p.pop.toLocaleString():'';
+    popSpan.style.cssText='color:var(--muted);font-size:.7rem;flex-shrink:0';
+    const moveBtn=document.createElement('button'); moveBtn.textContent='📍'; moveBtn.title='Move viewer here';
+    moveBtn.style.cssText='padding:1px 5px;font-size:.8rem;flex-shrink:0;line-height:1.4';
+    moveBtn.onclick=e=>{ e.stopPropagation(); _civMoveViewTo(p.x,p.y); };
+    const editBtn=document.createElement('button'); editBtn.textContent='✎'; editBtn.title='Edit';
+    editBtn.style.cssText='padding:1px 5px;font-size:.8rem;flex-shrink:0;line-height:1.4';
+    editBtn.onclick=e=>{ e.stopPropagation(); _civSelectedPlace=p; _civRenderPlaceEditor(); drawCivLayer(); };
+    const delBtn=document.createElement('button'); delBtn.textContent='×'; delBtn.title='Delete settlement';
+    delBtn.style.cssText='padding:1px 6px;font-size:.85rem;flex-shrink:0;border-color:var(--warn);line-height:1.4';
+    delBtn.onclick=e=>{
+      e.stopPropagation();
+      const idx=state.places.indexOf(p); if(idx>=0) state.places.splice(idx,1);
+      if(_civSelectedPlace===p) _civSelectedPlace=null;
+      _civRenderPlaceEditor(); renderNow();
+    };
+    row.onclick=()=>{ _civSelectedPlace=p; _civRenderPlaceEditor(); drawCivLayer(); };
+    row.append(sw,glyph,nameSpan,popSpan,moveBtn,editBtn,delBtn);
+    el.appendChild(row);
+  }
 }
 
 /* ---- ways list (auto MST road/sea infrastructure) ---- */
@@ -9625,8 +9708,8 @@ function _civSyncFromState(){
   const _origLoadZip=loadZip;
   loadZip=function(){
     const r=_origLoadZip.apply(this,arguments);
-    if(r&&typeof r.then==='function') r.then(()=>{ _civSyncFromState(); drawCivLayer(); });
-    else { _civSyncFromState(); drawCivLayer(); }
+    if(r&&typeof r.then==='function') r.then(()=>{ _civSyncFromState(); _civSelectedPlace=null; _civRenderPlaceEditor(); drawCivLayer(); });
+    else { _civSyncFromState(); _civSelectedPlace=null; _civRenderPlaceEditor(); drawCivLayer(); }
     return r;
   };
 }
@@ -9711,6 +9794,7 @@ function _civSetTool(tool){
   _civBuildFactionPicker();
   _civRenderWayList();
   _civRenderJourneyList();
+  _civRenderSettlementList();
 
   const terR=document.getElementById('civTerRadius');
   const terRV=document.getElementById('civTerRadiusV');

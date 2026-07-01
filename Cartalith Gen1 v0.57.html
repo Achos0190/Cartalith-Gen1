@@ -7911,7 +7911,8 @@ function getCivTerritory(){
 }
 
 /* ---- drawing helpers ---- */
-function _civDrawSettlementPin(ctx,px,py,place,selected){
+function _civDrawSettlementPin(ctx,px,py,place,selected,opts){
+  opts=opts||{};
   const klass=CIV_SETTLEMENT_CLASSES.find(c=>c.key===(place.kind||'town'))||CIV_SETTLEMENT_CLASSES[2];
   const sc=Math.max(1,GW/512);   // scales with working resolution so icons stay the same screen size at any GW
   const sz=(4+klass.rank)*sc;
@@ -7927,7 +7928,7 @@ function _civDrawSettlementPin(ctx,px,py,place,selected){
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(klass.glyph,px,py);
   // label
-  if(place.name){
+  if(place.name && !opts.skipLabel){
     ctx.font=`600 ${Math.max(9,(sz+sc))|0}px sans-serif`;
     ctx.textBaseline='bottom'; ctx.textAlign='center';
     ctx.lineWidth=2.5*sc; ctx.strokeStyle='rgba(8,6,4,.85)';
@@ -7937,7 +7938,8 @@ function _civDrawSettlementPin(ctx,px,py,place,selected){
   ctx.restore();
 }
 
-function _civDrawPoiPin(ctx,px,py,place,selected){
+function _civDrawPoiPin(ctx,px,py,place,selected,opts){
+  opts=opts||{};
   const poi=CIV_POI_TYPES.find(t=>t.key===(place.kind||'other'))||CIV_POI_TYPES[7];
   const sc=Math.max(1,GW/512);
   const r=5*sc;
@@ -7947,7 +7949,7 @@ function _civDrawPoiPin(ctx,px,py,place,selected){
   ctx.fillStyle=selected?'#ffe090':'#d8c080';
   ctx.font=`${(9*sc)|0}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(poi.glyph,px,py);
-  if(place.name){
+  if(place.name && !opts.skipLabel){
     ctx.font=`600 ${(9*sc)|0}px sans-serif`; ctx.textBaseline='bottom';
     ctx.lineWidth=2*sc; ctx.strokeStyle='rgba(8,6,4,.85)';
     ctx.strokeText(place.name,px,py-r-sc);
@@ -8064,15 +8066,47 @@ function drawCivLayer(){
   }
   civCtx.restore();
 
-  // 3. Places — LOD-filtered, high-tier drawn first (labels declutter naturally)
+  // 3. Places — LOD-filtered, high-tier drawn first; label collisions resolved via an
+  //    occupancy grid (Imhof 1975 name-positioning priority: capitals/cities claim space first,
+  //    lower tiers lose their label — but never their pin glyph — on collision).
   const tierRankDraw={capital:0,city:1,town:2,village:3,hamlet:4};
   const sortedForDraw=state.places.slice().sort((a,b)=>(tierRankDraw[a.kind]||3)-(tierRankDraw[b.kind]||3));
+  const lsc=Math.max(1,GW/512);
+  const LGRID_S=8*lsc;   // label-occupancy grid cell size (canvas px), scales with working resolution
+  const lgW=Math.max(1,Math.ceil(GW/LGRID_S)), lgH=Math.max(1,Math.ceil(GH/LGRID_S));
+  const lblOcc=new Uint8Array(lgW*lgH);
+  const lblTest=(px,py,w,h)=>{
+    const x0=Math.max(0,Math.floor((px-w/2)/LGRID_S)), x1=Math.min(lgW-1,Math.floor((px+w/2)/LGRID_S));
+    const y0=Math.max(0,Math.floor((py-h)/LGRID_S)), y1=Math.min(lgH-1,Math.floor(py/LGRID_S));
+    for(let gy=y0;gy<=y1;gy++) for(let gx=x0;gx<=x1;gx++) if(lblOcc[gy*lgW+gx]) return false;
+    return true;
+  };
+  const lblMark=(px,py,w,h)=>{
+    const x0=Math.max(0,Math.floor((px-w/2)/LGRID_S)), x1=Math.min(lgW-1,Math.floor((px+w/2)/LGRID_S));
+    const y0=Math.max(0,Math.floor((py-h)/LGRID_S)), y1=Math.min(lgH-1,Math.floor(py/LGRID_S));
+    for(let gy=y0;gy<=y1;gy++) for(let gx=x0;gx<=x1;gx++) lblOcc[gy*lgW+gx]=1;
+  };
   for(const p of sortedForDraw){
     const lodMin=CIV_LOD_PLACE[p.kind]!=null?CIV_LOD_PLACE[p.kind]:0.5;
     if(zoom<lodMin) continue; // LOD: hide low-tier places at low zoom
     const px=p.x+0.5, py=p.y+0.5;
-    if(CIV_POI_KEYS.has(p.kind)) _civDrawPoiPin(civCtx,px,py,p,p===_civSelectedPlace);
-    else _civDrawSettlementPin(civCtx,px,py,p,p===_civSelectedPlace);
+    const isPoi=CIV_POI_KEYS.has(p.kind);
+    let sz;
+    if(isPoi) sz=5*lsc;
+    else{
+      const klass=CIV_SETTLEMENT_CLASSES.find(c=>c.key===(p.kind||'town'))||CIV_SETTLEMENT_CLASSES[2];
+      sz=(4+klass.rank)*lsc;
+    }
+    let skipLabel=false;
+    if(p.name){
+      const fsz=Math.max(9,sz+lsc);
+      const lw=p.name.length*fsz*0.62, lh=fsz*1.3;
+      const ly=py-sz-2*lsc;
+      if(lblTest(px,ly,lw,lh)) lblMark(px,ly,lw,lh);
+      else skipLabel=true;
+    }
+    if(isPoi) _civDrawPoiPin(civCtx,px,py,p,p===_civSelectedPlace,{skipLabel});
+    else _civDrawSettlementPin(civCtx,px,py,p,p===_civSelectedPlace,{skipLabel});
   }
 }
 
@@ -8571,8 +8605,9 @@ function _civIsCoastal(gx,gy,R){
   return false;
 }
 
-/* Enhanced travel cost: extends buildTravelCost with river crossing penalties,
-   biome density penalties, navigable river bonuses, and road-reuse corridor bonus.
+/* Enhanced travel cost: terrain-aware cost model following Douglas (1994) least-cost paths.
+   Includes mountain passes, swamp/floodplain penalties, biome density, river fords vs bridges,
+   navigable river transport bonuses, and road-reuse corridor formation.
    dfld is a downsampled heightmap at W×H; usageCount (optional) is also at W×H. */
 function _civEnhancedTravelCost(dfld, W, H, sea, usageCount, opts){
   opts=opts||{};
@@ -8592,23 +8627,36 @@ function _civEnhancedTravelCost(dfld, W, H, sea, usageCount, opts){
     const yt=y>0?dfld[i-W]:dfld[i], yb=y<H-1?dfld[i+W]:dfld[i];
     const sl=Math.hypot((xr-xl)*0.5,(yb-yt)*0.5);
     let c=1+slopeK*sl*sl;
-    // Map to full-res for flow/biome lookups
+    // Mountain pass detection: saddle point — low on one axis, bounded by higher ground on both sides.
+    // Natural through-routes; road-builders exploit them, so reduce the slope penalty.
+    const ewPass=(xr>dfld[i]+0.018)&&(xl>dfld[i]+0.018)&&dfld[i]>sea+0.15;
+    const nsPass=(yb>dfld[i]+0.018)&&(yt>dfld[i]+0.018)&&dfld[i]>sea+0.15;
+    if(ewPass||nsPass) c=1+slopeK*sl*sl*0.40;
+    // Map to full-res for flow/biome/river lookups
     const fx=Math.min(GW-1,Math.round(x*scX)), fy=Math.min(GH-1,Math.round(y*scY)), fi=fy*GW+fx;
-    // River crossing penalty (ford/bridge cost)
+    // Swamp/floodplain proxy: near-sea land with high flow accumulation = marshland
+    if(flow&&dfld[i]<sea+0.06&&flow[fi]>flowThresh*8) c*=1.8;
+    // River crossing: ford (order 1-2 = easy crossing) vs bridge (order 3+ = costly)
     if(flow&&flow[fi]>flowThresh){
-      c+=8*Math.min(1,Math.log(flow[fi]/flowThresh+1)/5);
+      const ord=riverOrder?riverOrder[fi]:0;
+      const mag=Math.min(1,Math.log(flow[fi]/flowThresh+1)/5);
+      const fordK=ord<=2?0.35:ord<=4?0.75:1.0; // small streams cheap to ford
+      c+=8*mag*fordK;
     }
-    // Navigable river bonus — reduces cost along major rivers (canoe/barge transport)
+    // Navigable river bonus — barge/raft transport along major rivers is faster than roads
     if(riverOrder&&riverOrder[fi]>=3){
       c*=1-0.35*Math.min(1,(riverOrder[fi]-2)/4);
     }
-    // Biome density penalties (dense forest / swamp slow overland travel)
+    // Biome terrain penalties (BIOME_KEYS order 1-based: 1=ice,2=tundra,3=boreal,4=conifer,
+    //   5=tempForest,6=tempRain,7=grass,8=shrub,9=desert,10=savanna,11=tropDry,12=tropWet)
     if(biomeR){
       const b=biomeR[fi];
-      if(b===3||b===5||b===12) c*=1.5;       // tropical wet / boreal / wetland
-      else if(b===4||b===11||b===6) c*=1.25; // temperate rain / cold / savanna
+      if(b===3||b===4||b===6||b===12) c*=1.6;  // dense forest: boreal/conifer/tempRain/tropWet
+      else if(b===5||b===11) c*=1.3;            // medium forest: tempForest/tropDry
+      else if(b===8||b===10) c*=1.1;            // scrub/savanna: slight overland friction
+      else if(b===1||b===2||b===9) c*=1.2;      // ice/tundra/desert: rough or barren terrain
     }
-    // Road reuse corridor bonus — already-used cells cost less (path merging → highways)
+    // Road reuse corridor bonus — encourages convergence into shared highway corridors
     if(usageCount&&usageCount[i]>0) c*=roadReuseK;
     cost[i]=Math.max(0.05,c);
   }
@@ -8616,8 +8664,8 @@ function _civEnhancedTravelCost(dfld, W, H, sea, usageCount, opts){
 }
 
 /* Extended settlement suitability: base EF score (50%) augmented with river confluences,
-   navigable river proximity, coastal harbour + estuary bonus, lake proximity,
-   mineral resources, and defensibility (high ground). */
+   navigable river proximity, coastal harbour + estuary bonus, lake proximity + lake narrows,
+   mineral resources, defensibility, agricultural productivity, and freshwater access. */
 function _civExtendedSuitability(){
   if(typeof currentSettlementSuitability!=='function') return null;
   const base=currentSettlementSuitability(); if(!base) return null;
@@ -8628,6 +8676,8 @@ function _civExtendedSuitability(){
   const riverOrder=(typeof _riverNet!=='undefined'&&_riverNet&&_riverNet.order)?_riverNet.order:null;
   const wb=(typeof currentWaterBodies==='function')?currentWaterBodies():null;
   const res=(typeof currentResourcePotentials==='function')?currentResourcePotentials():null;
+  const soilF=(typeof currentSoil==='function')?currentSoil():null;
+  const waF=(typeof currentWaterAccess==='function')?currentWaterAccess():null;
   const defR=Math.max(4,(GW/70)|0);
   for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
     const i=y*GW+x;
@@ -8671,6 +8721,12 @@ function _civExtendedSuitability(){
         if(wb[ny*GW+nx]===2) nearLake=true;
       }
       if(nearLake) sc+=0.07;
+      // Lake narrows: land cell flanked by lake on opposing sides (N-S or E-W)
+      const hasLakeN=y>0&&wb[(y-1)*GW+x]===2;
+      const hasLakeS=y<GH-1&&wb[(y+1)*GW+x]===2;
+      const hasLakeE=x<GW-1&&wb[y*GW+x+1]===2;
+      const hasLakeW=x>0&&wb[y*GW+x-1]===2;
+      if((hasLakeN&&hasLakeS)||(hasLakeE&&hasLakeW)) sc+=0.12;
     }
     // Mineral resource potential
     if(res){
@@ -8688,6 +8744,16 @@ function _civExtendedSuitability(){
       tot++; if(field[i]>=field[ny*GW+nx]) hi++;
     }
     sc+=0.05*(tot?hi/tot:0);
+    // Agricultural productivity: fertile soil × temperature optimum × rainfall optimum
+    if(soilF){
+      const tC=tempField?tempField[i]:15;
+      const r=rainField?rainField[i]:0.4;
+      const tBell=Math.exp(-0.5*((tC-15)/12)**2);
+      const rBell=r<0.3?r/0.3:r<0.6?1:r<0.8?(0.8-r)/0.2:0;
+      sc+=0.15*soilF[i]*tBell*rBell;
+    }
+    // Freshwater access: proximity to rivers and freshwater bodies
+    if(waF) sc+=0.08*waF[i];
     ext[i]=Math.min(1,Math.max(0,sc));
   }
   return ext;
@@ -8935,7 +9001,7 @@ function _civAutoWorld(){
    Returns {ways, usageCount, degreeOf}. */
 function _civHierarchicalNetwork(places, opts){
   opts=opts||{};
-  const n=places.length; if(n<2) return {ways:[],usageCount:null,degreeOf:new Array(n).fill(0)};
+  const n=places.length; if(n<2) return {ways:[],usageCount:null,degreeOf:new Array(n).fill(0),RW:0,RH:0,sc:1};
   const sea=state.seaLevel||0.42;
   const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
   const wrapX=!!state.world;
@@ -9039,7 +9105,7 @@ function _civHierarchicalNetwork(places, opts){
     const name=(pa.name&&pb.name)?pa.name+' → '+pb.name:(pa.name||pb.name||'');
     ways.push({pts,km,sea:false,name,type:wtype});
   }
-  return {ways,usageCount,degreeOf};
+  return {ways,usageCount,degreeOf,RW,RH,sc};
 }
 
 /* Network analysis: Brandes 2001 BFS betweenness centrality + degree + closeness.
@@ -9179,11 +9245,13 @@ function _civIterativeAutoWorld(passes){
   });
 
   let ways=[];
+  let lastNet=null;
 
   // Iterative centrality → tier feedback
   for(let pass=0;pass<passes;pass++){
     const net=_civHierarchicalNetwork(places,{});
     ways=net.ways;
+    lastNet=net;
     if(pass<passes-1){
       const metrics=_civNetworkMetrics(places,ways);
       const maxBtw=Math.max(...metrics.map(m=>m.betweenness),1e-9);
@@ -9201,16 +9269,81 @@ function _civIterativeAutoWorld(passes){
     }
   }
 
+  // Crossroads promotion (Christaller 1933 market-town emergence at convergence points):
+  // downsampled cells where several independent routes converge, far from any existing
+  // settlement, become new hamlet/village settlements; the network is then rebuilt once
+  // more so the promoted crossroads are actually connected.
+  if(lastNet&&lastNet.usageCount&&lastNet.RW){
+    const {usageCount,RW,RH,sc}=lastNet;
+    const minSep=Math.max(4,(GW/30)|0), minSepSq=minSep*minSep;
+    const cand=[];
+    for(let ry=0;ry<RH;ry++) for(let rx=0;rx<RW;rx++){
+      const u=usageCount[ry*RW+rx];
+      if(u<4) continue;
+      const wx=(rx+0.5)/sc, wy=(ry+0.5)/sc;
+      let near=false;
+      for(const p of places){
+        const dx=p.x-wx, dy=p.y-wy;
+        if(dx*dx+dy*dy<minSepSq){ near=true; break; }
+      }
+      if(!near) cand.push({x:wx,y:wy,u});
+    }
+    // Greedy local-maxima suppression among candidates (avoid clustered duplicates)
+    cand.sort((a,b)=>b.u-a.u);
+    const chosen=[];
+    for(const c of cand){
+      let near=false;
+      for(const o of chosen){
+        const dx=o.x-c.x, dy=o.y-c.y;
+        if(dx*dx+dy*dy<minSepSq){ near=true; break; }
+      }
+      if(!near) chosen.push(c);
+    }
+    const coastR2=Math.max(6,(GW/60)|0);
+    for(const c of chosen){
+      const gx=Math.min(GW-1,Math.max(0,Math.round(c.x))), gy=Math.min(GH-1,Math.max(0,Math.round(c.y)));
+      if(field[gy*GW+gx]<sea) continue;
+      const coastal=_civIsCoastal(gx,gy,coastR2);
+      const kind=c.u>=7?'village':'hamlet';
+      const basePop=kind==='village'?400:120;
+      const traits=['trade_hub']; if(coastal) traits.push('port');
+      // Inherit faction from the nearest existing settlement (political influence spreads outward)
+      let faction=1,fd=Infinity;
+      for(const p of places){ const d=Math.hypot(p.x-gx,p.y-gy); if(d<fd){ fd=d; faction=p.faction||1; } }
+      places.push({x:gx,y:gy,name:_civSettleName(rng),kind,klass:kind,category:'settlement',
+        faction,pop:Math.round(basePop*(0.9+rng()*0.3)),traits});
+    }
+    if(chosen.length){
+      lastNet=_civHierarchicalNetwork(places,{});
+      ways=lastNet.ways;
+    }
+  }
+
   // Sea routes between coastal settlements (ports)
   const ports=places.filter(p=>p.traits&&p.traits.includes('port'));
   if(ports.length>=2) ways.push(..._civMstRoutes(ports,true));
 
-  // Recalculate population based on final tier
+  // Final network analysis (Freeman 1977): betweenness ≈ trade-flow-through-town,
+  // closeness + degree ≈ market reach — both feed population, economic importance and trade volume.
+  const finalMetrics=_civNetworkMetrics(places,ways);
+  const maxBtwF=Math.max(...finalMetrics.map(m=>m.betweenness),1e-9);
+  const maxCloseF=Math.max(...finalMetrics.map(m=>m.closeness),1e-9);
+  const metricByPlace=new Map(finalMetrics.map(m=>[m.place,m]));
+
+  // Recalculate population based on final tier, scaled up by network centrality
   for(const p of places){
     const basePop=p.kind==='capital'?15000:p.kind==='city'?6000:p.kind==='town'?1500:p.kind==='village'?400:120;
     const c=candidates.find(c=>c.x===p.x&&c.y===p.y);
     const s=c?c.suit:0.5;
-    p.pop=Math.round(basePop*(0.7+s*0.8)*(0.8+rng()*0.4));
+    const m=metricByPlace.get(p);
+    const normB=m?m.betweenness/maxBtwF:0;
+    p.pop=Math.round(basePop*(0.7+s*0.8)*(0.8+rng()*0.4)*(1+normB*1.5));
+    // Economic importance: weighted blend of betweenness (trade-through), closeness (market
+    // reach) and degree (route connections), each normalized to [0,1].
+    const normClose=m?m.closeness/maxCloseF:0;
+    const normDeg=m?Math.min(1,m.degree/6):0;
+    p.economicImportance=m?Math.round((0.5*normB+0.3*normClose+0.2*normDeg)*1000)/1000:0;
+    p.tradeVolume=Math.round(p.pop*(0.4+0.6*p.economicImportance));
   }
 
   state.places=places;

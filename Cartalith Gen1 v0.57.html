@@ -9108,12 +9108,12 @@ function _civHierarchicalNetwork(places, opts){
   return {ways,usageCount,degreeOf,RW,RH,sc};
 }
 
-/* Network analysis: Brandes 2001 BFS betweenness centrality + degree + closeness.
+/* Network analysis: Brandes 2001 BFS betweenness centrality + degree + closeness + connected components.
    Builds graph from way endpoints snapped to nearest place within GW/20 cells.
-   Returns array of {place, degree, betweenness, closeness} indexed by place order. */
+   Returns array of {place, degree, betweenness, closeness, component, componentSize} indexed by place order. */
 function _civNetworkMetrics(places, ways){
   const n=places.length;
-  if(n<2) return places.map(p=>({place:p,degree:0,betweenness:0,closeness:0}));
+  if(n<2) return places.map(p=>({place:p,degree:0,betweenness:0,closeness:0,component:0,componentSize:n}));
   const snapR=GW/20;
 
   function nearestPlace(x,y){
@@ -9130,6 +9130,23 @@ function _civNetworkMetrics(places, ways){
     if(ai<0||bi<0||ai===bi) continue;
     adj[ai].add(bi); adj[bi].add(ai);
   }
+
+  // Connected components (flood-fill over adj): settlements with no road/sea-lane path
+  // between them (e.g. separate islands) land in different components. A place's
+  // componentSize/n is how much of the settled world it can actually trade with overland.
+  const compId=new Int32Array(n).fill(-1);
+  let nComp=0;
+  for(let s=0;s<n;s++){
+    if(compId[s]>=0) continue;
+    const id=nComp++; compId[s]=id;
+    const q=[s];
+    while(q.length){
+      const v=q.pop();
+      for(const w of adj[v]) if(compId[w]<0){ compId[w]=id; q.push(w); }
+    }
+  }
+  const compSize=new Int32Array(nComp);
+  for(let i=0;i<n;i++) compSize[compId[i]]++;
 
   // Brandes 2001: BFS-based O(V*(V+E)) betweenness
   const btw=new Float64Array(n);
@@ -9169,7 +9186,8 @@ function _civNetworkMetrics(places, ways){
     close[s]=reach>0?reach/(sumD||1)/n:0;
   }
 
-  return places.map((p,i)=>({place:p,degree:adj[i].size,betweenness:btw[i],closeness:close[i]}));
+  return places.map((p,i)=>({place:p,degree:adj[i].size,betweenness:btw[i],closeness:close[i],
+    component:compId[i],componentSize:compSize[compId[i]]}));
 }
 
 /* Iterative settlement + road synthesis (Christaller + Freeman betweenness feedback).
@@ -9324,7 +9342,9 @@ function _civIterativeAutoWorld(passes){
   if(ports.length>=2) ways.push(..._civMstRoutes(ports,true));
 
   // Final network analysis (Freeman 1977): betweenness ≈ trade-flow-through-town,
-  // closeness + degree ≈ market reach — both feed population, economic importance and trade volume.
+  // closeness + degree ≈ market reach, connected-component size ≈ how much of the settled
+  // world a place can actually trade with overland — all feed population, economic
+  // importance and trade volume.
   const finalMetrics=_civNetworkMetrics(places,ways);
   const maxBtwF=Math.max(...finalMetrics.map(m=>m.betweenness),1e-9);
   const maxCloseF=Math.max(...finalMetrics.map(m=>m.closeness),1e-9);
@@ -9337,12 +9357,17 @@ function _civIterativeAutoWorld(passes){
     const s=c?c.suit:0.5;
     const m=metricByPlace.get(p);
     const normB=m?m.betweenness/maxBtwF:0;
-    p.pop=Math.round(basePop*(0.7+s*0.8)*(0.8+rng()*0.4)*(1+normB*1.5));
+    // Component size (fraction of all settlements reachable overland/by sea-lane): a
+    // settlement isolated on its own island gets a mild population penalty, one in the
+    // dominant connected component gets the full multiplier.
+    const normCompSize=m?m.componentSize/places.length:1;
+    p.pop=Math.round(basePop*(0.7+s*0.8)*(0.8+rng()*0.4)*(1+normB*1.5)*(0.85+0.15*normCompSize));
     // Economic importance: weighted blend of betweenness (trade-through), closeness (market
-    // reach) and degree (route connections), each normalized to [0,1].
+    // reach), degree (route connections) and connected-component size (trade-network reach),
+    // each normalized to [0,1].
     const normClose=m?m.closeness/maxCloseF:0;
     const normDeg=m?Math.min(1,m.degree/6):0;
-    p.economicImportance=m?Math.round((0.5*normB+0.3*normClose+0.2*normDeg)*1000)/1000:0;
+    p.economicImportance=m?Math.round((0.45*normB+0.25*normClose+0.15*normDeg+0.15*normCompSize)*1000)/1000:0;
     p.tradeVolume=Math.round(p.pop*(0.4+0.6*p.economicImportance));
   }
 

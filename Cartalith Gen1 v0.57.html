@@ -157,6 +157,79 @@ details.cat-acc>summary::-webkit-details-marker{display:none}
 details.cat-acc>summary::before{content:'▸  ';color:var(--faint)}
 details.cat-acc[open]>summary::before{content:'▾  '}
 details.cat-acc[open]>summary{color:var(--accent)}
+/* ══ Asset Library (full-workspace page) ══ */
+#assetLibrary{flex:1;display:flex;min-width:0;min-height:0;background:var(--bg)}
+.al-rail{width:190px;flex-shrink:0;border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:8px 0}
+.al-rail .al-cat{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-radius:0;padding:8px 14px;color:var(--dim);font-size:12px;cursor:pointer}
+.al-rail .al-cat:hover{color:var(--ink);background:var(--panel2)}
+.al-rail .al-cat.on{color:var(--accent);background:var(--panel2);border-right:2px solid var(--accent)}
+.al-rail .al-cat .cnt{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint)}
+.al-rail .al-cat .cnt.has{color:var(--accent2)}
+.al-rail .al-rail-h{font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);padding:12px 14px 4px}
+.al-main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.al-toolbar{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.al-toolbar input[type=text]{flex:1;min-width:140px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:6px 9px;font-size:12px}
+.al-selcount{font-family:var(--mono);font-size:11px;color:var(--accent)}
+.al-batch{display:inline-flex;gap:6px;align-items:center}
+.al-danger{color:var(--warn);border-color:var(--warn)}
+.al-grid{flex:1;overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start}
+.al-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:6px;min-width:0}
+.al-card:hover{border-color:var(--faint)}
+.al-card.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.al-card.msel{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2)}
+.al-card .al-thumb{width:100%;aspect-ratio:1;border-radius:5px;background:var(--preview-al,#0c0e13);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.al-card .al-thumb canvas{max-width:100%;max-height:100%}
+.al-card .al-thumb .al-empty{color:var(--faint);font-size:22px}
+.al-card .al-nm{font-size:11.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al-card .al-sub{font-family:var(--mono);font-size:9.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al-card .al-badge{position:absolute;top:5px;right:5px;font-family:var(--mono);font-size:9px;background:rgba(10,12,17,.8);border:1px solid var(--line);border-radius:999px;padding:1px 6px;color:var(--accent2)}
+.al-card .al-dupe{position:absolute;top:5px;left:5px;font-size:10px;color:var(--warn)}
+.al-card .al-tags{display:flex;gap:3px;flex-wrap:wrap}
+.al-card .al-tag{font-family:var(--mono);font-size:9px;color:var(--dim);border:1px solid var(--line);border-radius:999px;padding:0 5px}
+.al-insp{width:300px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:0 0 20px}
+.al-insp-empty{color:var(--faint);font-size:12px;padding:22px 16px;text-align:center}
+.al-insp .sec{padding:12px 14px}
+.al-insp h3{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin:0 0 9px}
+.al-insp .al-prev-wrap{position:relative;width:100%;aspect-ratio:1;background:var(--preview-al,#0c0e13);border:1px solid var(--line);border-radius:7px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.al-insp .al-prev-wrap canvas{max-width:100%;max-height:100%;touch-action:none}
+.al-insp .al-meta input,.al-insp .al-meta textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:5px 7px;font-size:11.5px;font-family:var(--sans)}
+.al-insp .al-meta textarea{resize:vertical;min-height:44px}
+.al-insp .al-meta .row label{flex-basis:70px;font-size:11px}
+.al-insp .al-variants{display:flex;flex-wrap:wrap;gap:6px}
+.al-insp .al-var{width:56px;text-align:center;cursor:pointer;border:1px solid var(--line);border-radius:5px;padding:3px;background:var(--preview-al,#0c0e13)}
+.al-insp .al-var.on{border-color:var(--accent)}
+.al-insp .al-var canvas{width:100%;aspect-ratio:1}
+.al-insp .al-var .vn{font-size:8.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.al-bgsw{display:flex;gap:5px;align-items:center}
+.al-bgsw button{width:20px;height:20px;padding:0;border-radius:4px;border:1px solid var(--line)}
+.al-bgsw button.on{outline:2px solid var(--accent)}
+/* slicer overlay */
+.al-modal{position:absolute;inset:0;z-index:50;background:rgba(8,10,14,.88);display:flex;align-items:center;justify-content:center;padding:18px}
+.al-modal .al-dlg{background:var(--panel);border:1px solid var(--line);border-radius:10px;max-width:min(1180px,96%);max-height:94%;overflow:auto;display:flex;flex-direction:column}
+.al-modal .al-dlg-h{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.al-modal .al-dlg-h b{color:var(--accent);font-family:var(--mono);font-size:12px;letter-spacing:.06em}
+.al-modal .al-dlg-h button{margin-left:auto}
+.al-modal .al-dlg-b{display:flex;gap:14px;padding:14px;min-height:0;flex-wrap:wrap}
+.al-slice-left{flex:1;min-width:300px;display:flex;flex-direction:column;gap:8px}
+.al-slice-cv-wrap{overflow:auto;max-height:60vh;background:#0c0e13;border:1px solid var(--line);border-radius:6px;display:flex;align-items:flex-start;justify-content:center}
+.al-slice-cv-wrap canvas{touch-action:none;cursor:crosshair}
+.al-slice-cv-wrap canvas.mode-grid{cursor:move}
+.al-slice-cv-wrap canvas.mode-pick{cursor:copy}
+.al-slice-right{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;font-size:12px}
+.al-slice-right .row{margin:4px 0}
+.al-slice-drop{border:1px dashed var(--line);border-radius:7px;padding:20px 10px;text-align:center;color:var(--dim);cursor:pointer}
+.al-slice-drop.over{border-color:var(--accent);color:var(--accent)}
+.al-cellnames{max-height:130px;overflow-y:auto;border:1px solid var(--line);border-radius:5px;padding:5px}
+.al-cellnames .cn{display:flex;gap:6px;align-items:center;margin:2px 0}
+.al-cellnames .cn .n{font-family:var(--mono);font-size:10px;color:var(--faint);width:30px}
+.al-cellnames .cn input{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:4px;padding:2px 6px;font-size:11px}
+.al-cellnames .empty{color:var(--faint);font-size:10.5px;padding:4px}
+#alToast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:60;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 16px;font-size:12px;color:var(--ink);opacity:0;pointer-events:none;transition:opacity .2s;max-width:70%}
+#alToast.show{opacity:1}
+#alToast.warn{border-color:var(--accent)}
+#alToast.err{border-color:var(--warn)}
+#alToast.ok{border-color:var(--accent2)}
+@media (max-width:1100px){ .al-insp{width:250px} .al-rail{width:150px} }
 </style>
 </head>
 <body>
@@ -204,11 +277,44 @@ details.cat-acc[open]>summary{color:var(--accent)}
     <div id="wildInfo" class="settle-info" style="display:none"></div>
   </div>
 
+  <!-- ══ ASSET LIBRARY — full-workspace page (map hidden while open) ══ -->
+  <div id="assetLibrary" style="display:none">
+    <div class="al-rail" id="alRail"></div>
+    <div class="al-main">
+      <div class="al-toolbar">
+        <input id="alSearch" type="text" placeholder="Search name · type · category · tag · file…" spellcheck="false">
+        <select id="alSort" title="Sort">
+          <option value="slot">Sort: slot order</option>
+          <option value="name">Sort: name</option>
+          <option value="filled">Sort: filled first</option>
+        </select>
+        <button id="alSlicerBtn" title="Slice a sprite sheet into cells">▦ Sprite sheet…</button>
+        <button id="alSelModeBtn" title="Multi-select assets">☐ Select</button>
+        <span class="al-batch" id="alBatch" style="display:none">
+          <span class="al-selcount" id="alSelCount">0</span>
+          <button id="alBatchTag">Tag…</button>
+          <button id="alBatchColl">Collect…</button>
+          <button id="alBatchRename">Rename…</button>
+          <button id="alBatchDup">Duplicate</button>
+          <button id="alBatchDel" class="al-danger">Delete</button>
+        </span>
+      </div>
+      <div class="al-grid" id="alGrid"></div>
+    </div>
+    <div class="al-insp" id="alInsp"><div class="al-insp-empty">Select an asset to inspect it.</div></div>
+    <div class="al-modal" id="alSliceModal" style="display:none"></div>
+    <input type="file" id="alFilePicker" accept="image/*" style="display:none">
+    <input type="file" id="alSheetPicker" accept="image/*" style="display:none">
+    <input type="file" id="alPackPicker" accept=".zip,application/zip" style="display:none">
+    <div id="alToast"></div>
+  </div>
+
   <aside>
     <div id="tabBar">
       <button class="tab on" data-tab="generate">Generate</button>
       <button class="tab" data-tab="explore">Explore</button>
       <button class="tab" data-tab="edit">Edit</button>
+      <button class="tab" data-tab="assets">Assets</button>
       <button class="tab" data-tab="export">Export</button>
     </div>
 
@@ -857,6 +963,34 @@ details.cat-acc[open]>summary{color:var(--accent)}
       <div class="hint">One .zip with everything: the rendered map (PNG), raw 32-bit heightmap + temperature + rainfall, each layer as an image, and all parameters. Restore a saved world with <b>Import → Load project .zip</b> in the header. For tiled / 16K output use <b>Tiles → Export tile grid</b> in the Explore → Atlas tab.</div>
     </div>
     </div><!-- end exportPanel -->
+
+    <!-- ══ ASSETS (Asset Library side panel) ══ -->
+    <div id="assetsPanel" style="display:none">
+    <div class="sec">
+      <h2>Asset pack</h2>
+      <div class="row"><label>Pack name</label><input type="text" id="alPackName" value="Custom Asset Pack" spellcheck="false" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:5px 7px;font-size:12px"></div>
+      <div class="row"><label>Author</label><input type="text" id="alPackAuthor" value="" spellcheck="false" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:5px 7px;font-size:12px"></div>
+      <div class="row"><label>License</label><input type="text" id="alPackLicense" value="CC0" spellcheck="false" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:5px 7px;font-size:12px"></div>
+      <div class="readout" id="alStats">—</div>
+      <div class="hint">Assets live in the project: <b>Export .zip</b> (Export tab) embeds them and <b>Load project .zip</b> restores them — no rebuilding from pack ZIPs.</div>
+    </div>
+    <div class="sec">
+      <h2>Build &amp; export</h2>
+      <div class="btnrow">
+        <button class="accent" id="alExportBtn">Export pack .zip</button>
+        <button id="alValidateBtn">Validate</button>
+      </div>
+      <div class="btnrow">
+        <button id="alApplyBtn" title="Compile the library and load it as the live map asset pack">Apply to map</button>
+        <button id="alImportPackBtn" title="Load an existing pack ZIP into the library for editing">Import pack…</button>
+      </div>
+      <div class="btnrow">
+        <button id="alClearBtn" class="al-danger">Clear library</button>
+      </div>
+      <div id="alValidation" class="hint"></div>
+      <div class="hint">Export writes <code>pack.json</code> (schema 2) + PNGs as a STORED zip — byte-compatible with the engine importer and Cartalith packs.</div>
+    </div>
+    </div><!-- end assetsPanel -->
 
     <div class="sec">
       <div class="readout" id="readout"></div>
@@ -7153,6 +7287,7 @@ async function exportZip(){
     if(tiled){ const t=await bakeTiled(W,setProg); for(const im of t.images) E.push(im); E.push({name:'tiles/index.json',data:new TextEncoder().encode(JSON.stringify(t.index,null,2))}); }
     else { const blob=await bakeSingle(W,setProg); E.push({name:'map.png',data:new Uint8Array(await blob.arrayBuffer())}); }
     { const ea=document.getElementById('embedAtlasChk'); if(!ea||ea.checked){ try{ busyLabel.textContent='embedding atlas…'; const ax=await atlasExportEntries(true); if(ax){ for(const e of ax.entries) E.push(e); } }catch(_){} } }   /* v0.118: embed this world's baked atlas chunks (World/…) in the project .zip so the LOD/atlas travels with the project */
+    if(typeof window!=='undefined'&&window._alExportEntries){ try{ busyLabel.textContent='embedding assets…'; const ae=await window._alExportEntries(); if(ae) for(const e of ae) E.push(e); }catch(_){} }   /* Asset Library: imported assets + metadata travel with the project */
     E.push({name:'README.txt',data:new TextEncoder().encode(readme(W,tiled))});
     const url=URL.createObjectURL(zipStore(E)), a=document.createElement('a'); a.href=url; a.download=`world_${state.tect.seed}_${tiled?'tiles':(W/1024)+'k'}.zip`; a.click(); setTimeout(()=>URL.revokeObjectURL(url),5000);
   }catch(e){ alert('Export failed: '+e.message); }
@@ -7167,6 +7302,7 @@ async function loadZip(file){ showBusy('loading…');
     if(z['rainfall.f32']){ const fa=new Float32Array(z['rainfall.f32'].buffer); rainField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else simulateWeather(state.climate.wIters);
     plates=[]; _canInvert=true; _imported=true; syncUI(); renderNow();
     if(z[ATLAS_MANIFEST]){ try{ const nw=await atlasImportEntries(z); if(nw>0){ _worldKey=worldKey(); atlasSyncWorld(); updateAtlasStatus&&updateAtlasStatus(); } }catch(_){} }   /* v0.118: project carried a baked atlas → restore it to IndexedDB; rediscover for the current world */
+    if(typeof window!=='undefined'&&window._alImportProject){ try{ await window._alImportProject(z); }catch(_){} }   /* Asset Library: restore imported assets + metadata from the project */
   }catch(e){ alert('Load failed: '+e.message); }
   finally{ hideBusy(); }
 }
@@ -7432,11 +7568,15 @@ document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on')); b.classList.add('on');
   const tp=b.dataset.tab; _activeTab=tp;
   if(tp!=='edit'){ painting=false; _prevGx=NaN; _prevGy=NaN; clearBrushCursor(); }   /* leaving Edit tab cancels any in-progress freehand stroke + brush cursor */
-  ['generatePanel','explorePanel','editPanel','exportPanel'].forEach(id=>{
+  ['generatePanel','explorePanel','editPanel','exportPanel','assetsPanel'].forEach(id=>{
     const el=document.getElementById(id); if(el) el.style.display='none';
   });
-  const showId={generate:'generatePanel',explore:'explorePanel',edit:'editPanel',export:'exportPanel'}[tp];
+  const showId={generate:'generatePanel',explore:'explorePanel',edit:'editPanel',export:'exportPanel',assets:'assetsPanel'}[tp];
   if(showId){ const el=document.getElementById(showId); if(el) el.style.display='block'; }
+  /* Asset Library takes over the full workspace: hide the map viewport while it's open */
+  { const cw=document.querySelector('.canvas-wrap'), al=document.getElementById('assetLibrary');
+    if(cw&&al){ const on=(tp==='assets'); cw.style.display=on?'none':'flex'; al.style.display=on?'flex':'none';
+      if(on&&window.AssetLibrary&&window.AssetLibrary.opened) window.AssetLibrary.opened(); } }
 }));
 
 /* ---- Generate sub-tab switching (World / Civilization) ---- */
@@ -10738,6 +10878,1189 @@ function _civSetTool(tool){
   };
 
   _civBuildTimelineUI();
+})();
+</script>
+<script>
+"use strict";
+/* =====================================================================================================
+ * ASSET LIBRARY — Cartalith Gen1's native asset management page (migrated from asset_pack_compiler.html;
+ * algorithms reused, UI rebuilt in Cartalith's design language; the standalone compiler remains only a
+ * reference implementation). Occupies the full workspace while open (map hidden by the tab handler).
+ *
+ * Subsystems (clean interfaces, no cross-reach into each other's internals):
+ *   AssetDB            — slot registry + item store + metadata + tags (single source of truth)
+ *   AssetCollections   — user collections of slots, independent of engine categories
+ *   ThumbnailRenderer  — shared render core (thumbnails, inspector preview, export bake)
+ *   AssetImporter      — drag-drop / picker file intake + pack-ZIP import (schema 1+2)
+ *   SpriteSheetImporter— the complete slicer: adjustable/draggable grid, chroma key, per-cell names
+ *   ImageEditor        — inspector-embedded transform editor (scale/pan/fit/anchor/preview bg)
+ *   AssetValidator     — duplicate detection + pre-export validation warnings
+ *   PackManifestBuilder— pack.json schema-2 superset (byte-compatible with existing packs)
+ *   ZipExporter        — STORED zip via the engine's zipStore (readable by unzipStore/unzipAny)
+ *   AssetBrowserUI     — rail / grid / toolbar / search / multi-select / batch ops
+ *   InspectorUI        — persistent right-hand property inspector
+ *
+ * Persistence: assets travel WITH the project (window._alExportEntries / _alImportProject hooks in
+ * exportZip/loadZip write assetlib/library.json + assetlib/img/N.png). UI state → localStorage.
+ * Never serialized into `state` (transient-UI invariant 6 stays intact).
+ * ==================================================================================================== */
+(function(){
+const E=id=>document.getElementById(id);
+
+/* ---------------------------------------------------------------- render core (ThumbnailRenderer) */
+function defaultTransform(){ return {scale:1,panX:0,panY:0}; }
+function drawItemOnly(ctx,item,size){
+  const {img,w,h,t}=item;
+  const baseFit=size/Math.max(w,h);
+  const dw=w*baseFit*t.scale, dh=h*baseFit*t.scale;
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
+  ctx.drawImage(img,(size-dw)/2+t.panX,(size-dh)/2+t.panY,dw,dh);
+}
+function renderItem(ctx,item,size,opaque){
+  ctx.clearRect(0,0,size,size);
+  if(opaque){ ctx.fillStyle='#000'; ctx.fillRect(0,0,size,size); }
+  drawItemOnly(ctx,item,size);
+}
+function renderToCanvas(item,size,opaque){
+  const c=document.createElement('canvas'); c.width=size; c.height=size;
+  renderItem(c.getContext('2d'),item,size,opaque);
+  return c;
+}
+function renderToBlob(item,size,opaque){ return new Promise(res=>renderToCanvas(item,size,opaque).toBlob(res,'image/png')); }
+function fitToBottom(item,size){
+  const baseFit=size/Math.max(item.w,item.h);
+  item.t.panY=(size-item.h*baseFit*item.t.scale)/2;
+}
+const ThumbnailRenderer={
+  into(cv,item,fam){ const full=renderToCanvas(item,fam.size,fam.opaque); const c=cv.getContext('2d');
+    c.clearRect(0,0,cv.width,cv.height); c.imageSmoothingQuality='high'; c.drawImage(full,0,0,cv.width,cv.height); },
+  toBlob:renderToBlob, toCanvas:renderToCanvas, drawItemOnly, renderItem, defaultTransform, fitToBottom
+};
+
+/* ---------------------------------------------------------------- vocabulary (frozen — mirrors the
+   engine's PACK_TEX_SLOTS/PACK_ICON_SLOTS + Cartalith's biome/terrain/structure vocabularies) */
+function mkSlots(prefix,rows){ return rows.map((r,i)=>({id:r[0],name:r[1],desc:r[2]||'',code:prefix+'-'+String(i+1).padStart(2,'0')})); }
+const TEX={kind:'texture',size:512,opaque:true, multi:false,anchor:null};
+const ICO={kind:'icon',   size:256,opaque:false,multi:true};
+const FAMILIES=[
+  Object.assign({key:'textures',title:'Splat channels',tagText:'materialWeights',dir:'textures',section:'textures',
+    slots:mkSlots('TX',[['grass','Grass','Grassland / meadow ground'],['rock','Rock','Bare rock / cliff / high slope'],
+      ['sand','Sand','Desert / dune / beach'],['snow','Snow','Snow / ice cap'],['wetland','Wetland','Marsh / mud / swamp floor'],
+      ['canopy','Canopy','Closed-forest ground tint'],['parchment','Parchment','Paper base multiplied over the map (optional)']])},TEX),
+  Object.assign({key:'biomes',title:'Biome textures',tagText:'Cartalith biomes',dir:'biomes',section:'biomes',
+    slots:mkSlots('BI',[['coastal','Coastal Lowland','Low coastal plain'],['temperate_forest','Temperate Forest',''],
+      ['mediterranean','Mediterranean Scrub',''],['wetlands','Wetlands / Marshes',''],['steppe','Steppe / Grassland',''],
+      ['jungle','Tropical Jungle',''],['boreal','Boreal Taiga',''],['mountain','Mountain Highland',''],
+      ['cold_desert','Cold Desert / Badlands',''],['hot_desert','Hot Desert',''],['tundra','Tundra / Polar',''],
+      ['ruined','Ruined Wastes','Fantasy blight / wastes'],['hills','Hills',''],['lake_river','Lake / River','Inland fresh water'],
+      ['ocean','Ocean / Deep Water','']])},TEX),
+  Object.assign({key:'terrains',title:'Terrain textures',tagText:'Cartalith terrains',dir:'terrains',section:'terrains',
+    slots:mkSlots('TR',[['paved','Paved Road',''],['dirt','Dirt Track',''],['hardpack','Desert Hardpack',''],
+      ['plains','Open Plains',''],['forest_path','Forest Path',''],['hills','Hills',''],['rocky','Rocky Terrain',''],
+      ['mtn_pass','Mountain Pass',''],['mtn_trail','Mountain Trails',''],['swamp','Swamp / Marsh',''],
+      ['deep_sand','Deep Sand',''],['snow','Snow / Ice',''],['ruins','Ruins / Debris','']])},TEX),
+  Object.assign({key:'icons',title:'Feature icons',tagText:'placeMapIcons',dir:'icons',section:'icons',anchor:'bottom',
+    slots:mkSlots('IC',[['mountain','Mountain','Peaks — land-relative elevation ≥ 0.58'],['hill','Hill','Hills — elevation 0.53–0.58'],
+      ['tree_conifer','Conifer tree','Boreal / conifer forest cells'],['tree_broadleaf','Broadleaf tree','Temperate / tropical broadleaf']])},ICO),
+  Object.assign({key:'settlement',title:'Settlement pins',tagText:'size classes',dir:'structures/settlement',section:'structures',sub:'settlement',anchor:'center',
+    slots:mkSlots('SC',[['hamlet','Hamlet','glyph ⌂'],['village','Village','glyph ●'],['town','Town','glyph ◉'],
+      ['city','City','glyph ⬣'],['capital','Capital','glyph ✦'],['monastery','Monastery','glyph †'],
+      ['fortress','Fortress','glyph ♖'],['university','University','glyph ⌘'],['industrial','Industrial','glyph ⚙']])},ICO),
+  Object.assign({key:'trait',title:'Settlement traits',tagText:'role overlays',dir:'structures/trait',section:'structures',sub:'trait',anchor:'center',
+    slots:mkSlots('ST',[['fortified','Fortified','glyph ⬢'],['mining','Mining','glyph ⚒'],['port','Port','glyph ⚓'],
+      ['administrative','Administrative','glyph ♜'],['trade_hub','Trade hub','glyph ♣'],['military','Military','glyph ⚔'],
+      ['religious','Religious','glyph ✝']])},ICO),
+  Object.assign({key:'poi',title:'Points of interest',tagText:'POI markers',dir:'structures/poi',section:'structures',sub:'poi',anchor:'center',
+    slots:mkSlots('PI',[['ruin','Ruin / old settlement',''],['landmark','Landmark',''],['mountain_peak','Mountain peak',''],
+      ['lake','Lake / spring',''],['named_forest','Named forest',''],['battlefield','Battlefield',''],
+      ['shrine','Shrine / temple',''],['cave','Cave / tunnel',''],['bridge','Bridge / ford',''],['other','Other','']])},ICO),
+  Object.assign({key:'custom',title:'Custom icons',tagText:'user-defined',dir:'custom',section:'custom',anchor:'center',custom:true,slots:[]},ICO),
+];
+
+/* ---------------------------------------------------------------- AssetDB */
+const SLOT_REG={};   // uid → {fam, slot}
+const store={};      // uid → [item] — item {name,img,w,h,t,hash,meta?}
+function slugId(s){ return (String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''))||'icon'; }
+function defaultMeta(){ return {author:'',copyright:'',license:'',source:'',notes:'',version:'',tags:[]}; }
+FAMILIES.forEach(fam=>fam.slots.forEach(slot=>{
+  const uid=fam.key+':'+slot.id;
+  slot.uid=uid; slot.meta=defaultMeta();
+  SLOT_REG[uid]={fam,slot}; store[uid]=[];
+}));
+const AssetDB={
+  families:FAMILIES, reg:SLOT_REG, store,
+  get(uid){ return SLOT_REG[uid]; },
+  items(uid){ return store[uid]||[]; },
+  filledCount(famKey){ const fam=FAMILIES.find(f=>f.key===famKey); return fam.slots.filter(s=>store[s.uid].length>0).length; },
+  totalItems(){ let n=0; for(const uid in store) n+=store[uid].length; return n; },
+  addCustomSlot(name,setName){
+    const fam=FAMILIES.find(f=>f.custom);
+    setName=(setName||'Default').trim()||'Default';
+    const id=slugId(name), setId=slugId(setName), uid=fam.key+':'+setId+'/'+id;
+    const existing=fam.slots.find(s=>s.uid===uid);
+    if(existing) return existing;
+    const slot={id,name:String(name).trim(),set:setName,setId,desc:'custom icon',
+      code:'CU-'+String(fam.slots.length+1).padStart(2,'0'),uid,meta:defaultMeta()};
+    fam.slots.push(slot); SLOT_REG[uid]={fam,slot}; store[uid]=[];
+    return slot;
+  },
+  removeCustomSlot(uid){
+    const r=SLOT_REG[uid]; if(!r||!r.fam.custom) return false;
+    r.fam.slots=r.fam.slots.filter(s=>s.uid!==uid);
+    delete SLOT_REG[uid]; delete store[uid];
+    AssetCollections.dropUid(uid);
+    return true;
+  },
+  renameCustomSlot(uid,newName){
+    const r=SLOT_REG[uid]; if(!r||!r.fam.custom) return uid;
+    const fam=r.fam, slot=r.slot, nid=slugId(newName), nuid=fam.key+':'+slot.setId+'/'+nid;
+    if(nuid===uid){ slot.name=String(newName).trim(); return uid; }
+    if(SLOT_REG[nuid]) return uid;                        // collision — keep old id
+    slot.id=nid; slot.name=String(newName).trim(); slot.uid=nuid;
+    SLOT_REG[nuid]=r; delete SLOT_REG[uid];
+    store[nuid]=store[uid]; delete store[uid];
+    AssetCollections.renameUid(uid,nuid);
+    return nuid;
+  },
+  clear(){
+    for(const fam of FAMILIES){
+      if(fam.custom){ for(const s of fam.slots){ delete SLOT_REG[s.uid]; delete store[s.uid]; } fam.slots=[]; }
+      else for(const s of fam.slots){ store[s.uid]=[]; s.meta=defaultMeta(); }
+    }
+    AssetCollections.clear();
+  }
+};
+
+/* ---------------------------------------------------------------- AssetCollections */
+const AssetCollections={
+  map:{},                                       // name → [uid]
+  names(){ return Object.keys(this.map); },
+  add(name,uids){ name=String(name).trim(); if(!name) return;
+    const arr=this.map[name]||(this.map[name]=[]);
+    for(const u of uids) if(!arr.includes(u)) arr.push(u); },
+  remove(name,uid){ const arr=this.map[name]; if(!arr) return;
+    this.map[name]=arr.filter(u=>u!==uid); if(!this.map[name].length) delete this.map[name]; },
+  drop(name){ delete this.map[name]; },
+  dropUid(uid){ for(const n of this.names()) this.remove(n,uid); },
+  renameUid(o,n){ for(const k of this.names()){ const a=this.map[k]; const i=a.indexOf(o); if(i>=0) a[i]=n; } },
+  membership(uid){ return this.names().filter(n=>this.map[n].includes(uid)); },
+  clear(){ this.map={}; }
+};
+
+/* ---------------------------------------------------------------- duplicate hashing (AssetValidator half 1) */
+function itemHash(img,w,h){
+  try{
+    const c=document.createElement('canvas'); c.width=32; c.height=32;
+    const x=c.getContext('2d',{willReadFrequently:true});
+    x.drawImage(img,0,0,32,32);
+    const d=x.getImageData(0,0,32,32).data;
+    let hsh=0x811c9dc5;
+    for(let i=0;i<d.length;i+=7){ hsh^=d[i]; hsh=Math.imul(hsh,0x01000193); }
+    return ((hsh>>>0).toString(16))+'-'+w+'x'+h;
+  }catch(_){ return 'x'+Math.random(); }
+}
+const AssetValidator={
+  duplicateGroups(){
+    const byHash={};
+    for(const uid in store) store[uid].forEach((it,idx)=>{ if(!it.hash) it.hash=itemHash(it.img,it.w,it.h);
+      (byHash[it.hash]||(byHash[it.hash]=[])).push({uid,idx,name:it.name}); });
+    return Object.values(byHash).filter(g=>g.length>1);
+  },
+  slotHasDupe(uid){
+    const gs=this.duplicateGroups();
+    return gs.some(g=>g.some(e=>e.uid===uid));
+  },
+  run(){
+    const warn=[], packName=(E('alPackName')?E('alPackName').value.trim():'');
+    if(!packName) warn.push('Pack name is empty.');
+    if(AssetDB.totalItems()===0) warn.push('Library is empty — nothing to export.');
+    /* duplicate identifiers within the custom family / a set */
+    const seen={};
+    for(const fam of FAMILIES) for(const s of fam.slots){
+      const key=fam.key+':'+(s.setId?s.setId+'/':'')+s.id;
+      if(seen[key]) warn.push('Duplicate identifier: '+key);
+      seen[key]=1;
+      if(fam.custom && !/^[a-z0-9_]+$/.test(s.id)) warn.push('Invalid filename id: '+s.id);
+      if(fam.custom && store[s.uid] && store[s.uid].length===0) warn.push('Empty custom slot (no variants): '+s.name);
+    }
+    /* identical images */
+    for(const g of this.duplicateGroups()){
+      const names=g.map(e=>{ const r=SLOT_REG[e.uid]; return (r?r.slot.name:e.uid)+'#'+(e.idx+1); });
+      warn.push('Identical images: '+names.join(' = '));
+    }
+    /* collections referencing removed slots */
+    for(const n of AssetCollections.names())
+      for(const u of AssetCollections.map[n]) if(!SLOT_REG[u]) warn.push('Collection "'+n+'" references a missing asset.');
+    /* engine hint: splat textures partially filled */
+    const texFam=FAMILIES[0], filled=texFam.slots.filter(s=>store[s.uid].length).map(s=>s.id);
+    if(filled.length&&!filled.includes('grass')) warn.push('Splat channels present but no "grass" — the engine splat blends grass most.');
+    return warn;
+  }
+};
+
+/* ---------------------------------------------------------------- PackManifestBuilder + ZipExporter */
+const PackManifestBuilder={
+  put(m,fam,slotId,val){
+    if(fam.sub){ (m.structures||(m.structures={})); (m.structures[fam.sub]||(m.structures[fam.sub]={}))[slotId]=val; }
+    else{ (m[fam.section]||(m[fam.section]={}))[slotId]=val; }
+  },
+  async build(){
+    const manifest={schema:2,
+      name:(E('alPackName')&&E('alPackName').value.trim())||'Custom Asset Pack',
+      author:(E('alPackAuthor')&&E('alPackAuthor').value.trim())||'Cartalith Gen1',
+      license:(E('alPackLicense')&&E('alPackLicense').value.trim())||'CC0',
+      textures:{},icons:{}};
+    const entries=[]; let nTex=0,nIco=0;
+    for(const fam of FAMILIES){
+      for(const slot of fam.slots){
+        const arr=store[slot.uid]; if(!arr||!arr.length) continue;
+        if(fam.custom){
+          const paths=[];
+          for(let i=0;i<arr.length;i++){
+            const path='custom/'+slot.setId+'/'+slot.id+'_'+String(i+1).padStart(2,'0')+'.png';
+            const blob=await renderToBlob(arr[i],fam.size,false);
+            entries.push({name:path,data:new Uint8Array(await blob.arrayBuffer())});
+            paths.push(path); nIco++;
+          }
+          (manifest.custom||(manifest.custom={}));
+          (manifest.custom[slot.set]||(manifest.custom[slot.set]={}))[slot.id]=paths;
+          continue;
+        }
+        if(fam.kind==='texture'){
+          const path=fam.dir+'/'+slot.id+'.png';
+          const blob=await renderToBlob(arr[0],fam.size,true);
+          entries.push({name:path,data:new Uint8Array(await blob.arrayBuffer())});
+          this.put(manifest,fam,slot.id,path); nTex++;
+        } else {
+          const paths=[];
+          for(let i=0;i<arr.length;i++){
+            const path=fam.dir+'/'+slot.id+'_'+String(i+1).padStart(2,'0')+'.png';
+            const blob=await renderToBlob(arr[i],fam.size,false);
+            entries.push({name:path,data:new Uint8Array(await blob.arrayBuffer())});
+            paths.push(path); nIco++;
+          }
+          this.put(manifest,fam,slot.id,paths);
+        }
+      }
+    }
+    entries.push({name:'pack.json',data:new TextEncoder().encode(JSON.stringify(manifest,null,2))});
+    return {manifest,entries,nTex,nIco};
+  }
+};
+const ZipExporter={
+  blob(entries){ return zipStore(entries); },                              // engine STORED-zip writer
+  download(filename,entries){
+    const url=URL.createObjectURL(zipStore(entries));
+    const a=document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }
+};
+function slugName(s){ return (String(s).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')||'asset_pack'); }
+
+/* ---------------------------------------------------------------- toast */
+let _toastT=null;
+function toast(msg,kind){
+  const el=E('alToast'); if(!el) return;
+  el.textContent=msg; el.className='show '+(kind||'');
+  clearTimeout(_toastT); _toastT=setTimeout(()=>el.className=(kind||''),3600);
+}
+
+/* ---------------------------------------------------------------- AssetImporter */
+const AssetImporter={
+  intake(uid,fileList,done){
+    const r=SLOT_REG[uid]; if(!r) return;
+    const {fam}=r;
+    const files=[...fileList].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name));
+    if(!files.length){ toast('No image files in that drop.','warn'); return; }
+    const toLoad=fam.multi?files:files.slice(0,1);
+    let loaded=0,failed=0;
+    const fin=()=>{ if(loaded+failed<toLoad.length) return;
+      if(failed) toast(loaded+' loaded, '+failed+' failed to decode.',failed>loaded?'err':'warn');
+      if(done) done(loaded); };
+    toLoad.forEach(file=>{
+      const url=URL.createObjectURL(file);
+      const img=new Image();
+      img.onload=()=>{
+        const item={name:file.name,img,w:img.naturalWidth||fam.size,h:img.naturalHeight||fam.size,t:defaultTransform()};
+        item.hash=itemHash(img,item.w,item.h);
+        if(fam.anchor==='bottom') fitToBottom(item,fam.size);
+        if(fam.multi) store[uid].push(item); else store[uid]=[item];
+        loaded++; fin();
+      };
+      img.onerror=()=>{ URL.revokeObjectURL(url); failed++; fin(); };
+      img.src=url;
+    });
+  },
+  async decodeBytes(bytes){
+    const blob=new Blob([bytes],{type:'image/png'});
+    if(typeof createImageBitmap!=='undefined'){ const bmp=await createImageBitmap(blob); return {img:bmp,w:bmp.width,h:bmp.height}; }
+    const url=URL.createObjectURL(blob);
+    const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    return {img,w:img.naturalWidth,h:img.naturalHeight};
+  },
+  /* Load an existing pack ZIP (schema 1 or 2) into the library for editing. Compatible with every
+     pack the engine importer reads; unknown slot ids land in Custom/Imported with a warning. */
+  async importPackZip(ab){
+    const zip=await unzipAny(ab);
+    let m=null;
+    if(zip['pack.json']) m=JSON.parse(new TextDecoder().decode(zip['pack.json']));
+    else if(zip['pack.csv']&&typeof parsePackCsv==='function') m=parsePackCsv(new TextDecoder().decode(zip['pack.csv']));
+    else throw new Error('pack has no pack.json or pack.csv');
+    if(m.name&&E('alPackName')) E('alPackName').value=m.name;
+    if(m.author&&E('alPackAuthor')) E('alPackAuthor').value=m.author;
+    if(m.license&&E('alPackLicense')) E('alPackLicense').value=m.license;
+    const warns=[]; let n=0;
+    const loadInto=async(uid,path,label)=>{
+      if(!zip[path]){ warns.push('missing file: '+path); return; }
+      const {img,w,h}=await this.decodeBytes(zip[path]);
+      const fam=SLOT_REG[uid].fam;
+      const item={name:label||path.split('/').pop(),img,w,h,t:defaultTransform(),hash:itemHash(img,w,h)};
+      if(fam.anchor==='bottom') fitToBottom(item,fam.size);
+      if(fam.multi) store[uid].push(item); else store[uid]=[item];
+      n++;
+    };
+    const section=async(obj,famKey)=>{
+      if(!obj) return;
+      const fam=FAMILIES.find(f=>f.key===famKey);
+      for(const id in obj){
+        const slot=fam.slots.find(s=>s.id===id);
+        let uid=slot?slot.uid:null;
+        if(!uid){ uid=AssetDB.addCustomSlot(id,'Imported').uid; warns.push('unknown slot "'+id+'" → Custom/Imported'); }
+        const v=obj[id], paths=Array.isArray(v)?v:[v];
+        for(const p of paths) await loadInto(uid,p,id);
+      }
+    };
+    await section(m.textures,'textures');
+    await section(m.biomes,'biomes');
+    await section(m.terrains,'terrains');
+    await section(m.icons,'icons');
+    if(m.structures){ await section(m.structures.settlement,'settlement'); await section(m.structures.trait,'trait'); await section(m.structures.poi,'poi'); }
+    if(m.custom) for(const set in m.custom) for(const id in m.custom[set]){
+      const uid=AssetDB.addCustomSlot(id,set).uid;
+      const paths=m.custom[set][id];
+      for(const p of (Array.isArray(paths)?paths:[paths])) await loadInto(uid,p,id);
+    }
+    return {n,warns};
+  }
+};
+
+/* ---------------------------------------------------------------- UI state (remembered between sessions) */
+const UIState={
+  key:'cartalith_assetlib_ui',
+  data:{cat:'all',sort:'slot',previewBg:'#ffffff'},
+  load(){ try{ Object.assign(this.data,JSON.parse(localStorage.getItem(this.key)||'{}')); }catch(_){ } },
+  save(){ try{ localStorage.setItem(this.key,JSON.stringify(this.data)); }catch(_){ } }
+};
+UIState.load();
+
+/* ---------------------------------------------------------------- browser (AssetBrowserUI) */
+let _cat=UIState.data.cat||'all';       // 'all' | famKey | 'coll:Name'
+let _selUid=null;                       // inspected slot
+let _varIdx=0;                          // inspected variant
+let _selMode=false;                     // multi-select mode
+const _msel=new Set();                  // multi-selected uids
+let _built=false;
+
+function setPreviewBg(val){
+  UIState.data.previewBg=val; UIState.save();
+  const CHECKER='conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/16px 16px';
+  document.documentElement.style.setProperty('--preview-al',val==='checker'?CHECKER:val);
+  InspectorUI.render();
+}
+
+function visibleSlots(){
+  const q=(E('alSearch')&&E('alSearch').value.trim().toLowerCase())||'';
+  let list=[];
+  if(_cat==='all') for(const fam of FAMILIES) list.push(...fam.slots.map(s=>({fam,slot:s})));
+  else if(_cat.startsWith('coll:')){
+    const nm=_cat.slice(5);
+    for(const u of (AssetCollections.map[nm]||[])) if(SLOT_REG[u]) list.push(SLOT_REG[u]);
+  }
+  else{ const fam=FAMILIES.find(f=>f.key===_cat); if(fam) list=fam.slots.map(s=>({fam,slot:s})); }
+  if(q){
+    list=list.filter(({fam,slot})=>{
+      if(slot.name.toLowerCase().includes(q)||slot.id.includes(q)||slot.code.toLowerCase().includes(q)) return true;
+      if(fam.title.toLowerCase().includes(q)||fam.key.includes(q)||fam.kind.includes(q)) return true;
+      if(slot.set&&slot.set.toLowerCase().includes(q)) return true;
+      if(slot.meta&&slot.meta.tags.some(t=>t.toLowerCase().includes(q))) return true;
+      if(store[slot.uid]&&store[slot.uid].some(it=>it.name.toLowerCase().includes(q))) return true;
+      return false;
+    });
+  }
+  const sort=(E('alSort')&&E('alSort').value)||'slot';
+  if(sort==='name') list.sort((a,b)=>a.slot.name.localeCompare(b.slot.name));
+  else if(sort==='filled') list.sort((a,b)=>(store[b.slot.uid].length?1:0)-(store[a.slot.uid].length?1:0));
+  return list;
+}
+
+const AssetBrowserUI={
+  buildRail(){
+    const rail=E('alRail'); if(!rail) return;
+    rail.innerHTML='';
+    const mk=(key,label,count,hasAny)=>{
+      const b=document.createElement('button');
+      b.className='al-cat'+(key===_cat?' on':'');
+      b.innerHTML='<span>'+label+'</span><span class="cnt'+(hasAny?' has':'')+'">'+count+'</span>';
+      b.onclick=()=>{ _cat=key; UIState.data.cat=key; UIState.save(); AssetBrowserUI.refresh(); };
+      rail.appendChild(b);
+    };
+    mk('all','All assets',AssetDB.totalItems(),AssetDB.totalItems()>0);
+    const h1=document.createElement('div'); h1.className='al-rail-h'; h1.textContent='Categories'; rail.appendChild(h1);
+    for(const fam of FAMILIES){
+      const filled=fam.slots.filter(s=>store[s.uid].length>0).length;
+      mk(fam.key,fam.title,filled+'/'+fam.slots.length,filled>0);
+    }
+    const h2=document.createElement('div'); h2.className='al-rail-h'; h2.textContent='Collections'; rail.appendChild(h2);
+    const colls=AssetCollections.names();
+    if(!colls.length){ const d=document.createElement('div'); d.style.cssText='color:var(--faint);font-size:10.5px;padding:2px 14px 8px'; d.textContent='none yet — select assets and “Collect…”'; rail.appendChild(d); }
+    for(const nm of colls) mk('coll:'+nm,'▣ '+nm,AssetCollections.map[nm].length,true);
+  },
+  buildGrid(){
+    const grid=E('alGrid'); if(!grid) return;
+    grid.innerHTML='';
+    const list=visibleSlots();
+    if(!list.length){ grid.innerHTML='<div style="color:var(--faint);grid-column:1/-1;text-align:center;padding:30px 10px">No assets match. Drop images on a category slot, use the sprite-sheet slicer, or Import pack….</div>'; }
+    const dupeSet=new Set();
+    for(const g of AssetValidator.duplicateGroups()) for(const e of g) dupeSet.add(e.uid);
+    for(const {fam,slot} of list){
+      const items=store[slot.uid];
+      const card=document.createElement('div');
+      card.className='al-card'+(slot.uid===_selUid?' sel':'')+(_msel.has(slot.uid)?' msel':'');
+      card.dataset.uid=slot.uid;
+      const tags=(slot.meta&&slot.meta.tags.length)?'<div class="al-tags">'+slot.meta.tags.slice(0,4).map(t=>'<span class="al-tag">'+t+'</span>').join('')+'</div>':'';
+      card.innerHTML=
+        '<div class="al-thumb">'+(items.length?'<canvas width="140" height="140"></canvas>':'<span class="al-empty">⬇</span>')+
+        (items.length>1?'<span class="al-badge">×'+items.length+'</span>':'')+
+        (dupeSet.has(slot.uid)?'<span class="al-dupe" title="duplicate image detected">⚠</span>':'')+'</div>'+
+        '<div class="al-nm">'+slot.name+'</div>'+
+        '<div class="al-sub">'+slot.code+' · '+(slot.set?slot.set+'/':'')+slot.id+' · '+fam.tagText+'</div>'+tags;
+      if(items.length) ThumbnailRenderer.into(card.querySelector('canvas'),items[0],fam);
+      card.onclick=e=>{
+        if(_selMode||e.ctrlKey||e.metaKey){ if(_msel.has(slot.uid)) _msel.delete(slot.uid); else _msel.add(slot.uid); AssetBrowserUI.refreshSel(); return; }
+        _selUid=slot.uid; _varIdx=0; AssetBrowserUI.refreshSel(); InspectorUI.render();
+      };
+      /* drag-drop import straight onto the card */
+      card.addEventListener('dragover',e=>{ e.preventDefault(); card.style.borderColor='var(--accent)'; });
+      card.addEventListener('dragleave',()=>{ card.style.borderColor=''; });
+      card.addEventListener('drop',e=>{
+        e.preventDefault(); card.style.borderColor='';
+        AssetImporter.intake(slot.uid,e.dataTransfer.files,()=>{ AssetBrowserUI.refresh(); if(_selUid===slot.uid) InspectorUI.render(); AssetLibrary.markDirty(); });
+      });
+      grid.appendChild(card);
+    }
+    this.refreshSel();
+  },
+  refreshSel(){
+    document.querySelectorAll('#alGrid .al-card').forEach(c=>{
+      c.classList.toggle('sel',c.dataset.uid===_selUid);
+      c.classList.toggle('msel',_msel.has(c.dataset.uid));
+    });
+    const n=_msel.size;
+    E('alBatch').style.display=n?'inline-flex':'none';
+    E('alSelCount').textContent=n+' selected';
+    E('alSelModeBtn').classList.toggle('on',_selMode);
+    E('alSelModeBtn').textContent=_selMode?'☑ Select':'☐ Select';
+  },
+  refresh(){ this.buildRail(); this.buildGrid(); AssetLibrary.refreshStats(); }
+};
+
+/* ---------------------------------------------------------------- ImageEditor + InspectorUI */
+const ImageEditor={
+  drag:null,
+  attach(cv,fam,item){
+    cv.onpointerdown=e=>{ e.preventDefault(); this.drag={x:e.clientX,y:e.clientY,panX:item.t.panX,panY:item.t.panY}; cv.setPointerCapture(e.pointerId); };
+    cv.onpointermove=e=>{ if(!this.drag) return;
+      const r=cv.getBoundingClientRect(), k=fam.size/r.width;
+      item.t.panX=this.drag.panX+(e.clientX-this.drag.x)*k;
+      item.t.panY=this.drag.panY+(e.clientY-this.drag.y)*k;
+      InspectorUI.paint(); InspectorUI.syncT(); };
+    cv.onpointerup=()=>{ if(this.drag){ this.drag=null; AssetBrowserUI.buildGrid(); AssetLibrary.markDirty(); } };
+    cv.onwheel=e=>{ e.preventDefault();
+      item.t.scale=Math.max(0.05,Math.min(12,item.t.scale*(e.deltaY<0?1.08:1/1.08)));
+      InspectorUI.paint(); InspectorUI.syncT(); AssetLibrary.markDirty(); };
+  },
+  drawAnchor(ctx,size,anchor){
+    const cx=size/2, cy=anchor==='center'?size/2:size;
+    ctx.save();
+    ctx.lineWidth=Math.max(1,size/256); ctx.strokeStyle='rgba(91,140,255,.55)'; ctx.setLineDash([size/40,size/40]);
+    ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,size); ctx.stroke();
+    ctx.beginPath();
+    if(anchor==='center'){ ctx.moveTo(0,cy); ctx.lineTo(size,cy); } else { ctx.moveTo(0,cy-1); ctx.lineTo(size,cy-1); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(255,210,80,.95)'; ctx.lineWidth=Math.max(1.5,size/170);
+    const r=size*0.045;
+    if(anchor==='center'){ ctx.beginPath(); ctx.arc(cx,cy,r,0,2*Math.PI); ctx.stroke(); }
+    else{ ctx.beginPath(); ctx.moveTo(cx-r,cy-2); ctx.lineTo(cx+r,cy-2); ctx.stroke(); }
+    ctx.restore();
+  }
+};
+
+const InspectorUI={
+  texBg:{uid:null,tone:1,contrast:1},
+  render(){
+    const box=E('alInsp'); if(!box) return;
+    const r=_selUid?SLOT_REG[_selUid]:null;
+    if(!r){ box.innerHTML='<div class="al-insp-empty">Select an asset to inspect it.</div>'; return; }
+    const {fam,slot}=r;
+    const items=store[slot.uid];
+    if(_varIdx>=items.length) _varIdx=Math.max(0,items.length-1);
+    const it=items[_varIdx]||null;
+    const meta=slot.meta||(slot.meta=defaultMeta());
+    box.innerHTML=
+      '<div class="sec"><h3>'+slot.code+' · '+slot.name+'</h3>'+
+      '<div class="al-prev-wrap"><canvas id="alPrev" width="'+fam.size+'" height="'+fam.size+'"></canvas></div>'+
+      '<div class="hint" id="alPrevInfo"></div>'+
+      '<div class="row"><label>Scale</label><input type="range" id="alScale" min="5" max="600" value="'+(it?Math.round(it.t.scale*100):100)+'"><span class="val" id="alScaleV">'+(it?it.t.scale.toFixed(2):'1.00')+'×</span></div>'+
+      '<div class="btnrow"><button id="alFit">Fit</button><button id="alReset">Reset</button>'+
+      (fam.multi?'<button id="alAddVar">+ Variant</button>':'<button id="alReplace">Replace…</button>')+
+      (it?'<button id="alDelVar" class="al-danger">Delete</button>':'')+'</div>'+
+      '<div class="row"><label>Preview bg</label><span class="al-bgsw" id="alBgSw">'+
+        ['#ffffff','checker','#101218','#3bbf5a','#3b6fe2'].map(bg=>'<button data-bg="'+bg+'" style="background:'+(bg==='checker'?'repeating-conic-gradient(#1a1f2b 0 25%,#222838 0 50%) 0 0/8px 8px':bg)+'"></button>').join('')+'</span></div>'+
+      (fam.opaque?'':'<div class="row"><label>Texture bg</label><select id="alTexBg" style="flex:1"></select></div>')+
+      '</div>'+
+      (fam.multi?'<div class="sec"><h3>Variants ('+items.length+')</h3><div class="al-variants" id="alVars"></div>'+
+        (it?'<div class="row" style="margin-top:8px"><label>Name</label><input type="text" id="alVarName" value="'+(it.name||'').replace(/"/g,'&quot;')+'" spellcheck="false" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:4px 7px;font-size:11px"></div>':'')+
+        '<div class="hint">Deterministic per-cell variant pick on the map (pickIconVariant) — variants break repetition.</div></div>':'')+
+      '<div class="sec al-meta"><h3>Metadata</h3>'+
+      (fam.custom?'<div class="row"><label>Asset name</label><input type="text" id="alSlotName" value="'+slot.name.replace(/"/g,'&quot;')+'" spellcheck="false"></div>':'')+
+      '<div class="row"><label>Tags</label><input type="text" id="alMetaTags" value="'+meta.tags.join(', ').replace(/"/g,'&quot;')+'" placeholder="medieval, naval…" spellcheck="false"></div>'+
+      '<div class="row"><label>Author</label><input type="text" id="alMetaAuthor" value="'+(meta.author||'').replace(/"/g,'&quot;')+'" spellcheck="false"></div>'+
+      '<div class="row"><label>Copyright</label><input type="text" id="alMetaCopy" value="'+(meta.copyright||'').replace(/"/g,'&quot;')+'" spellcheck="false"></div>'+
+      '<div class="row"><label>Licence</label><input type="text" id="alMetaLic" value="'+(meta.license||'').replace(/"/g,'&quot;')+'" spellcheck="false"></div>'+
+      '<div class="row"><label>Source</label><input type="text" id="alMetaSrc" value="'+(meta.source||'').replace(/"/g,'&quot;')+'" spellcheck="false"></div>'+
+      '<div class="row"><label>Version</label><input type="text" id="alMetaVer" value="'+(meta.version||'').replace(/"/g,'&quot;')+'" spellcheck="false"></div>'+
+      '<div class="row" style="align-items:flex-start"><label>Notes</label><textarea id="alMetaNotes" spellcheck="false">'+(meta.notes||'')+'</textarea></div>'+
+      '</div>'+
+      '<div class="sec"><h3>Collections</h3><div id="alCollMember" class="hint" style="margin-top:0"></div>'+
+      '<div class="btnrow" style="margin-top:6px"><button id="alAddColl">Add to collection…</button>'+
+      (fam.custom?'<button id="alRmSlot" class="al-danger">Remove slot</button>':'')+'</div></div>';
+    /* info line */
+    const info=E('alPrevInfo');
+    info.innerHTML=it
+      ? ('source '+it.w+'×'+it.h+'px → output '+fam.size+'×'+fam.size+'px · '+(fam.opaque?'alpha flattened on black':'alpha preserved')+
+         (fam.anchor==='bottom'?' · base-anchored':fam.anchor==='center'?' · center-anchored':'')+' · drag to pan, wheel to zoom')
+      : 'Empty — drop an image on the card, or click + Variant / Replace.';
+    /* preview */
+    this.paint();
+    if(it) ImageEditor.attach(E('alPrev'),fam,it);
+    /* transform controls */
+    if(it){
+      E('alScale').oninput=e=>{ it.t.scale=(+e.target.value)/100; E('alScaleV').textContent=it.t.scale.toFixed(2)+'×'; this.paint(); AssetLibrary.markDirty(); };
+      E('alReset').onclick=()=>{ it.t=defaultTransform(); this.render(); AssetBrowserUI.buildGrid(); AssetLibrary.markDirty(); };
+      E('alFit').onclick=()=>{ it.t=defaultTransform(); if(fam.anchor==='bottom') fitToBottom(it,fam.size); this.render(); AssetBrowserUI.buildGrid(); AssetLibrary.markDirty(); };
+      if(E('alDelVar')) E('alDelVar').onclick=()=>{ items.splice(_varIdx,1); _varIdx=0; this.render(); AssetBrowserUI.refresh(); AssetLibrary.markDirty(); };
+    } else {
+      E('alScale').disabled=true; E('alReset').disabled=true; E('alFit').disabled=true;
+    }
+    if(E('alAddVar')) E('alAddVar').onclick=()=>AssetLibrary.pickInto(slot.uid);
+    if(E('alReplace')) E('alReplace').onclick=()=>AssetLibrary.pickInto(slot.uid);
+    /* bg swatches */
+    document.querySelectorAll('#alBgSw button').forEach(b=>{
+      b.classList.toggle('on',b.dataset.bg===UIState.data.previewBg);
+      b.onclick=()=>{ this.texBg.uid=null; setPreviewBg(b.dataset.bg); };
+    });
+    /* texture preview background (icons only) */
+    if(E('alTexBg')){
+      const sel=E('alTexBg');
+      sel.innerHTML='<option value="">(none — solid colour)</option>';
+      for(const f2 of FAMILIES){ if(f2.kind!=='texture') continue;
+        const withImg=f2.slots.filter(s=>store[s.uid].length);
+        if(!withImg.length) continue;
+        const og=document.createElement('optgroup'); og.label=f2.title;
+        for(const s of withImg){ const o=document.createElement('option'); o.value=s.uid; o.textContent=s.code+' · '+s.name; og.appendChild(o); }
+        sel.appendChild(og);
+      }
+      sel.value=this.texBg.uid||'';
+      sel.onchange=()=>{ this.texBg.uid=sel.value||null; this.paint(); };
+    }
+    /* variants strip */
+    if(E('alVars')){
+      const wrap=E('alVars');
+      items.forEach((v,i)=>{
+        const d=document.createElement('div'); d.className='al-var'+(i===_varIdx?' on':'');
+        d.innerHTML='<canvas width="56" height="56"></canvas><div class="vn">'+(v.name||('#'+(i+1)))+'</div>';
+        ThumbnailRenderer.into(d.querySelector('canvas'),v,fam);
+        d.onclick=()=>{ _varIdx=i; this.render(); };
+        wrap.appendChild(d);
+      });
+      if(E('alVarName')) E('alVarName').oninput=e=>{ it.name=e.target.value; AssetLibrary.markDirty(); };
+    }
+    /* metadata */
+    const mbind=(id,key)=>{ const el=E(id); if(el) el.oninput=()=>{ meta[key]=el.value; AssetLibrary.markDirty(); }; };
+    mbind('alMetaAuthor','author'); mbind('alMetaCopy','copyright'); mbind('alMetaLic','license');
+    mbind('alMetaSrc','source'); mbind('alMetaVer','version'); mbind('alMetaNotes','notes');
+    if(E('alMetaTags')) E('alMetaTags').onchange=()=>{ meta.tags=E('alMetaTags').value.split(',').map(s=>s.trim()).filter(Boolean); AssetBrowserUI.refresh(); AssetLibrary.markDirty(); };
+    if(E('alSlotName')) E('alSlotName').onchange=()=>{
+      const nuid=AssetDB.renameCustomSlot(slot.uid,E('alSlotName').value);
+      _selUid=nuid; AssetBrowserUI.refresh(); this.render(); AssetLibrary.markDirty();
+    };
+    /* collections */
+    const cm=AssetCollections.membership(slot.uid);
+    E('alCollMember').innerHTML=cm.length?cm.map(n=>'<span class="al-tag" style="margin-right:4px">▣ '+n+' <a href="#" data-cn="'+n+'" style="color:var(--warn);text-decoration:none">×</a></span>').join(''):'not in any collection';
+    document.querySelectorAll('#alCollMember a').forEach(a=>a.onclick=e=>{ e.preventDefault(); AssetCollections.remove(a.dataset.cn,slot.uid); AssetBrowserUI.refresh(); this.render(); AssetLibrary.markDirty(); });
+    E('alAddColl').onclick=()=>{
+      const nm=prompt('Collection name:',AssetCollections.names()[0]||'Fantasy Pack');
+      if(nm){ AssetCollections.add(nm,[slot.uid]); AssetBrowserUI.refresh(); this.render(); AssetLibrary.markDirty(); }
+    };
+    if(E('alRmSlot')) E('alRmSlot').onclick=()=>{
+      if(!confirm('Remove custom slot "'+slot.name+'" and its images?')) return;
+      AssetDB.removeCustomSlot(slot.uid); _selUid=null; AssetBrowserUI.refresh(); this.render(); AssetLibrary.markDirty();
+    };
+  },
+  paint(){
+    const cv=E('alPrev'); if(!cv||!_selUid) return;
+    const {fam,slot}=SLOT_REG[_selUid];
+    const it=store[slot.uid][_varIdx];
+    const ctx=cv.getContext('2d');
+    ctx.clearRect(0,0,fam.size,fam.size);
+    if(fam.opaque){ ctx.fillStyle='#000'; ctx.fillRect(0,0,fam.size,fam.size); }
+    else if(this.texBg.uid&&store[this.texBg.uid]&&store[this.texBg.uid].length){
+      const im=store[this.texBg.uid][0];
+      const s=Math.max(fam.size/im.w,fam.size/im.h);
+      ctx.drawImage(im.img,(fam.size-im.w*s)/2,(fam.size-im.h*s)/2,im.w*s,im.h*s);
+    }
+    if(it) drawItemOnly(ctx,it,fam.size);
+    if(fam.anchor) ImageEditor.drawAnchor(ctx,fam.size,fam.anchor);
+  },
+  syncT(){
+    const it=_selUid&&store[_selUid][_varIdx];
+    if(it&&E('alScale')){ E('alScale').value=Math.round(it.t.scale*100); E('alScaleV').textContent=it.t.scale.toFixed(2)+'×'; }
+  }
+};
+
+/* ---------------------------------------------------------------- SpriteSheetImporter (complete slicer) */
+const SpriteSheetImporter={
+  sheet:null, slCells:[], slScale:1, gridRect:null, mode:'select', pdrag:null,
+  colF:[0,1], rowF:[0,1], sel:new Set(), cellNames:{},
+  chroma:{enabled:false,color:[255,255,255],tol:40},
+  open(){
+    const m=E('alSliceModal');
+    m.style.display='flex';
+    if(!m.dataset.built){
+      m.dataset.built='1';
+      m.innerHTML=
+      '<div class="al-dlg">'+
+        '<div class="al-dlg-h"><b>SPRITE-SHEET SLICER</b><span class="hint" style="margin:0">grid → select cells → add</span><button id="alSlClose">✕ Close</button></div>'+
+        '<div class="al-dlg-b">'+
+          '<div class="al-slice-left">'+
+            '<div class="al-slice-drop" id="alSlDrop">Drag a sprite sheet here — or click to browse</div>'+
+            '<div class="al-slice-cv-wrap" id="alSlWrap" style="display:none"><canvas id="alSlCv"></canvas></div>'+
+            '<div class="al-bgsw" id="alSlBg" style="display:none"><span class="hint" style="margin:0 6px 0 0">bg:</span>'+
+              ['#0c0e13','checker','#ffffff','#3bbf5a','#3b6fe2'].map(bg=>'<button data-bg="'+bg+'" style="background:'+(bg==='checker'?'repeating-conic-gradient(#1a1f2b 0 25%,#222838 0 50%) 0 0/8px 8px':bg)+'"></button>').join('')+'</div>'+
+            '<div class="hint" id="alSlInfo">Load a sheet, set the grid, then click cells to select.</div>'+
+          '</div>'+
+          '<div class="al-slice-right">'+
+            '<div class="seg sm" id="alSlMode"><button data-m="select" class="on">Select cells</button><button data-m="grid">Adjust grid</button><button data-m="pick">💧 Pick bg</button></div>'+
+            '<div class="row"><label>Columns</label><input type="number" id="alSlCols" min="1" max="128" value="4"></div>'+
+            '<div class="row"><label>Rows</label><input type="number" id="alSlRows" min="1" max="128" value="4"></div>'+
+            '<div class="row"><label>Spacing px</label><input type="number" id="alSlSpacing" min="0" value="0"></div>'+
+            '<div class="btnrow"><button id="alSlResetG">Reset grid</button><button id="alSlAll">All</button><button id="alSlNone">Clear</button><button id="alSlInv">Invert</button><span class="al-selcount" id="alSlCount">0 selected</span></div>'+
+            '<label class="chk"><input type="checkbox" id="alChEnable"> background → transparent <span id="alChSw" style="display:inline-block;width:14px;height:14px;border:1px solid var(--line);border-radius:3px;margin-left:4px"></span></label>'+
+            '<div class="row"><label>Tolerance</label><input type="range" id="alChTol" min="0" max="150" value="40"><span class="val" id="alChTolV">40</span></div>'+
+            '<label class="chk"><input type="checkbox" id="alSlSkip" checked> skip fully-transparent cells</label>'+
+            '<div class="row"><label>Target</label><select id="alSlTarget" style="flex:1"></select></div>'+
+            '<div class="row"><label>Custom set</label><input type="text" id="alSlSet" value="Default" spellcheck="false" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:4px 7px;font-size:11px"></div>'+
+            '<div class="row"><label>New name</label><input type="text" id="alSlNew" placeholder="e.g. windmill" spellcheck="false" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:4px 7px;font-size:11px"></div>'+
+            '<div><div class="sublabel" style="margin-top:4px">Per-cell names <span class="al-selcount" id="alCnHint"></span></div><div class="al-cellnames" id="alCellNames"><div class="empty">Select cells to name them.</div></div></div>'+
+            '<button class="accent" id="alSlAdd">Add selected cells →</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+      this.wire();
+    }
+    this.refreshTargets();
+  },
+  close(){ E('alSliceModal').style.display='none'; },
+  wire(){
+    const S=this;
+    E('alSlClose').onclick=()=>S.close();
+    E('alSlDrop').onclick=()=>E('alSheetPicker').click();
+    E('alSlDrop').addEventListener('dragover',e=>{ e.preventDefault(); E('alSlDrop').classList.add('over'); });
+    E('alSlDrop').addEventListener('dragleave',()=>E('alSlDrop').classList.remove('over'));
+    E('alSlDrop').addEventListener('drop',e=>{ e.preventDefault(); E('alSlDrop').classList.remove('over'); S.loadSheet(e.dataTransfer.files[0]); });
+    E('alSheetPicker').addEventListener('change',e=>{ S.loadSheet(e.target.files[0]); e.target.value=''; });
+    ['alSlCols','alSlRows'].forEach(id=>E(id).addEventListener('input',()=>{ S.resetLines(); S.sel.clear(); S.cellNames={}; S.redraw(); S.renderNames(); }));
+    E('alSlSpacing').addEventListener('input',()=>S.redraw());
+    E('alSlResetG').onclick=()=>{ if(!S.sheet) return; S.gridRect={x:0,y:0,w:S.sheet.w,h:S.sheet.h}; S.resetLines(); S.redraw(); };
+    E('alSlAll').onclick=()=>{ S.slCells.forEach(c=>S.sel.add(c.idx)); S.redraw(); S.renderNames(); };
+    E('alSlNone').onclick=()=>{ S.sel.clear(); S.redraw(); S.renderNames(); };
+    E('alSlInv').onclick=()=>{ const inv=new Set(); S.slCells.forEach(c=>{ if(!S.sel.has(c.idx)) inv.add(c.idx); }); S.sel=inv; S.redraw(); S.renderNames(); };
+    document.querySelectorAll('#alSlMode button').forEach(b=>b.onclick=()=>S.setMode(b.dataset.m));
+    E('alChEnable').onchange=e=>{ S.chroma.enabled=e.target.checked; S.updateSwatch(); S.redraw(); };
+    E('alChTol').oninput=e=>{ S.chroma.tol=+e.target.value||0; E('alChTolV').textContent=S.chroma.tol; if(S.chroma.enabled) S.redraw(); };
+    document.querySelectorAll('#alSlBg button').forEach(b=>b.onclick=()=>{
+      E('alSlWrap').style.background=b.dataset.bg==='checker'?'conic-gradient(#1a1f2b 25%,#222838 0 50%,#1a1f2b 0 75%,#222838 0) 0 0/22px 22px':b.dataset.bg;
+      document.querySelectorAll('#alSlBg button').forEach(x=>x.classList.toggle('on',x===b));
+    });
+    const cv=E('alSlCv');
+    cv.addEventListener('contextmenu',e=>e.preventDefault());
+    cv.addEventListener('pointerdown',e=>{
+      if(!S.sheet) return; e.preventDefault();
+      const {sx,sy}=S.evToSrc(e);
+      if(S.mode==='pick'){ S.sample(sx,sy); S.setMode('select'); return; }
+      if(S.mode==='grid'){
+        const tol=e.pointerType==='touch'?26:11;
+        const tgt=S.pickTarget(sx,sy,tol);
+        if(tgt){ S.pdrag={target:tgt,startX:sx,startY:sy,orig:Object.assign({},S.gridRect)}; cv.setPointerCapture(e.pointerId); }
+        return;
+      }
+      S.pdrag={target:null,startX:sx,startY:sy}; cv.setPointerCapture(e.pointerId);
+    });
+    cv.addEventListener('pointermove',e=>{ if(!S.pdrag||!S.pdrag.target||!S.sheet) return; e.preventDefault(); const {sx,sy}=S.evToSrc(e); S.dragTo(sx,sy); });
+    cv.addEventListener('pointerup',e=>{
+      if(S.pdrag&&!S.pdrag.target&&S.sheet){
+        const {sx,sy}=S.evToSrc(e);
+        const cell=S.slCells.find(c=>sx>=c.x&&sx<c.x+c.w&&sy>=c.y&&sy<c.y+c.h);
+        if(cell){ if(S.sel.has(cell.idx)) S.sel.delete(cell.idx); else S.sel.add(cell.idx); S.redraw(); S.renderNames(); }
+      }
+      S.pdrag=null;
+    });
+    cv.addEventListener('pointercancel',()=>{ S.pdrag=null; });
+    E('alSlAdd').onclick=()=>S.addSlices();
+    S.updateSwatch();
+  },
+  clampInt(v,lo,hi){ v=parseInt(v,10); if(!isFinite(v)) v=lo; return Math.max(lo,Math.min(hi,v)); },
+  resetLines(){
+    const cols=this.clampInt(E('alSlCols').value,1,128), rows=this.clampInt(E('alSlRows').value,1,128);
+    this.colF=[]; for(let i=0;i<=cols;i++) this.colF.push(i/cols);
+    this.rowF=[]; for(let j=0;j<=rows;j++) this.rowF.push(j/rows);
+  },
+  evToSrc(e){
+    const cv=E('alSlCv'), r=cv.getBoundingClientRect();
+    return {sx:(e.clientX-r.left)*(cv.width/r.width)/this.slScale, sy:(e.clientY-r.top)*(cv.height/r.height)/this.slScale};
+  },
+  computeCells(){
+    const cols=this.clampInt(E('alSlCols').value,1,128), rows=this.clampInt(E('alSlRows').value,1,128);
+    const g=Math.max(0,parseFloat(E('alSlSpacing').value)||0);
+    if(this.colF.length!==cols+1||this.rowF.length!==rows+1) this.resetLines();
+    const R=this.gridRect, cells=[]; let cw=Infinity, ch=Infinity;
+    for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+      const x0=R.x+this.colF[c]*R.w+(c>0?g/2:0), x1=R.x+this.colF[c+1]*R.w-(c<cols-1?g/2:0);
+      const y0=R.y+this.rowF[r]*R.h+(r>0?g/2:0), y1=R.y+this.rowF[r+1]*R.h-(r<rows-1?g/2:0);
+      const w=x1-x0,h=y1-y0; cw=Math.min(cw,w); ch=Math.min(ch,h);
+      cells.push({c,r,idx:r*cols+c,x:x0,y:y0,w,h});
+    }
+    return {cells,cw,ch};
+  },
+  applyChroma(ctx,w,h){
+    const im=ctx.getImageData(0,0,w,h), a=im.data;
+    const [cr,cg,cb]=this.chroma.color, t2=this.chroma.tol*this.chroma.tol;
+    for(let i=0;i<a.length;i+=4){
+      if(a[i+3]===0) continue;
+      const dr=a[i]-cr,dg=a[i+1]-cg,db=a[i+2]-cb;
+      if(dr*dr+dg*dg+db*db<=t2) a[i+3]=0;
+    }
+    ctx.putImageData(im,0,0);
+  },
+  handlePoints(){
+    const r=this.gridRect, mx=r.x+r.w/2, my=r.y+r.h/2;
+    return {nw:{x:r.x,y:r.y},n:{x:mx,y:r.y},ne:{x:r.x+r.w,y:r.y},w:{x:r.x,y:my},e:{x:r.x+r.w,y:my},
+            sw:{x:r.x,y:r.y+r.h},s:{x:mx,y:r.y+r.h},se:{x:r.x+r.w,y:r.y+r.h}};
+  },
+  pickTarget(sx,sy,tolPx){
+    const t=(tolPx||11)/this.slScale, R=this.gridRect, pts=this.handlePoints();
+    for(const k in pts){ if(Math.abs(sx-pts[k].x)<=t&&Math.abs(sy-pts[k].y)<=t) return {kind:'handle',h:k}; }
+    const cols=this.colF.length-1, rows=this.rowF.length-1;
+    let best=null,bestD=t;
+    if(sy>=R.y-t&&sy<=R.y+R.h+t)
+      for(let i=1;i<cols;i++){ const d=Math.abs(sx-(R.x+this.colF[i]*R.w)); if(d<=bestD){ bestD=d; best={kind:'vline',i}; } }
+    if(sx>=R.x-t&&sx<=R.x+R.w+t)
+      for(let j=1;j<rows;j++){ const d=Math.abs(sy-(R.y+this.rowF[j]*R.h)); if(d<bestD){ bestD=d; best={kind:'hline',j}; } }
+    if(best) return best;
+    if(sx>R.x&&sx<R.x+R.w&&sy>R.y&&sy<R.y+R.h) return {kind:'move'};
+    return null;
+  },
+  applyHandle(handle,dx,dy,o){
+    let {x,y,w,h}=o; const MIN=8;
+    if(handle==='move'){ x=o.x+dx; y=o.y+dy; }
+    else{
+      if(handle.indexOf('w')>=0){ x=o.x+dx; w=o.w-dx; }
+      if(handle.indexOf('e')>=0){ w=o.w+dx; }
+      if(handle.indexOf('n')>=0){ y=o.y+dy; h=o.h-dy; }
+      if(handle.indexOf('s')>=0){ h=o.h+dy; }
+    }
+    if(w<MIN){ if(handle.indexOf('w')>=0) x=o.x+o.w-MIN; w=MIN; }
+    if(h<MIN){ if(handle.indexOf('n')>=0) y=o.y+o.h-MIN; h=MIN; }
+    x=Math.max(0,Math.min(x,this.sheet.w-MIN)); y=Math.max(0,Math.min(y,this.sheet.h-MIN));
+    w=Math.min(w,this.sheet.w-x); h=Math.min(h,this.sheet.h-y);
+    this.gridRect={x,y,w,h};
+  },
+  dragTo(sx,sy){
+    const p=this.pdrag, R=this.gridRect;
+    if(p.target.kind==='handle'){ this.applyHandle(p.target.h,sx-p.startX,sy-p.startY,p.orig); }
+    else if(p.target.kind==='move'){ this.applyHandle('move',sx-p.startX,sy-p.startY,p.orig); }
+    else if(p.target.kind==='vline'){
+      const i=p.target.i, gap=6/Math.max(1,R.w);
+      this.colF[i]=Math.max(this.colF[i-1]+gap,Math.min(this.colF[i+1]-gap,(sx-R.x)/R.w));
+    } else if(p.target.kind==='hline'){
+      const j=p.target.j, gap=6/Math.max(1,R.h);
+      this.rowF[j]=Math.max(this.rowF[j-1]+gap,Math.min(this.rowF[j+1]-gap,(sy-R.y)/R.h));
+    }
+    this.redraw();
+  },
+  redraw(){
+    if(!this.sheet) return;
+    const {cells,cw,ch}=this.computeCells();
+    this.slCells=cells;
+    const maxW=740, maxH=Math.max(240,Math.round(window.innerHeight*0.55));
+    let scale=Math.min(maxW/this.sheet.w,maxH/this.sheet.h,8);
+    if(!isFinite(scale)||scale<=0) scale=1;
+    this.slScale=scale;
+    const cv=E('alSlCv'), ctx=cv.getContext('2d');
+    cv.width=Math.max(1,Math.round(this.sheet.w*scale));
+    cv.height=Math.max(1,Math.round(this.sheet.h*scale));
+    ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.drawImage(this.sheet.img,0,0,cv.width,cv.height);
+    if(this.chroma.enabled) this.applyChroma(ctx,cv.width,cv.height);
+    ctx.lineWidth=1;
+    if(cw>0&&ch>0){
+      for(const cell of cells){
+        const x=cell.x*scale,y=cell.y*scale,w=cell.w*scale,h=cell.h*scale;
+        if(this.sel.has(cell.idx)){ ctx.fillStyle='rgba(91,140,255,.32)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle='rgba(120,180,255,.95)'; }
+        else ctx.strokeStyle='rgba(255,55,55,.7)';
+        ctx.strokeRect(x+.5,y+.5,Math.max(0,w-1),Math.max(0,h-1));
+        if(w>14&&h>12){
+          const lbl=String(cell.idx+1), fs=Math.max(9,Math.min(13,h*0.32));
+          ctx.font='600 '+fs+'px ui-monospace,monospace'; ctx.textBaseline='top';
+          ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.7)'; ctx.strokeText(lbl,x+3,y+2);
+          ctx.fillStyle=this.sel.has(cell.idx)?'#dce6ff':'rgba(255,255,255,.92)'; ctx.fillText(lbl,x+3,y+2);
+          ctx.lineWidth=1;
+        }
+      }
+    }
+    const R=this.gridRect;
+    ctx.strokeStyle='rgba(255,40,40,.95)'; ctx.lineWidth=2;
+    ctx.strokeRect(R.x*scale+1,R.y*scale+1,R.w*scale-2,R.h*scale-2);
+    if(this.mode==='grid'){
+      const cols=this.colF.length-1, rows=this.rowF.length-1;
+      const tab=(x,y,col)=>{ ctx.fillStyle='#fff'; ctx.fillRect(x-6,y-6,12,12); ctx.fillStyle=col; ctx.fillRect(x-5,y-5,10,10); };
+      for(let i=1;i<cols;i++) tab((R.x+this.colF[i]*R.w)*scale,(R.y+R.h/2)*scale,'#ff9e2d');
+      for(let j=1;j<rows;j++) tab((R.x+R.w/2)*scale,(R.y+this.rowF[j]*R.h)*scale,'#ff9e2d');
+      const pts=this.handlePoints();
+      for(const k in pts) tab(pts[k].x*scale,pts[k].y*scale,'#ff2d2d');
+    }
+    ctx.lineWidth=1;
+    E('alSlCount').textContent=this.sel.size+' selected';
+    E('alSlInfo').textContent=(cw>0&&ch>0)
+      ? this.sheet.name+' — '+this.sheet.w+'×'+this.sheet.h+'px · '+cells.length+' cells (min ~'+Math.round(cw)+'×'+Math.round(ch)+'px)'
+      : 'Grid too dense — reduce columns/rows or spacing.';
+  },
+  renderNames(){
+    const box=E('alCellNames'); if(!box) return;
+    const idxs=[...this.sel].sort((a,b)=>a-b);
+    E('alCnHint').textContent=idxs.length?idxs.length+' cell'+(idxs.length!==1?'s':''):'';
+    if(!idxs.length){ box.innerHTML='<div class="empty">Select cells to name them.</div>'; return; }
+    box.innerHTML='';
+    for(const idx of idxs){
+      const row=document.createElement('div'); row.className='cn';
+      row.innerHTML='<span class="n">#'+(idx+1)+'</span><input type="text" placeholder="name (optional)" spellcheck="false">';
+      const inp=row.querySelector('input');
+      inp.value=this.cellNames[idx]||'';
+      inp.addEventListener('input',()=>{ const v=inp.value.trim(); if(v) this.cellNames[idx]=v; else delete this.cellNames[idx]; });
+      box.appendChild(row);
+    }
+  },
+  sample(sx,sy){
+    const x=Math.max(0,Math.min(this.sheet.w-1,Math.floor(sx))), y=Math.max(0,Math.min(this.sheet.h-1,Math.floor(sy)));
+    const p=this.sheet.ctx.getImageData(x,y,1,1).data;
+    this.chroma.color=[p[0],p[1],p[2]]; this.chroma.enabled=true; E('alChEnable').checked=true;
+    this.updateSwatch(); this.redraw();
+    toast('Keyed colour rgb('+p[0]+','+p[1]+','+p[2]+') → transparent.','ok');
+  },
+  updateSwatch(){
+    const sw=E('alChSw'); if(!sw) return;
+    sw.style.background='rgb('+this.chroma.color.join(',')+')';
+    sw.style.opacity=this.chroma.enabled?'1':'.3';
+  },
+  isBlank(ctx,w,h){
+    const d=ctx.getImageData(0,0,w,h).data;
+    for(let i=3;i<d.length;i+=4) if(d[i]>8) return false;
+    return true;
+  },
+  cropCell(cell){
+    const sx=Math.max(0,Math.round(cell.x)), sy=Math.max(0,Math.round(cell.y));
+    const sw=Math.max(1,Math.round(cell.w)), sh=Math.max(1,Math.round(cell.h));
+    const cc=document.createElement('canvas'); cc.width=sw; cc.height=sh;
+    const cx=cc.getContext('2d',{willReadFrequently:true});
+    cx.drawImage(this.sheet.cv,sx,sy,sw,sh,0,0,sw,sh);
+    if(this.chroma.enabled) this.applyChroma(cx,sw,sh);
+    return cc;
+  },
+  addSlices(){
+    if(!this.sheet){ toast('Load a sprite sheet first.','warn'); return; }
+    if(!this.sel.size){ toast('Select at least one cell.','warn'); return; }
+    const tgt=E('alSlTarget').value, newName=E('alSlNew').value.trim();
+    const skipBlank=E('alSlSkip').checked;
+    const idxs=[...this.sel].sort((a,b)=>a-b);
+    const setName=(E('alSlSet').value||'Default').trim()||'Default';
+    const base=this.sheet.name.replace(/\.[^.]+$/,'');
+    const mkItem=(cc,nm,fam)=>{ const item={name:nm,img:cc,w:cc.width,h:cc.height,t:defaultTransform(),hash:itemHash(cc,cc.width,cc.height)};
+      if(fam.anchor==='bottom') fitToBottom(item,fam.size); return item; };
+    if(tgt==='__percell__'){
+      let made=0,skipped=0;
+      for(const idx of idxs){
+        const cell=this.slCells.find(c=>c.idx===idx); if(!cell) continue;
+        const cc=this.cropCell(cell);
+        if(skipBlank&&this.isBlank(cc.getContext('2d'),cc.width,cc.height)){ skipped++; continue; }
+        const nm=this.cellNames[idx]||('cell '+(idx+1));
+        const slot=AssetDB.addCustomSlot(nm,setName);
+        store[slot.uid].push(mkItem(cc,nm,SLOT_REG[slot.uid].fam));
+        made++;
+      }
+      toast('Created '+made+' custom icon'+(made!==1?'s':'')+' in “'+setName+'”'+(skipped?' ('+skipped+' blank skipped)':'.'),made?'ok':'warn');
+    } else {
+      let uid;
+      if(newName) uid=AssetDB.addCustomSlot(newName,setName).uid;
+      else{ uid=tgt; if(!uid||uid==='__new__'){ toast('Pick a target slot, type a new name, or choose “separate custom icons”.','warn'); return; } }
+      const {fam,slot}=SLOT_REG[uid];
+      let added=0,skipped=0;
+      for(const idx of idxs){
+        const cell=this.slCells.find(c=>c.idx===idx); if(!cell) continue;
+        const cc=this.cropCell(cell);
+        if(skipBlank&&this.isBlank(cc.getContext('2d'),cc.width,cc.height)){ skipped++; continue; }
+        const nm=this.cellNames[idx]||(base+'_r'+(cell.r+1)+'c'+(cell.c+1));
+        const item=mkItem(cc,nm,fam);
+        if(fam.multi){ store[uid].push(item); added++; }
+        else{ store[uid]=[item]; added++; break; }
+      }
+      toast('Added '+added+' cell'+(added!==1?'s':'')+(skipped?' ('+skipped+' blank skipped)':'')+' → '+slot.name+'.',added?'ok':'warn');
+    }
+    this.sel.clear(); this.cellNames={}; E('alSlNew').value='';
+    this.redraw(); this.renderNames();
+    AssetBrowserUI.refresh(); AssetLibrary.markDirty();
+  },
+  loadSheet(file){
+    if(!file) return;
+    if(!/^image\//.test(file.type)&&!/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(file.name)){ toast('That is not an image file.','warn'); return; }
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      const w=img.naturalWidth||1, h=img.naturalHeight||1;
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const cx=cv.getContext('2d',{willReadFrequently:true});
+      cx.imageSmoothingEnabled=false; cx.drawImage(img,0,0);
+      this.sheet={img,cv,ctx:cx,w,h,name:file.name};
+      this.gridRect={x:0,y:0,w,h};
+      this.resetLines(); this.sel.clear(); this.cellNames={};
+      this.setMode('select');
+      E('alSlWrap').style.display='flex'; E('alSlBg').style.display='flex';
+      this.redraw(); this.renderNames();
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); toast('Could not decode that image.','err'); };
+    img.src=url;
+  },
+  setMode(m){
+    this.mode=m;
+    document.querySelectorAll('#alSlMode button').forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+    const cv=E('alSlCv');
+    cv.classList.toggle('mode-grid',m==='grid');
+    cv.classList.toggle('mode-pick',m==='pick');
+    if(this.sheet) this.redraw();
+  },
+  refreshTargets(){
+    const sel=E('alSlTarget'); if(!sel) return;
+    const cur=sel.value;
+    sel.innerHTML='';
+    const o1=document.createElement('option'); o1.value='__new__'; o1.textContent='➕ new custom icon (name below)'; sel.appendChild(o1);
+    const o2=document.createElement('option'); o2.value='__percell__'; o2.textContent='➕ separate custom icons (per cell)'; sel.appendChild(o2);
+    for(const fam of FAMILIES){
+      if(!fam.slots.length) continue;
+      const og=document.createElement('optgroup'); og.label=fam.title;
+      for(const slot of fam.slots){ const o=document.createElement('option'); o.value=slot.uid; o.textContent=slot.code+' · '+slot.name; og.appendChild(o); }
+      sel.appendChild(og);
+    }
+    if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  }
+};
+
+/* ---------------------------------------------------------------- project persistence */
+async function encodeItemPng(it){
+  const c=document.createElement('canvas'); c.width=it.w; c.height=it.h;
+  c.getContext('2d').drawImage(it.img,0,0);
+  const blob=await new Promise(res=>c.toBlob(res,'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+window._alExportEntries=async function(){
+  if(AssetDB.totalItems()===0) return null;
+  const entries=[], slots=[]; let imgIdx=0;
+  for(const fam of FAMILIES) for(const slot of fam.slots){
+    const arr=store[slot.uid]; if(!arr) continue;
+    const rec={fam:fam.key,id:slot.id,name:slot.name,meta:slot.meta,items:[]};
+    if(slot.set){ rec.set=slot.set; }
+    for(const it of arr){
+      const idx=imgIdx++;
+      entries.push({name:'assetlib/img/'+idx+'.png',data:await encodeItemPng(it)});
+      rec.items.push({img:idx,name:it.name,t:it.t});
+    }
+    if(rec.items.length||rec.meta.tags.length||(fam.custom)) slots.push(rec);
+  }
+  const lib={version:1,kind:'cartalith-assetlib',
+    pack:{name:E('alPackName')?E('alPackName').value:'',author:E('alPackAuthor')?E('alPackAuthor').value:'',license:E('alPackLicense')?E('alPackLicense').value:''},
+    collections:AssetCollections.map, slots};
+  entries.push({name:'assetlib/library.json',data:new TextEncoder().encode(JSON.stringify(lib,null,1))});
+  return entries;
+};
+window._alImportProject=async function(zip){
+  if(!zip['assetlib/library.json']){ return; }        // project has no assets — leave the library as-is
+  const lib=JSON.parse(new TextDecoder().decode(zip['assetlib/library.json']));
+  AssetDB.clear();
+  if(lib.pack){ if(E('alPackName')&&lib.pack.name) E('alPackName').value=lib.pack.name;
+    if(E('alPackAuthor')) E('alPackAuthor').value=lib.pack.author||'';
+    if(E('alPackLicense')) E('alPackLicense').value=lib.pack.license||'CC0'; }
+  AssetCollections.map=lib.collections||{};
+  for(const rec of (lib.slots||[])){
+    let uid;
+    if(rec.fam==='custom') uid=AssetDB.addCustomSlot(rec.name||rec.id,rec.set||'Default').uid;
+    else{ const fam=FAMILIES.find(f=>f.key===rec.fam); const slot=fam&&fam.slots.find(s=>s.id===rec.id); uid=slot&&slot.uid; }
+    if(!uid) continue;
+    SLOT_REG[uid].slot.meta=Object.assign(defaultMeta(),rec.meta||{});
+    for(const im of (rec.items||[])){
+      const bytes=zip['assetlib/img/'+im.img+'.png']; if(!bytes) continue;
+      try{
+        const {img,w,h}=await AssetImporter.decodeBytes(bytes);
+        store[uid].push({name:im.name||'',img,w,h,t:Object.assign(defaultTransform(),im.t||{}),hash:itemHash(img,w,h)});
+      }catch(_){}
+    }
+  }
+  if(_built) AssetBrowserUI.refresh();
+};
+
+/* ---------------------------------------------------------------- top-level page controller */
+const AssetLibrary={
+  dirty:false,
+  markDirty(){ this.dirty=true; this.refreshStats(); },
+  opened(){
+    if(!_built){ _built=true; this.init(); }
+    AssetBrowserUI.refresh();
+  },
+  init(){
+    setPreviewBg(UIState.data.previewBg||'#ffffff');
+    if(E('alSort')) E('alSort').value=UIState.data.sort||'slot';
+    E('alSearch').addEventListener('input',()=>AssetBrowserUI.buildGrid());
+    E('alSort').addEventListener('change',()=>{ UIState.data.sort=E('alSort').value; UIState.save(); AssetBrowserUI.buildGrid(); });
+    E('alSlicerBtn').onclick=()=>SpriteSheetImporter.open();
+    E('alSelModeBtn').onclick=()=>{ _selMode=!_selMode; if(!_selMode) _msel.clear(); AssetBrowserUI.refreshSel(); };
+    E('alFilePicker').addEventListener('change',e=>{
+      if(this._pickUid) AssetImporter.intake(this._pickUid,e.target.files,()=>{ AssetBrowserUI.refresh(); InspectorUI.render(); this.markDirty(); });
+      e.target.value='';
+    });
+    /* batch ops */
+    E('alBatchDel').onclick=()=>{
+      if(!_msel.size||!confirm('Delete images of '+_msel.size+' selected asset(s)? (custom slots are removed entirely)')) return;
+      for(const uid of [..._msel]){
+        const r=SLOT_REG[uid]; if(!r) continue;
+        if(r.fam.custom) AssetDB.removeCustomSlot(uid); else store[uid]=[];
+      }
+      _msel.clear(); if(_selUid&&!SLOT_REG[_selUid]) _selUid=null;
+      AssetBrowserUI.refresh(); InspectorUI.render(); this.markDirty();
+    };
+    E('alBatchTag').onclick=()=>{
+      const t=prompt('Add tag(s) to '+_msel.size+' asset(s) — comma-separated:'); if(!t) return;
+      const tags=t.split(',').map(s=>s.trim()).filter(Boolean);
+      for(const uid of _msel){ const r=SLOT_REG[uid]; if(!r) continue;
+        for(const tg of tags) if(!r.slot.meta.tags.includes(tg)) r.slot.meta.tags.push(tg); }
+      AssetBrowserUI.refresh(); this.markDirty();
+    };
+    E('alBatchColl').onclick=()=>{
+      const nm=prompt('Add '+_msel.size+' asset(s) to collection:',AssetCollections.names()[0]||'Fantasy Pack'); if(!nm) return;
+      AssetCollections.add(nm,[..._msel]);
+      AssetBrowserUI.refresh(); this.markDirty();
+    };
+    E('alBatchRename').onclick=()=>{
+      const base=prompt('Rename pattern — selected assets become “Base_01”, “Base_02”, …\n(custom slots are renamed; fixed slots rename their variants)','Village'); if(!base) return;
+      let n=1;
+      for(const uid of [..._msel]){
+        const r=SLOT_REG[uid]; if(!r) continue;
+        const nm=base+'_'+String(n).padStart(2,'0');
+        if(r.fam.custom){ const nuid=AssetDB.renameCustomSlot(uid,nm); if(nuid!==uid){ _msel.delete(uid); _msel.add(nuid); if(_selUid===uid) _selUid=nuid; } n++; }
+        else{ store[uid].forEach((it,i)=>{ it.name=base+'_'+String(n+i).padStart(2,'0'); }); n+=Math.max(1,store[uid].length); }
+      }
+      AssetBrowserUI.refresh(); InspectorUI.render(); this.markDirty();
+    };
+    E('alBatchDup').onclick=()=>{
+      let made=0;
+      for(const uid of [..._msel]){
+        const r=SLOT_REG[uid]; if(!r||!store[uid].length) continue;
+        const slot=AssetDB.addCustomSlot(r.slot.name+' copy','Duplicates');
+        for(const it of store[uid])
+          store[slot.uid].push({name:it.name,img:it.img,w:it.w,h:it.h,t:Object.assign({},it.t),hash:it.hash});
+        made++;
+      }
+      toast(made?'Duplicated '+made+' asset(s) → Custom/Duplicates.':'Nothing to duplicate.','ok');
+      AssetBrowserUI.refresh(); this.markDirty();
+    };
+    /* aside panel */
+    if(E('alExportBtn')) E('alExportBtn').onclick=()=>this.exportPack();
+    if(E('alValidateBtn')) E('alValidateBtn').onclick=()=>this.showValidation(true);
+    if(E('alApplyBtn')) E('alApplyBtn').onclick=()=>this.applyToMap();
+    if(E('alImportPackBtn')) E('alImportPackBtn').onclick=()=>E('alPackPicker').click();
+    E('alPackPicker').addEventListener('change',async e=>{
+      const f=e.target.files[0]; e.target.value='';
+      if(!f) return;
+      try{
+        const {n,warns}=await AssetImporter.importPackZip(await f.arrayBuffer());
+        toast('Imported '+n+' image(s) from pack'+(warns.length?' — '+warns.length+' warning(s)':'.'),warns.length?'warn':'ok');
+        if(warns.length) E('alValidation').innerHTML=warns.map(w=>'⚠ '+w).join('<br>');
+        AssetBrowserUI.refresh(); this.markDirty();
+      }catch(err){ toast('Pack import failed: '+err.message,'err'); }
+    });
+    if(E('alClearBtn')) E('alClearBtn').onclick=()=>{
+      if(!confirm('Clear the entire asset library?')) return;
+      AssetDB.clear(); _selUid=null; _msel.clear();
+      AssetBrowserUI.refresh(); InspectorUI.render(); this.markDirty();
+    };
+    ['alPackName','alPackAuthor','alPackLicense'].forEach(id=>{ if(E(id)) E(id).addEventListener('input',()=>this.markDirty()); });
+    /* whole-window drop guard while the library is open */
+    ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{
+      if(document.getElementById('assetLibrary').style.display!=='none'&&!e.target.closest('.al-card')&&!e.target.closest('.al-slice-drop')) e.preventDefault();
+    }));
+  },
+  _pickUid:null,
+  pickInto(uid){
+    this._pickUid=uid;
+    E('alFilePicker').multiple=SLOT_REG[uid].fam.multi;
+    E('alFilePicker').value=''; E('alFilePicker').click();
+  },
+  refreshStats(){
+    const el=E('alStats'); if(!el) return;
+    let nTex=0,nIco=0;
+    for(const fam of FAMILIES) for(const s of fam.slots){ const n=store[s.uid]?store[s.uid].length:0;
+      if(fam.kind==='texture') nTex+=n; else nIco+=n; }
+    el.innerHTML='<b>'+nTex+'</b> textures · <b>'+nIco+'</b> icons · <b>'+AssetCollections.names().length+'</b> collections';
+  },
+  showValidation(always){
+    const warn=AssetValidator.run();
+    const el=E('alValidation');
+    if(el) el.innerHTML=warn.length?warn.map(w=>'⚠ '+w).join('<br>'):(always?'✓ No issues found.':'');
+    return warn;
+  },
+  async exportPack(){
+    const warn=this.showValidation(false);
+    if(warn.length&&!confirm('Validation found '+warn.length+' issue(s):\n\n'+warn.slice(0,8).join('\n')+(warn.length>8?'\n…':'')+'\n\nExport anyway?')) return;
+    if(AssetDB.totalItems()===0){ toast('Add at least one image before exporting.','warn'); return; }
+    toast('Building pack…');
+    try{
+      const {manifest,entries,nTex,nIco}=await PackManifestBuilder.build();
+      ZipExporter.download(slugName(manifest.name)+'.zip',entries);
+      toast('Exported "'+slugName(manifest.name)+'.zip" — '+nTex+' texture'+(nTex!==1?'s':'')+', '+nIco+' icon'+(nIco!==1?'s':'')+'.','ok');
+    }catch(err){ toast('Export failed: '+err.message,'err'); }
+  },
+  async applyToMap(){
+    if(AssetDB.totalItems()===0){ toast('Library is empty.','warn'); return; }
+    toast('Compiling pack for the map…');
+    try{
+      const {entries}=await PackManifestBuilder.build();
+      const blob=ZipExporter.blob(entries);
+      await loadAssetPack(blob);                       // engine importer — same path as Import asset pack…
+      toast('Pack applied — the map now uses these textures/icons (see Style → splat/icons).','ok');
+    }catch(err){ toast('Apply failed: '+err.message,'err'); }
+  }
+};
+
+window.AssetLibrary=AssetLibrary;
 })();
 </script>
 </body>

@@ -7863,6 +7863,30 @@ const CIV_TRAITS=[
   {key:'military',    label:'Military',     glyph:'⚔'},
   {key:'religious',   label:'Religious',    glyph:'✝'},
 ];
+/* Economic specialisations — ported from Cartalith V1.915's SPECIALISATIONS (economy half) */
+const CIV_SPECIALISATIONS=[
+  {key:'none',     label:'None / generic'},
+  {key:'fishing',  label:'Fishing'},
+  {key:'grain',    label:'Grain producer'},
+  {key:'pastoral', label:'Pastoral / herding'},
+  {key:'timber',   label:'Timber / forestry'},
+  {key:'mining',   label:'Mining'},
+  {key:'vineyard', label:'Vineyard / orchard'},
+  {key:'trade_hub',label:'Trade hub'},
+  {key:'monastic', label:'Monastic / temple'},
+  {key:'garrison', label:'Garrison / fort'},
+];
+/* Road conditions — the V1.915 ROUTE.land quality tiers; the journey planner's road
+   sampling consumes an edited way's condition, so road quality changes travel time */
+const CIV_WAY_TYPES=[
+  {key:'highway', label:'Trade highway'},
+  {key:'regional',label:'Regional road'},
+  {key:'road',    label:'Road'},
+  {key:'track',   label:'Track'},
+  {key:'ancient', label:'Ancient route'},
+  {key:'sea-lane',label:'Sea lane'},
+];
+const CIV_WAY_CONDITIONS=['Maintained','Standard','Deteriorated','Broken','None / Wild'];
 const CIV_TRANSPORT_MODES=[
   {key:'Walking',    label:'Walking',       kmh:4.0,  hoursDay:10, cat:'land'},
   {key:'Mounted',    label:'Mounted Rider', kmh:6.5,  hoursDay:10, cat:'land'},
@@ -8077,6 +8101,8 @@ function drawCivLayer(){
     const lodMin=CIV_LOD_ROAD[wtype]!=null?CIV_LOD_ROAD[wtype]:0.35;
     if(zoom<lodMin) return; // LOD: skip minor roads at low zoom
     tracePts(rt.pts,rt.brks);
+    /* degraded roads fade on the map (condition set in the way-properties editor) */
+    civCtx.globalAlpha=rt.condition==='Broken'?0.5:rt.condition==='Deteriorated'?0.72:rt.condition==='None / Wild'?0.6:1;
     if(wtype==='sea-lane'){
       civCtx.strokeStyle='rgba(10,30,60,.4)'; civCtx.lineWidth=1.5*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(30,130,200,.7)';
@@ -8103,6 +8129,7 @@ function drawCivLayer(){
       civCtx.setLineDash([1.8*rsc,1.3*rsc]); civCtx.lineWidth=0.7*rsc; civCtx.stroke();
     }
     civCtx.setLineDash([]);
+    civCtx.globalAlpha=1;
   });
   // 2b. Journeys — amber/gold dashed planned routes
   civJourneys.forEach((jn,ji)=>{
@@ -8316,6 +8343,9 @@ function _civRenderPlaceEditor(){
     </select></div>
     ${!isPOI?`<div class="row"><label>Pop.</label><input id="_civPePop" type="number" min="0" step="500" style="flex:1" value="${p.pop|0}"></div>`:''}
     <div class="row"><label>Polity</label><select id="_civPeFac" style="flex:1">${facOpts}</select></div>
+    ${!isPOI?`<div class="row"><label>Economy</label><select id="_civPeSpec" style="flex:1">${CIV_SPECIALISATIONS.map(s=>`<option value="${s.key}"${(p.specialisation||'none')===s.key?' selected':''}>${s.label}</option>`).join('')}</select></div>
+    <div class="row"><label>Econ. importance</label><input id="_civPeEcon" type="number" min="0" max="1" step="0.05" style="flex:1" value="${p.economicImportance!=null?p.economicImportance:0}"><span style="padding-left:4px;color:var(--muted);font-size:.72rem">0–1</span></div>
+    <div class="row"><label>Trade volume</label><input id="_civPeTrade" type="number" min="0" step="100" style="flex:1" value="${p.tradeVolume!=null?p.tradeVolume:0}"></div>`:''}
     ${!isPOI?`<div class="row" style="flex-wrap:wrap;align-items:flex-start"><label>Traits</label><div style="flex:1;display:flex;flex-wrap:wrap;gap:3px">${traitHtml}</div></div>`:''}
     <button id="_civPeDelete" style="width:100%;margin-top:6px;border-color:var(--warn)">Delete place</button>`;
   document.getElementById('_civPeName').oninput=()=>{ p.name=document.getElementById('_civPeName').value; drawCivLayer(); };
@@ -8328,6 +8358,9 @@ function _civRenderPlaceEditor(){
   document.getElementById('_civPeKind').onchange=()=>{ p.kind=document.getElementById('_civPeKind').value; drawCivLayer(); };
   const popEl=document.getElementById('_civPePop'); if(popEl) popEl.oninput=()=>{ p.pop=+popEl.value||0; };
   document.getElementById('_civPeFac').onchange=()=>{ p.faction=+document.getElementById('_civPeFac').value; drawCivLayer(); };
+  const specEl=document.getElementById('_civPeSpec'); if(specEl) specEl.onchange=()=>{ p.specialisation=specEl.value; };
+  const econEl=document.getElementById('_civPeEcon'); if(econEl) econEl.oninput=()=>{ p.economicImportance=Math.max(0,Math.min(1,+econEl.value||0)); };
+  const tradeEl=document.getElementById('_civPeTrade'); if(tradeEl) tradeEl.oninput=()=>{ p.tradeVolume=Math.max(0,+tradeEl.value||0); };
   host.querySelectorAll('[data-trait]').forEach(b=>b.onclick=()=>{
     const t=b.dataset.trait, idx=p.traits.indexOf(t);
     if(idx>=0) p.traits.splice(idx,1); else p.traits.push(t);
@@ -8397,28 +8430,60 @@ function _civRenderSettlementList(){
 }
 
 /* ---- ways list (auto MST road/sea infrastructure) ---- */
+let _civSelectedWayIdx=-1;   /* way whose properties editor is expanded (transient) */
 function _civRenderWayList(){
   const el=document.getElementById('civWayList'); if(!el) return;
   if(!civWays.length){ el.innerHTML='<div class="hint">No ways yet. Use <b>Draw way</b>, <b>Auto-routes</b>, or <b>Connect roads</b>.</div>'; return; }
   el.innerHTML='';
-  const _wayTypeIcons={road:'🛤',track:'🌿','sea-lane':'⛵',ancient:'🏚'};
+  const _wayTypeIcons={highway:'🛣',regional:'🛤',road:'🛤',track:'🌿','sea-lane':'⛵',ancient:'🏚'};
   civWays.forEach((rt,ri)=>{
     const name=rt.name||('Way '+(ri+1));
     const wtype=rt.type||(rt.sea?'sea-lane':'road');
     const typeIcon=_wayTypeIcons[wtype]||'🛤';
     const kmStr=rt.km!=null?rt.km.toFixed(0)+' km':'';
+    const expanded=(ri===_civSelectedWayIdx);
     const card=document.createElement('div');
-    card.style.cssText='border-radius:5px;padding:4px 8px;border:1px solid var(--border);background:var(--panel);display:flex;align-items:center;gap:5px;font-size:.8rem;';
+    card.style.cssText='border-radius:5px;padding:4px 8px;margin-bottom:3px;border:1px solid '+(expanded?'var(--accent)':'var(--border)')+';background:var(--panel);font-size:.8rem;';
+    const head=document.createElement('div'); head.style.cssText='display:flex;align-items:center;gap:5px;';
     const iconSpan=document.createElement('span'); iconSpan.textContent=typeIcon; iconSpan.style.fontSize='11px';
     const nameInput=document.createElement('input');
     nameInput.type='text'; nameInput.value=name;
     nameInput.style.cssText='flex:1;background:transparent;border:none;color:var(--text);font-size:.8rem;font-weight:600;padding:0;outline:none;min-width:0';
     nameInput.oninput=()=>{ rt.name=nameInput.value; };
     const meta=document.createElement('span'); meta.style.cssText='color:var(--muted);font-size:.7rem;flex-shrink:0'; meta.textContent=kmStr;
+    const editBtn=document.createElement('button'); editBtn.textContent='✎'; editBtn.title='Edit way properties';
+    editBtn.style.cssText='padding:0 5px;font-size:.8rem;flex-shrink:0;line-height:1.4'+(expanded?';border-color:var(--accent)':'');
+    editBtn.onclick=()=>{ _civSelectedWayIdx=expanded?-1:ri; _civRenderWayList(); };
     const delBtn=document.createElement('button'); delBtn.textContent='×'; delBtn.title='Delete way';
     delBtn.style.cssText='padding:0 4px;font-size:.85rem;border-color:var(--warn);flex-shrink:0;';
-    delBtn.onclick=()=>{ civWays.splice(ri,1); _civRenderWayList(); renderNow(); };
-    card.append(iconSpan,nameInput,meta,delBtn);
+    delBtn.onclick=()=>{ civWays.splice(ri,1); if(_civSelectedWayIdx===ri)_civSelectedWayIdx=-1; else if(_civSelectedWayIdx>ri)_civSelectedWayIdx--; _civRenderWayList(); renderNow(); };
+    head.append(iconSpan,nameInput,meta,editBtn,delBtn);
+    card.appendChild(head);
+    if(expanded){
+      /* way properties — class + condition, mirroring V1.915's road-class/route-quality
+         model. Type drives the drawn style + LOD tier; condition feeds the journey
+         planner's road sampling (a Broken highway is slower than a Maintained track). */
+      const ed=document.createElement('div'); ed.style.cssText='margin-top:5px;padding-top:5px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px;';
+      const typeRow=document.createElement('div'); typeRow.style.cssText='display:flex;align-items:center;gap:6px;';
+      typeRow.innerHTML=`<span style="color:var(--muted);font-size:.72rem;width:64px;flex-shrink:0">Type</span>`;
+      const typeSel=document.createElement('select'); typeSel.style.cssText='flex:1;font-size:.78rem;';
+      typeSel.innerHTML=CIV_WAY_TYPES.map(t=>`<option value="${t.key}"${wtype===t.key?' selected':''}>${t.label}</option>`).join('');
+      typeSel.onchange=()=>{ rt.type=typeSel.value; rt.sea=(typeSel.value==='sea-lane'); _civRenderWayList(); renderNow(); };
+      typeRow.appendChild(typeSel); ed.appendChild(typeRow);
+      if(wtype!=='sea-lane'){
+        const condRow=document.createElement('div'); condRow.style.cssText='display:flex;align-items:center;gap:6px;';
+        condRow.innerHTML=`<span style="color:var(--muted);font-size:.72rem;width:64px;flex-shrink:0">Condition</span>`;
+        const condSel=document.createElement('select'); condSel.style.cssText='flex:1;font-size:.78rem;';
+        const cur=rt.condition||'Standard';
+        condSel.innerHTML=CIV_WAY_CONDITIONS.map(c=>`<option value="${c}"${cur===c?' selected':''}>${c}</option>`).join('');
+        condSel.onchange=()=>{ rt.condition=condSel.value; renderNow(); };
+        condRow.appendChild(condSel); ed.appendChild(condRow);
+        const hint=document.createElement('div'); hint.style.cssText='font-size:.68rem;color:var(--muted);';
+        hint.textContent='Condition feeds the journey planner: routes along this way inherit its road quality.';
+        ed.appendChild(hint);
+      }
+      card.appendChild(ed);
+    }
     el.appendChild(card);
   });
 }
@@ -8756,6 +8821,9 @@ function _jpRoadCells(){
     if(!w.pts||w.sea||w.type==='sea-lane') continue;
     const rec=w.type==='highway'?["Paved Road","Maintained"]:w.type==='regional'?["Paved Road","Standard"]
       :w.type==='ancient'?["Dirt Track","Deteriorated"]:["Dirt Track","Standard"];
+    /* a user-edited way condition (way-properties editor) overrides the type default —
+       a Broken highway is slower than a Maintained track */
+    if(w.condition) rec[1]=w.condition;
     const pri=w.type==='highway'?3:w.type==='regional'?2:1;
     for(const[x,y] of w.pts) put(x,y,rec,pri);
   }
@@ -10428,7 +10496,7 @@ function _civSyncToState(){
   state.civ={
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
-    ways:civWays.map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''})),
+    ways:civWays.map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,manual:!!r.manual,name:r.name||''})),
     journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):null})),
     year:civYear,
     factionNames:[...civFactionNames],
@@ -10443,7 +10511,7 @@ function _civSyncFromState(){
   } else { civTerritory=null; }
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
   // backwards compat: old saves used c.routes — treat them as ways
-  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''}));
+  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,manual:!!r.manual,name:r.name||''}));
   civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):undefined}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];

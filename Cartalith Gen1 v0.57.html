@@ -8901,40 +8901,40 @@ const JP_MOUNT_BLOCKED=new Set(["Swamp / Marsh"]);
 /* ---- data: biomes — weather distributions per season (sum 100), water L/person/day
    range, forage/grazing potential. Keys match CART_BIOMES names 1:1. ---- */
 const JP_BIOMES={
-  "Temperate Forest":{water:[2,3],forage:0.55,grazing:0.60,desertLike:false,weather:{
+  "Temperate Forest":{water:[2,3],forage:0.55,grazing:0.60,desertLike:false,bestAnimals:["mule","donkey","horse"],weather:{
     Spring:{Clear:50,Rain:40,Storm:10,Snow:0,Sandstorm:0}, Summer:{Clear:70,Rain:22,Storm:8,Snow:0,Sandstorm:0},
     Autumn:{Clear:45,Rain:40,Storm:12,Snow:3,Sandstorm:0}, Winter:{Clear:30,Rain:18,Storm:7,Snow:45,Sandstorm:0}}},
-  "Tropical Jungle":{water:[3,5],forage:0.65,grazing:0.45,desertLike:false,weather:{
+  "Tropical Jungle":{water:[3,5],forage:0.65,grazing:0.45,desertLike:false,bestAnimals:["mule","donkey"],weather:{
     Spring:{Clear:35,Rain:50,Storm:15,Snow:0,Sandstorm:0}, Summer:{Clear:55,Rain:32,Storm:13,Snow:0,Sandstorm:0},
     Autumn:{Clear:25,Rain:55,Storm:20,Snow:0,Sandstorm:0}, Winter:{Clear:60,Rain:28,Storm:12,Snow:0,Sandstorm:0}}},
-  "Boreal Taiga":{water:[2,3],forage:0.30,grazing:0.35,desertLike:false,weather:{
+  "Boreal Taiga":{water:[2,3],forage:0.30,grazing:0.35,desertLike:false,bestAnimals:["mule","horse"],weather:{
     Spring:{Clear:40,Rain:30,Storm:10,Snow:20,Sandstorm:0}, Summer:{Clear:65,Rain:25,Storm:10,Snow:0,Sandstorm:0},
     Autumn:{Clear:35,Rain:30,Storm:10,Snow:25,Sandstorm:0}, Winter:{Clear:20,Rain:5,Storm:5,Snow:70,Sandstorm:0}}},
-  "Tundra / Polar":{water:[2,4],forage:0.10,grazing:0.10,desertLike:false,weather:{
+  "Tundra / Polar":{water:[2,4],forage:0.10,grazing:0.10,desertLike:false,bestAnimals:["mule","horse"],weather:{
     Spring:{Clear:30,Rain:15,Storm:10,Snow:45,Sandstorm:0}, Summer:{Clear:50,Rain:30,Storm:15,Snow:5,Sandstorm:0},
     Autumn:{Clear:25,Rain:15,Storm:10,Snow:50,Sandstorm:0}, Winter:{Clear:10,Rain:2,Storm:3,Snow:85,Sandstorm:0}}},
-  "Steppe / Grassland":{water:[3,5],forage:0.22,grazing:0.65,desertLike:false,weather:{
+  "Steppe / Grassland":{water:[3,5],forage:0.22,grazing:0.65,desertLike:false,bestAnimals:["horse","mule","camel"],weather:{
     Spring:{Clear:55,Rain:25,Storm:15,Snow:5,Sandstorm:0}, Summer:{Clear:70,Rain:15,Storm:15,Snow:0,Sandstorm:0},
     Autumn:{Clear:60,Rain:20,Storm:15,Snow:5,Sandstorm:0}, Winter:{Clear:40,Rain:5,Storm:5,Snow:50,Sandstorm:0}}},
-  "Mediterranean Scrub":{water:[3,5],forage:0.32,grazing:0.45,desertLike:false,weather:{
+  "Mediterranean Scrub":{water:[3,5],forage:0.32,grazing:0.45,desertLike:false,bestAnimals:["mule","donkey","horse"],weather:{
     Spring:{Clear:65,Rain:22,Storm:10,Snow:0,Sandstorm:3}, Summer:{Clear:88,Rain:3,Storm:4,Snow:0,Sandstorm:5},
     Autumn:{Clear:60,Rain:25,Storm:10,Snow:0,Sandstorm:5}, Winter:{Clear:48,Rain:35,Storm:12,Snow:0,Sandstorm:5}}},
-  "Hot Desert":{water:[6,10],forage:0.04,grazing:0.00,desertLike:true,weather:{
+  "Hot Desert":{water:[6,10],forage:0.04,grazing:0.00,desertLike:true,bestAnimals:["camel"],weather:{
     Spring:{Clear:72,Rain:3,Storm:5,Snow:0,Sandstorm:20}, Summer:{Clear:78,Rain:0,Storm:2,Snow:0,Sandstorm:20},
     Autumn:{Clear:75,Rain:4,Storm:4,Snow:0,Sandstorm:17}, Winter:{Clear:78,Rain:6,Storm:6,Snow:0,Sandstorm:10}}},
-  "Cold Desert / Badlands":{water:[4,7],forage:0.07,grazing:0.05,desertLike:true,weather:{
+  "Cold Desert / Badlands":{water:[4,7],forage:0.07,grazing:0.05,desertLike:true,bestAnimals:["camel","mule","horse"],weather:{
     Spring:{Clear:55,Rain:10,Storm:8,Snow:8,Sandstorm:19}, Summer:{Clear:70,Rain:15,Storm:10,Snow:0,Sandstorm:5},
     Autumn:{Clear:55,Rain:15,Storm:8,Snow:5,Sandstorm:17}, Winter:{Clear:38,Rain:5,Storm:5,Snow:35,Sandstorm:17}}},
-  "Mountain Highland":{water:[2,4],forage:0.18,grazing:0.25,desertLike:false,weather:{
+  "Mountain Highland":{water:[2,4],forage:0.18,grazing:0.25,desertLike:false,bestAnimals:["mule","donkey"],weather:{
     Spring:{Clear:35,Rain:30,Storm:18,Snow:17,Sandstorm:0}, Summer:{Clear:55,Rain:28,Storm:14,Snow:3,Sandstorm:0},
     Autumn:{Clear:35,Rain:25,Storm:15,Snow:25,Sandstorm:0}, Winter:{Clear:15,Rain:5,Storm:10,Snow:70,Sandstorm:0}}},
-  "Wetlands / Marshes":{water:[3,4],forage:0.50,grazing:0.40,desertLike:false,weather:{
+  "Wetlands / Marshes":{water:[3,4],forage:0.50,grazing:0.40,desertLike:false,bestAnimals:["donkey","mule"],weather:{
     Spring:{Clear:30,Rain:55,Storm:13,Snow:2,Sandstorm:0}, Summer:{Clear:55,Rain:33,Storm:12,Snow:0,Sandstorm:0},
     Autumn:{Clear:30,Rain:50,Storm:15,Snow:5,Sandstorm:0}, Winter:{Clear:25,Rain:35,Storm:10,Snow:30,Sandstorm:0}}},
-  "Coastal Lowland":{water:[2,4],forage:0.40,grazing:0.50,desertLike:false,weather:{
+  "Coastal Lowland":{water:[2,4],forage:0.40,grazing:0.50,desertLike:false,bestAnimals:["mule","horse","donkey"],weather:{
     Spring:{Clear:50,Rain:33,Storm:15,Snow:2,Sandstorm:0}, Summer:{Clear:65,Rain:23,Storm:10,Snow:0,Sandstorm:2},
     Autumn:{Clear:45,Rain:33,Storm:20,Snow:2,Sandstorm:0}, Winter:{Clear:35,Rain:27,Storm:15,Snow:23,Sandstorm:0}}},
-  "Ruined Wastes":{water:[3,5],forage:0.15,grazing:0.18,desertLike:false,weather:{
+  "Ruined Wastes":{water:[3,5],forage:0.15,grazing:0.18,desertLike:false,bestAnimals:["mule","donkey"],weather:{
     Spring:{Clear:48,Rain:18,Storm:14,Snow:5,Sandstorm:15}, Summer:{Clear:62,Rain:12,Storm:13,Snow:0,Sandstorm:13},
     Autumn:{Clear:48,Rain:18,Storm:14,Snow:5,Sandstorm:15}, Winter:{Clear:35,Rain:10,Storm:10,Snow:30,Sandstorm:15}}}
 };
@@ -8976,13 +8976,13 @@ const JP_DRAFT_FOOD=6, JP_HUMAN_FOOD=1.5, JP_HUMAN_PORTER=30;
 /* settlement density (per 100 km of route) → infrastructure tier */
 const JP_INFRA_TIERS=[[8,"Operational Waystations"],[4,"Stable Settlements"],[1.5,"Sparse Settlements"],[0.25,"Ruined Region"],[-1,"Hostile / Dead Zone"]];
 const JP_PRESETS={
-  "Lone courier":{groupSize:1,transport:"Mounted Rider",mountAnimal:"horse",pace:"Haste",hours:10,cargoKg:5,supplyDays:2,grazing:"Full — graze on route",foraging:"None",animals:{donkey:0,mule:0,camel:0,horse:1},carts:0,wagons:0,travois:0,sleds:0},
-  "Foot traveller":{groupSize:1,transport:"Walking",pace:"Standard Pace",hours:8,cargoKg:10,supplyDays:4,grazing:"None — carry all fodder",foraging:"Opportunistic",animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0},
-  "Merchant caravan":{groupSize:12,transport:"Baggage Train",pace:"Standard Pace",hours:8,cargoKg:900,supplyDays:7,grazing:"Partial — graze at camp",foraging:"None",animals:{donkey:0,mule:8,camel:0,horse:2},carts:2,wagons:0,travois:0,sleds:0},
-  "Desert caravan":{groupSize:20,transport:"Baggage Train",pace:"Standard Pace",hours:8,cargoKg:3000,supplyDays:10,grazing:"None — carry all fodder",foraging:"None",desertWater:"Established Caravan Route",animals:{donkey:0,mule:0,camel:24,horse:0},carts:0,wagons:0,travois:0,sleds:0},
-  "Army column":{groupSize:400,transport:"Walking",pace:"Standard Pace",hours:8,cargoKg:15000,supplyDays:12,grazing:"Partial — graze at camp",foraging:"Opportunistic",animals:{donkey:0,mule:20,camel:0,horse:80},carts:0,wagons:30,travois:0,sleds:0},
-  "River trader":{groupSize:4,transport:"River Transport",vessel:"River Barge",pace:"Standard Pace",hours:10,cargoKg:15000,supplyDays:7,animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0},
-  "Sea merchant":{groupSize:6,transport:"Sea Faring",vessel:"Cog",pace:"Standard Pace",hours:14,cargoKg:40000,supplyDays:14,animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0}
+  "Lone courier":{groupSize:1,transport:"Mounted Rider",mountAnimal:"horse",pace:"Haste",hours:10,cargoKg:5,supplyDays:2,grazing:"Full — graze on route",foraging:"None",animals:{donkey:0,mule:0,camel:0,horse:1},carts:0,wagons:0,travois:0,sleds:0,assetMode:"manual"},
+  "Foot traveller":{groupSize:1,transport:"Walking",pace:"Standard Pace",hours:8,cargoKg:10,supplyDays:4,grazing:"None — carry all fodder",foraging:"Opportunistic",animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0,assetMode:"manual"},
+  "Merchant caravan":{groupSize:12,transport:"Baggage Train",pace:"Standard Pace",hours:8,cargoKg:900,supplyDays:7,grazing:"Partial — graze at camp",foraging:"None",animals:{donkey:0,mule:8,camel:0,horse:2},carts:2,wagons:0,travois:0,sleds:0,assetMode:"manual"},
+  "Desert caravan":{groupSize:20,transport:"Baggage Train",pace:"Standard Pace",hours:8,cargoKg:3000,supplyDays:10,grazing:"None — carry all fodder",foraging:"None",desertWater:"Established Caravan Route",animals:{donkey:0,mule:0,camel:24,horse:0},carts:0,wagons:0,travois:0,sleds:0,assetMode:"manual"},
+  "Army column":{groupSize:400,transport:"Walking",pace:"Standard Pace",hours:8,cargoKg:15000,supplyDays:12,grazing:"Partial — graze at camp",foraging:"Opportunistic",animals:{donkey:0,mule:20,camel:0,horse:80},carts:0,wagons:30,travois:0,sleds:0,assetMode:"manual"},
+  "River trader":{groupSize:4,transport:"River Transport",vessel:"River Barge",pace:"Standard Pace",hours:10,cargoKg:15000,supplyDays:7,animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0,assetMode:"manual"},
+  "Sea merchant":{groupSize:6,transport:"Sea Faring",vessel:"Cog",pace:"Standard Pace",hours:14,cargoKg:40000,supplyDays:14,animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0,assetMode:"manual"}
 };
 
 /* ---- helpers (ported) ---- */
@@ -9009,6 +9009,154 @@ function jpResolveMount(plan){
   if(present.length) return present.reduce((s,k)=>JP_ANIMALS[k].mountedSpeed<JP_ANIMALS[s].mountedSpeed?k:s,present[0]);
   return (plan.mountAnimal&&JP_ANIMALS[plan.mountAnimal])?plan.mountAnimal:"horse";
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTO ANIMAL/TRANSPORT PICKER (port of V1.915's bestAnimalForContext
+   + autoFillAssets / maybeAutoFill). V1.915 ran this per hand-authored
+   stage (one terrain+biome each); Gen1 derives many stages from the
+   drawn route, so the species pick is a km-weighted vote across every
+   LAND stage and the pack-count solver runs against the longest land
+   stretch's biome (the representative "provisioning" leg) — the count
+   math itself (cargo/food/water/fodder → iterate animal count → carts
+   only where every stage still allows wheels) is otherwise identical.
+═══════════════════════════════════════════════════════════════ */
+function jpBestAnimalForContext(terrain,biomeKey){
+  const biome=JP_BIOMES[biomeKey];
+  if(terrain==="Deep Sand"||terrain==="Desert Hardpack")
+    return {key:"camel",reason:"camels dominate desert travel — water efficiency and load stability on sand."};
+  if(terrain==="Mountain Trails"||terrain==="Rocky Terrain")
+    return {key:"mule",reason:"mules are sure-footed and rated for rough terrain where horses falter."};
+  if(terrain==="Swamp / Marsh")
+    return {key:"donkey",reason:"donkeys handle marginal footing with light loads — wagons and horses cannot operate here."};
+  if(terrain==="Open Plains"&&biomeKey==="Steppe / Grassland")
+    return {key:"horse",reason:"horses are the historical steppe transport — speed and grazing efficiency on open grass."};
+  if(terrain==="Snow / Ice")
+    return {key:"mule",reason:"mules tolerate cold and rough surfaces better than horses; donkeys struggle in deep snow."};
+  if(terrain==="Forest Path")
+    return {key:"mule",reason:"mules carry well through narrow forest tracks where wagons cannot enter."};
+  if(biome?.desertLike)
+    return {key:"camel",reason:"arid biome — camels minimise water consumption and tolerate heat."};
+  if(biome?.bestAnimals?.length){
+    const k=biome.bestAnimals[0];
+    return {key:k,reason:`${JP_ANIMALS[k].label.toLowerCase()}s are the typical workhorses for this biome.`};
+  }
+  return {key:"mule",reason:"mules are the versatile default — workable across most temperate terrain."};
+}
+function jpCanUseWheels(terrain){ return !JP_WHEEL_BLOCKED.has(terrain); }
+/* km-weighted vote for the whole route: each land stage nominates a species via
+   jpBestAnimalForContext, weighted by its length, so a route mostly through desert
+   with a short mountain stretch still picks the camel. */
+function jpPickSpeciesForRoute(landStages){
+  const tally={}, reasonOf={};
+  for(const s of landStages){
+    const pick=jpBestAnimalForContext(s.terrain,s.biome);
+    tally[pick.key]=(tally[pick.key]||0)+Math.max(0.01,s.km);
+    reasonOf[pick.key]=pick.reason;
+  }
+  const keys=Object.keys(tally);
+  if(!keys.length) return {key:"mule",reason:"no land stages on this route — mule is the versatile default."};
+  const best=keys.reduce((a,b)=>tally[b]>tally[a]?b:a);
+  return {key:best,reason:reasonOf[best]};
+}
+/* auto-pick the transport/animal/vehicle mix for the whole plan against the derived
+   route. Mutates plan.animals/carts/wagons/travois/sleds (+ plan.mountAnimal for
+   Mounted Rider, + plan.transport on a Walking→Baggage Train auto-promote) and
+   returns {ok, hint, warn, promoted} for the UI to display. */
+function jpAutoPickTransport(jn){
+  const plan=_jpEnsurePlan(jn);
+  const stages=_jpDeriveStages(jn,plan);
+  const landStages=stages.filter(s=>s.cat==='land');
+  if(!landStages.length) return {ok:false,hint:"No land stages on this route — nothing to auto-pick."};
+  if(plan.transport!=="Walking"&&plan.transport!=="Mounted Rider"&&plan.transport!=="Baggage Train")
+    return {ok:false,hint:"Auto-pick applies to Walking, Mounted Rider and Baggage Train — pick a vessel manually for river/sea legs."};
+
+  const people=Math.max(1,plan.groupSize|0), cargo=Math.max(0,+plan.cargoKg||0), supplyDays=Math.max(1,plan.supplyDays|0);
+  const fodderFrac=JP_GRAZING[plan.grazing]?.fodderFrac??1.0;
+  /* the longest land stretch stands in for "the route" when a single biome/terrain
+     is needed for desert-water and wheel-viability decisions (V1.915's one-stage-one-terrain model) */
+  const dominant=landStages.reduce((a,b)=>b.km>a.km?b:a,landStages[0]);
+  const biomeKey=dominant.biome, biome=JP_BIOMES[biomeKey];
+  let promoted=false;
+
+  if(plan.transport==="Walking"){
+    const humanWaterCarryDays_w=biome?.desertLike?Math.min(supplyDays,4):Math.min(supplyDays,2);
+    const humanWaterRate_w=biome?(biome.water[0]+biome.water[1])/2:2.5;
+    const supplyMass=people*JP_HUMAN_FOOD*supplyDays+people*humanWaterRate_w*humanWaterCarryDays_w;
+    const totalNeed=cargo+supplyMass, porterCap=people*JP_HUMAN_PORTER;
+    const overloaded=totalNeed>porterCap;
+    if(!overloaded){
+      ["donkey","mule","camel","horse"].forEach(k=>plan.animals[k]=0);
+      plan.carts=0; plan.wagons=0; plan.travois=0; plan.sleds=0;
+      return {ok:true,hint:`<strong>Walking:</strong> ${jpFmtKg(totalNeed)} fits within porter capacity ${jpFmtKg(porterCap)}. No animals or carts needed.`};
+    }
+    if(!plan.autoPromote){
+      ["donkey","mule","camel","horse"].forEach(k=>plan.animals[k]=0);
+      plan.carts=0; plan.wagons=0; plan.travois=0; plan.sleds=0;
+      return {ok:true,warn:true,hint:`<strong>Walking:</strong> ${jpFmtKg(totalNeed)} exceeds porter capacity ${jpFmtKg(porterCap)} — reduce cargo, enable Auto-promote, or switch to Baggage Train manually.`};
+    }
+    plan.transport="Baggage Train";   /* auto-promote: fall through to the Baggage Train picker below */
+    promoted=true;
+  }
+
+  if(plan.transport==="Mounted Rider"){
+    const pick=jpPickSpeciesForRoute(landStages);
+    plan.mountAnimal=pick.key;
+    return {ok:true,promoted:false,hint:`<strong>Auto-picked mount:</strong> ${JP_ANIMALS[pick.key].label} — ${pick.reason}`};
+  }
+
+  /* Baggage Train (direct, or promoted from an overloaded Walking) */
+  const pick=jpPickSpeciesForRoute(landStages);
+  const A=JP_ANIMALS[pick.key];
+  const humanWaterCarryDays=biome?.desertLike?Math.min(supplyDays,4):Math.min(supplyDays,2);
+  const animalWaterCarryDays=biome?.desertLike?Math.min(supplyDays,4):0;
+  const humanWaterRate=biome?(biome.water[0]+biome.water[1])/2:2.5;
+  const humanFood=people*JP_HUMAN_FOOD*supplyDays;
+  const humanWater=people*humanWaterRate*humanWaterCarryDays;
+  const dm=biome?.desertLike?JP_DESERT_ANIMAL_MOD[pick.key]:{food:1,water:1};
+  const animalFood=A.food*dm.food, animalWater=A.water*dm.water;
+  const humanCarry=people*JP_HUMAN_PORTER;
+  let count=Math.max(1,Math.ceil((cargo+humanFood+humanWater-humanCarry)/Math.max(A.cap*0.7,50)));
+  for(let i=0;i<6;i++){
+    const fodder=count*animalFood*supplyDays*fodderFrac;
+    const animalWaterT=count*animalWater*animalWaterCarryDays;
+    const totalNeed=cargo+humanFood+humanWater+fodder+animalWaterT;
+    const needed=Math.max(0,totalNeed-humanCarry);
+    const next=Math.max(1,Math.ceil(needed/A.cap));
+    if(next===count) break;
+    count=next;
+  }
+  /* carts/wagons only if EVERY land stage on the route still allows wheels — a single
+     wheel-blocked stretch (e.g. a forest path or ford) would strand a wagon mid-journey */
+  const wheelsOk=landStages.every(s=>jpCanUseWheels(s.terrain));
+  let wagons=0, carts=0;
+  if(wheelsOk){
+    if(cargo>=1200&&people>=8) wagons=Math.max(1,Math.ceil(cargo/2000));
+    else if(cargo>=400&&people>=4) carts=Math.max(1,Math.ceil(cargo/1500));
+    const draftNeed=wagons*JP_WAGON_DRAFT+carts*JP_CART_DRAFT;
+    if(draftNeed>0){
+      const cargoLeftover=Math.max(0,cargo-(wagons*JP_WAGON_CAP+carts*JP_CART_CAP));
+      const totalNeed2=cargoLeftover+humanFood+humanWater;
+      let c2=Math.max(1,Math.ceil((totalNeed2-humanCarry)/Math.max(A.cap*0.7,50)));
+      for(let i=0;i<4;i++){
+        const fodder=(c2+draftNeed)*animalFood*supplyDays*fodderFrac;
+        const water=(c2+draftNeed)*animalWater*animalWaterCarryDays;
+        const need=Math.max(0,cargoLeftover+humanFood+humanWater+fodder+water-humanCarry);
+        const next=Math.max(1,Math.ceil(need/A.cap));
+        if(next===c2) break; c2=next;
+      }
+      count=c2;
+    }
+  }
+  ["donkey","mule","camel","horse"].forEach(k=>plan.animals[k]=(k===pick.key)?count:0);
+  plan.carts=carts; plan.wagons=wagons; plan.travois=0; plan.sleds=0;
+  const hint=`<strong>Auto-picked:</strong> ${A.label} × ${count}`+
+    (carts?`, ${carts} cart${carts>1?'s':''}`:'')+
+    (wagons?`, ${wagons} wagon${wagons>1?'s':''}`:'')+
+    ` — ${pick.reason}`+
+    (promoted?` <span style="opacity:.7">(auto-promoted from Walking — load exceeded porter capacity)</span>`:'');
+  return {ok:true,promoted,hint};
+}
+
 function jpForaging(mode,biomeKey,terrain,season,people){
   if(mode==="None") return {move:1.0,reduction:0.0};
   const biome=JP_BIOMES[biomeKey]; if(!biome) return {move:1.0,reduction:0.0};
@@ -9082,7 +9230,8 @@ function _jpEnsurePlan(jn){
   const D={groupSize:jn.groupSize||4,transport:jn.sea?"Sea Faring":"Walking",mountAnimal:"horse",vessel:jn.sea?"Cog":"Keelboat",
     hours:8,pace:"Standard Pace",season:"Summer",cargoKg:0,supplyDays:7,carryFood:true,
     grazing:"Partial — graze at camp",foraging:"None",desertWater:"Established Caravan Route",
-    routeCond:"auto",infra:"auto",animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0};
+    routeCond:"auto",infra:"auto",animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0,
+    assetMode:"auto",autoPromote:false};
   for(const k in D){ if(p[k]===undefined) p[k]=D[k]; }
   if(typeof p.animals!=='object'||!p.animals) p.animals={donkey:0,mule:0,camel:0,horse:0};
   for(const a of ['donkey','mule','camel','horse']) if(p.animals[a]===undefined) p.animals[a]=0;
@@ -9444,26 +9593,50 @@ function _civDrawProfile(plan){
 }
 
 /* ---- planner UI ---- */
+/* Runs the auto animal/transport picker (if the plan is in Auto mode) and returns its
+   result, or null in Manual mode / no journey selected. Single call site per refresh so
+   the picker never runs twice (and never fights a promoted-transport re-render). */
+function _jpRunAuto(jn){
+  const plan=_jpEnsurePlan(jn);
+  if(plan.assetMode!=='auto') return null;
+  return jpAutoPickTransport(jn);
+}
 function _jpRefresh(structural){
   if(_civSelectedJourneyIdx<0||_civSelectedJourneyIdx>=civJourneys.length) return;
   const jn=civJourneys[_civSelectedJourneyIdx];
   jn.groupSize=jn.plan?jn.plan.groupSize:jn.groupSize;   /* keep the legacy save field in sync */
-  if(structural) _jpRenderPartyForm(jn);
+  const auto=_jpRunAuto(jn);
+  if(auto&&auto.promoted) structural=true;   /* Walking→Baggage Train swap needs the Mount/Vessel rows to update */
+  if(structural) _jpRenderPartyForm(jn,auto&&auto.hint);
+  else if(auto) _jpSyncAssetInputs(jn,auto.hint);   /* targeted DOM write — keeps focus in whatever input the user is editing */
   _jpRenderResults(jn);
   _civRenderJourneyList();
 }
-function _jpRenderPartyForm(jn){
+/* Auto-mode targeted refresh: writes the picker's output straight into the (disabled)
+   animal/cart/mount inputs + hint text without rebuilding the form's innerHTML, so typing
+   in cargo/groupSize/supplyDays elsewhere in the same form never loses focus mid-keystroke. */
+function _jpSyncAssetInputs(jn,hint){
+  const host=document.getElementById('jpParty'); if(!host) return;
+  const p=jn.plan; if(!p) return;
+  ['donkey','mule','camel','horse'].forEach(k=>{ const el=host.querySelector(`[data-jp="animals.${k}"]`); if(el) el.value=p.animals[k]; });
+  ['carts','wagons','travois','sleds'].forEach(k=>{ const el=host.querySelector(`[data-jp="${k}"]`); if(el) el.value=p[k]; });
+  const mEl=host.querySelector('[data-jp="mountAnimal"]'); if(mEl) mEl.value=p.mountAnimal;
+  const hintEl=host.querySelector('.auto-pick-hint'); if(hintEl) hintEl.innerHTML=hint||'';
+}
+function _jpRenderPartyForm(jn,autoHint){
   const host=document.getElementById('jpParty'); if(!host) return;
   const p=_jpEnsurePlan(jn);
   const opt=(list,cur)=>list.map(k=>`<option value="${k.replace(/"/g,'&quot;')}"${k===cur?' selected':''}>${k}</option>`).join('');
   const isMounted=p.transport==="Mounted Rider";
   const isWater=p.transport==="River Transport"||p.transport==="Sea Faring";
+  const isAuto=p.assetMode==='auto';
+  const dis=isAuto?'disabled':'';
   const vessels=Object.keys(JP_SHIPS).filter(v=>JP_SHIPS[v].modes.includes(p.transport==="Sea Faring"?"sea":"river"));
   host.innerHTML=`
     <div class="sublabel">Travelling party</div>
     <div class="row"><label>Group size</label><input data-jp="groupSize" type="number" min="1" max="100000" value="${p.groupSize}" style="flex:1"><span style="padding-left:4px;color:var(--muted);font-size:.75rem">people</span></div>
     <div class="row"><label>Transport</label><select data-jp="transport" data-structural="1" style="flex:1">${opt(JP_TOP_MODES,p.transport)}</select></div>
-    ${isMounted?`<div class="row"><label>Mount</label><select data-jp="mountAnimal" style="flex:1">${opt(Object.keys(JP_ANIMALS),p.mountAnimal)}</select></div>`:''}
+    ${isMounted?`<div class="row"><label>Mount</label><select data-jp="mountAnimal" ${dis} style="flex:1">${opt(Object.keys(JP_ANIMALS),p.mountAnimal)}</select></div>`:''}
     ${isWater?`<div class="row"><label>Vessel</label><select data-jp="vessel" style="flex:1">${opt(vessels,vessels.includes(p.vessel)?p.vessel:vessels[0])}</select></div>`:''}
     <div class="row"><label>Pace</label><select data-jp="pace" style="flex:1">${opt(Object.keys(JP_PACE),p.pace)}</select></div>
     <div class="row"><label>Hours/day</label><input data-jp="hours" type="number" min="1" max="16" value="${p.hours}" style="flex:1"></div>
@@ -9474,19 +9647,28 @@ function _jpRenderPartyForm(jn){
     <label class="chk"><input data-jp="carryFood" type="checkbox" ${p.carryFood?'checked':''}> Carry food (off = live off the land / buy en route)</label>
     <div class="row"><label>Grazing</label><select data-jp="grazing" style="flex:1">${opt(Object.keys(JP_GRAZING),p.grazing)}</select></div>
     <div class="row"><label>Foraging</label><select data-jp="foraging" style="flex:1">${opt(Object.keys(JP_FORAGING),p.foraging)}</select></div>
-    <div class="sublabel" style="margin-top:8px">Animals &amp; vehicles</div>
+    <div class="sublabel" style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:6px">
+      <span>Animals &amp; vehicles</span>
+      <div class="seg sm" style="width:auto;flex:0 0 auto">
+        <button type="button" data-am="auto" class="${isAuto?'on':''}">Auto</button>
+        <button type="button" data-am="manual" class="${!isAuto?'on':''}">Manual</button>
+      </div>
+    </div>
+    ${isAuto?`<label class="chk" style="font-size:.72rem"><input data-jp="autoPromote" type="checkbox" ${p.autoPromote?'checked':''}> Auto-promote Walking → Baggage Train if overloaded</label>
+    <div class="hint auto-pick-hint" style="font-size:.72rem">${autoHint||''}</div>`:
+    `<div class="hint" style="font-size:.7rem">Best animal for the route (terrain × biome, km-weighted) + pack count for cargo/supplies is picked automatically in <b>Auto</b> — switch back from Manual to let it recompute.</div>`}
     <div class="row" style="gap:4px"><label>Donkeys / Mules</label>
-      <input data-jp="animals.donkey" type="number" min="0" value="${p.animals.donkey}" style="flex:1;min-width:0">
-      <input data-jp="animals.mule" type="number" min="0" value="${p.animals.mule}" style="flex:1;min-width:0"></div>
+      <input data-jp="animals.donkey" type="number" min="0" ${dis} value="${p.animals.donkey}" style="flex:1;min-width:0">
+      <input data-jp="animals.mule" type="number" min="0" ${dis} value="${p.animals.mule}" style="flex:1;min-width:0"></div>
     <div class="row" style="gap:4px"><label>Camels / Horses</label>
-      <input data-jp="animals.camel" type="number" min="0" value="${p.animals.camel}" style="flex:1;min-width:0">
-      <input data-jp="animals.horse" type="number" min="0" value="${p.animals.horse}" style="flex:1;min-width:0"></div>
+      <input data-jp="animals.camel" type="number" min="0" ${dis} value="${p.animals.camel}" style="flex:1;min-width:0">
+      <input data-jp="animals.horse" type="number" min="0" ${dis} value="${p.animals.horse}" style="flex:1;min-width:0"></div>
     <div class="row" style="gap:4px"><label>Carts / Wagons</label>
-      <input data-jp="carts" type="number" min="0" value="${p.carts}" style="flex:1;min-width:0">
-      <input data-jp="wagons" type="number" min="0" value="${p.wagons}" style="flex:1;min-width:0"></div>
+      <input data-jp="carts" type="number" min="0" ${dis} value="${p.carts}" style="flex:1;min-width:0">
+      <input data-jp="wagons" type="number" min="0" ${dis} value="${p.wagons}" style="flex:1;min-width:0"></div>
     <div class="row" style="gap:4px"><label>Travois / Sleds</label>
-      <input data-jp="travois" type="number" min="0" value="${p.travois}" style="flex:1;min-width:0">
-      <input data-jp="sleds" type="number" min="0" value="${p.sleds}" style="flex:1;min-width:0"></div>
+      <input data-jp="travois" type="number" min="0" ${dis} value="${p.travois}" style="flex:1;min-width:0">
+      <input data-jp="sleds" type="number" min="0" ${dis} value="${p.sleds}" style="flex:1;min-width:0"></div>
     <div class="sublabel" style="margin-top:8px">Route conditions</div>
     <div class="row"><label>Road quality</label><select data-jp="routeCond" style="flex:1">${opt(['auto',...Object.keys(JP_ROUTE.land)],p.routeCond)}</select></div>
     <div class="row"><label>Infrastructure</label><select data-jp="infra" style="flex:1">${opt(['auto',...Object.keys(JP_INFRA)],p.infra)}</select></div>
@@ -9501,6 +9683,9 @@ function _jpRenderPartyForm(jn){
       _jpRefresh(el.dataset.structural==='1');
     };
     el.addEventListener('change',apply);
+  });
+  host.querySelectorAll('[data-am]').forEach(btn=>{
+    btn.addEventListener('click',()=>{ const pl=_jpEnsurePlan(jn); pl.assetMode=btn.dataset.am; _jpRefresh(true); });
   });
   const pr=document.getElementById('jpPresetRow');
   if(pr){ pr.innerHTML='';
@@ -9566,7 +9751,8 @@ function _civUpdatePlannerPanel(){
   sec.style.display='';
   const jn=civJourneys[_civSelectedJourneyIdx];
   _jpEnsurePlan(jn);
-  _jpRenderPartyForm(jn);
+  const auto=_jpRunAuto(jn);
+  _jpRenderPartyForm(jn,auto&&auto.hint);
   _jpRenderResults(jn);
 }
 

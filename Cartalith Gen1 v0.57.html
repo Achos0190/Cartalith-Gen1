@@ -513,11 +513,20 @@ details.cat-acc[open]>summary{color:var(--accent)}
           <option value="other">◆ Other</option>
         </select>
       </div>
+      <div class="sublabel" style="margin-top:8px">Auto-populate counts <span style="text-transform:none;font-weight:400;color:var(--muted)">(blank = automatic)</span></div>
+      <div class="row" style="gap:4px"><label>Capitals / Cities</label>
+        <input id="civNCap" type="number" min="0" max="50" placeholder="auto" style="flex:1;min-width:0">
+        <input id="civNCity" type="number" min="0" max="200" placeholder="auto" style="flex:1;min-width:0"></div>
+      <div class="row" style="gap:4px"><label>Towns / Villages</label>
+        <input id="civNTown" type="number" min="0" max="500" placeholder="auto" style="flex:1;min-width:0">
+        <input id="civNVil" type="number" min="0" max="1000" placeholder="auto" style="flex:1;min-width:0"></div>
+      <div class="row"><label>Hamlets</label>
+        <input id="civNHam" type="number" min="0" max="2000" placeholder="auto" style="flex:1;min-width:0"></div>
       <div class="btnrow" style="margin-top:6px">
         <button id="civAutoPopulateBtn" class="accent">Auto-populate world</button>
         <button id="civClearPlacesBtn">Clear places</button>
       </div>
-      <div class="hint"><b>Auto-populate world</b> places settlements based on terrain suitability and carrying capacity. Use <b>Drop place</b> to manually click the map and place individual settlements or POIs. <b>Inspect</b> lets you select and edit existing places. Click a place to open the editor below.</div>
+      <div class="hint"><b>Auto-populate world</b> places settlements based on terrain suitability and carrying capacity. Fill in any of the count fields to fix how many of each tier are seeded (e.g. Capitals 3, Villages 10, Hamlets 20) — tiers are then assigned best-site-first and the centrality promotion step is skipped so your counts hold; crossroads trade settlements may still add a few. Use <b>Drop place</b> to manually place settlements or POIs; <b>Inspect</b> selects and edits existing places.</div>
       <details class="acc" style="margin-top:8px">
         <summary>All settlements (<span id="civSettlementCount">0</span>)</summary>
         <div id="civSettlementList" style="margin-top:8px"></div>
@@ -8095,12 +8104,15 @@ function drawCivLayer(){
     }
   };
   // 2a. Ways — road hierarchy with LOD filtering
-  civWays.forEach(rt=>{
-    if(!rt.pts||rt.pts.length<2) return;
+  civWays.forEach((rt,ri)=>{
+    if(!rt.pts||rt.pts.length<2||rt.hidden) return;
     const wtype=rt.type||(rt.sea?'sea-lane':'road');
     const lodMin=CIV_LOD_ROAD[wtype]!=null?CIV_LOD_ROAD[wtype]:0.35;
     if(zoom<lodMin) return; // LOD: skip minor roads at low zoom
     tracePts(rt.pts,rt.brks);
+    if(ri===_civSelectedWayIdx){   /* pin-pointed way: gold halo under the road strokes */
+      civCtx.strokeStyle='rgba(255,214,96,.5)'; civCtx.lineWidth=4.5*rsc; civCtx.stroke();
+    }
     /* degraded roads fade on the map (condition set in the way-properties editor) */
     civCtx.globalAlpha=rt.condition==='Broken'?0.5:rt.condition==='Deteriorated'?0.72:rt.condition==='None / Wild'?0.6:1;
     if(wtype==='sea-lane'){
@@ -8185,6 +8197,7 @@ function drawCivLayer(){
     for(let gy=y0;gy<=y1;gy++) for(let gx=x0;gx<=x1;gx++) lblOcc[gy*lgW+gx]=1;
   };
   for(const p of sortedForDraw){
+    if(!p.kind) continue;   /* bare {x,y} terrain reference points are drawn by drawRoadsOverlay, not as civ pins */
     const lodMin=CIV_LOD_PLACE[p.kind]!=null?CIV_LOD_PLACE[p.kind]:0.5;
     const px=p.x+0.5, py=p.y+0.5;
     const isPoi=CIV_POI_KEYS.has(p.kind);
@@ -8347,6 +8360,7 @@ function _civRenderPlaceEditor(){
     <div class="row"><label>Econ. importance</label><input id="_civPeEcon" type="number" min="0" max="1" step="0.05" style="flex:1" value="${p.economicImportance!=null?p.economicImportance:0}"><span style="padding-left:4px;color:var(--muted);font-size:.72rem">0–1</span></div>
     <div class="row"><label>Trade volume</label><input id="_civPeTrade" type="number" min="0" step="100" style="flex:1" value="${p.tradeVolume!=null?p.tradeVolume:0}"></div>`:''}
     ${!isPOI?`<div class="row" style="flex-wrap:wrap;align-items:flex-start"><label>Traits</label><div style="flex:1;display:flex;flex-wrap:wrap;gap:3px">${traitHtml}</div></div>`:''}
+    ${!isPOI?`<button id="_civPeConnect" style="width:100%;margin-top:6px">🛤 Connect to road network</button>`:''}
     <button id="_civPeDelete" style="width:100%;margin-top:6px;border-color:var(--warn)">Delete place</button>`;
   document.getElementById('_civPeName').oninput=()=>{ p.name=document.getElementById('_civPeName').value; drawCivLayer(); };
   document.getElementById('_civPeCat').onchange=()=>{
@@ -8358,6 +8372,7 @@ function _civRenderPlaceEditor(){
   document.getElementById('_civPeKind').onchange=()=>{ p.kind=document.getElementById('_civPeKind').value; drawCivLayer(); };
   const popEl=document.getElementById('_civPePop'); if(popEl) popEl.oninput=()=>{ p.pop=+popEl.value||0; };
   document.getElementById('_civPeFac').onchange=()=>{ p.faction=+document.getElementById('_civPeFac').value; drawCivLayer(); };
+  const connEl=document.getElementById('_civPeConnect'); if(connEl) connEl.onclick=()=>_civConnectPlaceToNetwork(p);
   const specEl=document.getElementById('_civPeSpec'); if(specEl) specEl.onchange=()=>{ p.specialisation=specEl.value; };
   const econEl=document.getElementById('_civPeEcon'); if(econEl) econEl.oninput=()=>{ p.economicImportance=Math.max(0,Math.min(1,+econEl.value||0)); };
   const tradeEl=document.getElementById('_civPeTrade'); if(tradeEl) tradeEl.oninput=()=>{ p.tradeVolume=Math.max(0,+tradeEl.value||0); };
@@ -8437,6 +8452,7 @@ function _civRenderWayList(){
   el.innerHTML='';
   const _wayTypeIcons={highway:'🛣',regional:'🛤',road:'🛤',track:'🌿','sea-lane':'⛵',ancient:'🏚'};
   civWays.forEach((rt,ri)=>{
+    if(rt.hidden) return;   /* consolidated-away duplicates keep the logical link but have no geometry to list */
     const name=rt.name||('Way '+(ri+1));
     const wtype=rt.type||(rt.sea?'sea-lane':'road');
     const typeIcon=_wayTypeIcons[wtype]||'🛤';
@@ -8451,13 +8467,17 @@ function _civRenderWayList(){
     nameInput.style.cssText='flex:1;background:transparent;border:none;color:var(--text);font-size:.8rem;font-weight:600;padding:0;outline:none;min-width:0';
     nameInput.oninput=()=>{ rt.name=nameInput.value; };
     const meta=document.createElement('span'); meta.style.cssText='color:var(--muted);font-size:.7rem;flex-shrink:0'; meta.textContent=kmStr;
+    const moveBtn=document.createElement('button'); moveBtn.textContent='📍'; moveBtn.title='Move viewer to this way (and highlight it)';
+    moveBtn.style.cssText='padding:0 5px;font-size:.8rem;flex-shrink:0;line-height:1.4';
+    moveBtn.onclick=()=>{ _civSelectedWayIdx=ri; _civRenderWayList();
+      const mid=rt.pts[(rt.pts.length/2)|0]; _civMoveViewTo(mid[0],mid[1]); drawCivLayer(); };
     const editBtn=document.createElement('button'); editBtn.textContent='✎'; editBtn.title='Edit way properties';
     editBtn.style.cssText='padding:0 5px;font-size:.8rem;flex-shrink:0;line-height:1.4'+(expanded?';border-color:var(--accent)':'');
-    editBtn.onclick=()=>{ _civSelectedWayIdx=expanded?-1:ri; _civRenderWayList(); };
+    editBtn.onclick=()=>{ _civSelectedWayIdx=expanded?-1:ri; _civRenderWayList(); drawCivLayer(); };
     const delBtn=document.createElement('button'); delBtn.textContent='×'; delBtn.title='Delete way';
     delBtn.style.cssText='padding:0 4px;font-size:.85rem;border-color:var(--warn);flex-shrink:0;';
     delBtn.onclick=()=>{ civWays.splice(ri,1); if(_civSelectedWayIdx===ri)_civSelectedWayIdx=-1; else if(_civSelectedWayIdx>ri)_civSelectedWayIdx--; _civRenderWayList(); renderNow(); };
-    head.append(iconSpan,nameInput,meta,editBtn,delBtn);
+    head.append(iconSpan,nameInput,meta,moveBtn,editBtn,delBtn);
     card.appendChild(head);
     if(expanded){
       /* way properties — class + condition, mirroring V1.915's road-class/route-quality
@@ -8818,14 +8838,14 @@ function _jpRoadCells(){
   const put=(x,y,rec,pri)=>{ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const k=(x+dx)+','+(y+dy);
     const old=map.get(k); if(!old||old.pri<pri) map.set(k,{terr:rec[0],cond:rec[1],pri}); } };
   for(const w of civWays){
-    if(!w.pts||w.sea||w.type==='sea-lane') continue;
+    if(!w.pts||w.sea||w.type==='sea-lane'||w.hidden) continue;
     const rec=w.type==='highway'?["Paved Road","Maintained"]:w.type==='regional'?["Paved Road","Standard"]
       :w.type==='ancient'?["Dirt Track","Deteriorated"]:["Dirt Track","Standard"];
     /* a user-edited way condition (way-properties editor) overrides the type default —
        a Broken highway is slower than a Maintained track */
     if(w.condition) rec[1]=w.condition;
     const pri=w.type==='highway'?3:w.type==='regional'?2:1;
-    for(const[x,y] of w.pts) put(x,y,rec,pri);
+    _civWalkWayCells(w,(x,y)=>put(x,y,rec,pri));
   }
   if(state.roads&&state.roads.edges) for(const e of state.roads.edges){ if(!e.path)continue;
     for(const[x,y] of e.path) put(Math.round(x),Math.round(y),["Dirt Track","Standard"],1); }
@@ -9484,6 +9504,23 @@ function _civSettleName(rng){
   return s[0].toUpperCase()+s.slice(1)+sfx;
 }
 
+/* Snap a cell onto dry land: if (gx,gy) is below sea OR in a water body (ocean/lake —
+   lakes pool above sea level), spiral outward up to maxR for the nearest dry cell.
+   Returns [x,y] or null if none found. Guards settlements from spawning in lakes when
+   coarse-grid road/suitability coordinates round into water at full resolution. */
+function _civSnapLand(gx,gy,maxR){
+  const sea=state.seaLevel||0.42;
+  const wb=(typeof currentWaterBodies==='function')?currentWaterBodies():null;
+  const dry=(x,y)=>x>=0&&x<GW&&y>=0&&y<GH&&field[y*GW+x]>=sea&&(!wb||wb[y*GW+x]===0);
+  if(dry(gx,gy)) return [gx,gy];
+  for(let r=1;r<=(maxR||6);r++)
+    for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+      if(Math.max(Math.abs(dx),Math.abs(dy))!==r) continue;
+      if(dry(gx+dx,gy+dy)) return [gx+dx,gy+dy];
+    }
+  return null;
+}
+
 /* Check if a full-res cell is within R cells of water */
 function _civIsCoastal(gx,gy,R){
   const sea=state.seaLevel||0.42;
@@ -10037,20 +10074,103 @@ function _civHierarchicalNetwork(places, opts){
     }
   }
 
-  // Classify routes by max usageCount and smooth
+  /* Classify, CONSOLIDATE and smooth. Reuse-cost routing makes many edges share the
+     same corridor cells; previously each edge emitted its own full polyline, so shared
+     corridors were traced several times with slightly diverging smoothing ("different
+     paths" on the map). Now edges claim cells busiest-corridor-first: each edge only
+     emits the sub-runs of its path not yet claimed (plus one claimed connector cell at
+     each cut so strokes join at junctions). Fully-claimed edges emit a hidden 2-point
+     way that keeps the logical A—B link for network metrics without drawing anything. */
   const ways=[];
-  for(const {a,b,path} of allEdges){
-    const pa=places[a], pb=places[b];
-    let maxU=0; for(const ci of path) if(usageCount[ci]>maxU) maxU=usageCount[ci];
-    const wtype=maxU>=8?'highway':maxU>=5?'regional':maxU>=3?'road':'track';
-    const raw=path.map(ci=>({x:((ci%RW)+0.5)/sc, y:(((ci/RW)|0)+0.5)/sc}));
-    if(raw.length<2) continue;
-    const sm=_civSmoothPath(raw);
-    if(!sm||sm.pts.length<2) continue;
+  const claimed=new Set();
+  const eOrdered=allEdges.map(e=>{ let mu=0; for(const ci of e.path) if(usageCount[ci]>mu) mu=usageCount[ci];
+    return {a:e.a,b:e.b,path:e.path,maxU:mu}; }).sort((x,y)=>y.maxU-x.maxU);
+  for(const e of eOrdered){
+    const pa=places[e.a], pb=places[e.b];
+    const wtype=e.maxU>=8?'highway':e.maxU>=5?'regional':e.maxU>=3?'road':'track';
     const name=(pa.name&&pb.name)?pa.name+' → '+pb.name:(pa.name||pb.name||'');
-    ways.push({pts:sm.pts,km:sm.km,brks:sm.brks.length?sm.brks:undefined,sea:false,name,type:wtype});
+    const runs=[]; let run=null;
+    for(let k=0;k<e.path.length;k++){
+      const ci=e.path[k];
+      if(!claimed.has(ci)){
+        if(!run){ run=[]; if(k>0) run.push(e.path[k-1]); }   /* connector into the junction */
+        run.push(ci);
+      } else if(run){ run.push(ci); runs.push(run); run=null; }   /* connector out */
+    }
+    if(run) runs.push(run);
+    for(const ci of e.path) claimed.add(ci);
+    let emitted=false;
+    for(const r of runs){
+      if(r.length<2) continue;
+      const raw=r.map(ci=>({x:((ci%RW)+0.5)/sc, y:(((ci/RW)|0)+0.5)/sc}));
+      const sm=_civSmoothPath(raw);
+      if(!sm||sm.pts.length<2) continue;
+      ways.push({pts:sm.pts,km:sm.km,brks:sm.brks.length?sm.brks:undefined,sea:false,name,type:wtype,aIdx:e.a,bIdx:e.b});
+      emitted=true;
+    }
+    if(!emitted){   /* corridor entirely shared — keep the logical link, draw nothing */
+      ways.push({pts:[[pa.x,pa.y],[pb.x,pb.y]],km:0,sea:false,name,type:wtype,aIdx:e.a,bIdx:e.b,hidden:true});
+    }
   }
   return {ways,usageCount,degreeOf,RW,RH,sc};
+}
+
+/* Walk every full-res cell along a way's polyline (rasterizing the segments BETWEEN the
+   smoothed sample points — the pts array alone is sparse on long straights, which left
+   gaps in road-discount masks and made routers ignore half the road). Respects seam
+   breaks (brks) and never rasterizes across an X-seam jump. */
+function _civWalkWayCells(w,cb){
+  const pts=w.pts; if(!pts||!pts.length) return;
+  const bs=w.brks&&w.brks.length?new Set(w.brks):null;
+  cb(pts[0][0],pts[0][1]);
+  for(let k=1;k<pts.length;k++){
+    const x0=pts[k-1][0],y0=pts[k-1][1],x1=pts[k][0],y1=pts[k][1];
+    if((bs&&bs.has(k))||Math.abs(x1-x0)>GW/2){ cb(x1,y1); continue; }
+    const n=Math.max(1,Math.ceil(Math.max(Math.abs(x1-x0),Math.abs(y1-y0))));
+    for(let s=1;s<=n;s++) cb(Math.round(x0+(x1-x0)*s/n),Math.round(y0+(y1-y0)*s/n));
+  }
+}
+
+/* Build a road from a (manually placed) settlement to the nearest point of the existing
+   network — the closest way cell, or the nearest other settlement when no ways exist —
+   via terrain-aware least-cost routing. Existing roads are discounted so the new spur
+   merges onto the network instead of paralleling it. */
+function _civConnectPlaceToNetwork(p){
+  const sea=state.seaLevel||0.42;
+  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+  const dfld=new Float32Array(RW*RH);
+  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+    dfld[y*RW+x]=field[fy*GW+fx];
+  }
+  const cost=_civEnhancedTravelCost(dfld,RW,RH,sea,null,{});   /* lake-safe, terrain-aware */
+  const roadCells=new Set();
+  for(const w of civWays){ if(!w.pts||w.hidden||w.sea||w.type==='sea-lane') continue;
+    _civWalkWayCells(w,(px,py)=>{ const rx=Math.min(RW-1,Math.max(0,Math.round(px*sc))), ry=Math.min(RH-1,Math.max(0,Math.round(py*sc))); roadCells.add(ry*RW+rx); }); }
+  for(const i of roadCells) if(isFinite(cost[i])) cost[i]*=0.25;
+  const sx=Math.min(RW-1,Math.round(p.x*sc)), sy=Math.min(RH-1,Math.round(p.y*sc));
+  let si=sy*RW+sx;
+  if(!isFinite(cost[si])){ outer: for(let r=1;r<=8;r++) for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){
+    const nx=Math.min(RW-1,Math.max(0,sx+dx)), ny=Math.min(RH-1,Math.max(0,sy+dy));
+    if(isFinite(cost[ny*RW+nx])){ si=ny*RW+nx; break outer; } } }
+  const {dist,prev}=roadDijkstra(cost,RW,RH,si%RW,(si/RW)|0,!!state.world);
+  const startX=si%RW, startY=(si/RW)|0;
+  const tooClose=i=>{ const x=i%RW,y=(i/RW)|0; return Math.abs(x-startX)<=2&&Math.abs(y-startY)<=2; };
+  let best=-1,bd=Infinity;
+  for(const i of roadCells){ if(tooClose(i)) continue; if(dist[i]<bd){ bd=dist[i]; best=i; } }
+  if(best<0){   /* no ways yet — connect to the nearest other settlement instead */
+    for(const q of state.places){ if(q===p||!q.kind||!CIV_SETTLE_KEYS.has(q.kind)) continue;
+      const qi=Math.min(RH-1,Math.round(q.y*sc))*RW+Math.min(RW-1,Math.round(q.x*sc));
+      if(dist[qi]<bd){ bd=dist[qi]; best=qi; } }
+  }
+  if(best<0||!isFinite(bd)){ alert('No reachable road or settlement from here — is this place on a separate landmass?'); return; }
+  const raw=[]; let ci=best, guard=RW*RH;
+  while(ci!==si&&ci>=0&&guard-->0){ raw.push({x:((ci%RW)+0.5)/sc,y:(((ci/RW)|0)+0.5)/sc}); const pv=prev[ci]; if(pv<0||pv===ci) break; ci=pv; }
+  raw.push({x:p.x,y:p.y}); raw.reverse();
+  const sm=raw.length>=2?_civSmoothPath(raw):null;
+  if(!sm||sm.pts.length<2){ alert('This place is already on the network.'); return; }
+  civWays.push({pts:sm.pts,km:sm.km,brks:sm.brks.length?sm.brks:undefined,sea:false,name:(p.name||'Place')+' → network',type:'road',manual:true});
+  _civRenderWayList(); renderNow();
 }
 
 /* Wrap-aware path smoothing. In Whole-world mode roadDijkstra legitimately crosses the
@@ -10098,8 +10218,14 @@ function _civNetworkMetrics(places, ways){
   const adj=Array.from({length:n},()=>new Set());
   for(const w of ways){
     if(w.sea||!w.pts||w.pts.length<2) continue;
-    const [ax,ay]=w.pts[0], [bx,by]=w.pts[w.pts.length-1];
-    const ai=nearestPlace(ax,ay), bi=nearestPlace(bx,by);
+    /* consolidated ways carry their logical endpoints (aIdx/bIdx) — geometry runs may
+       start/end mid-corridor at junctions, so endpoint snapping alone would miss them */
+    let ai=-1, bi=-1;
+    if(w.aIdx!=null&&w.bIdx!=null&&places[w.aIdx]&&places[w.bIdx]){ ai=w.aIdx; bi=w.bIdx; }
+    else{
+      const [ax,ay]=w.pts[0], [bx,by]=w.pts[w.pts.length-1];
+      ai=nearestPlace(ax,ay); bi=nearestPlace(bx,by);
+    }
     if(ai<0||bi<0||ai===bi) continue;
     adj[ai].add(bi); adj[bi].add(ai);
   }
@@ -10174,9 +10300,21 @@ function _civIterativeAutoWorld(passes){
   const suit=_civExtendedSuitability()||currentSettlementSuitability();
   if(!suit){ alert('No suitable settlement sites found. Generate a world first.'); return; }
 
-  const maxPlaces=Math.min(40,Math.max(8,(GW*GH/65536*20)|0));
-  const seeds=findSettlementSeeds(suit,GW,GH,{thresh:0.42,suppR:Math.max(6,(GW/22)|0)});
+  /* user-fixed tier counts (Auto-populate counts inputs; blank = automatic). When given,
+     exactly that many of each tier are seeded best-site-first and the centrality
+     promotion/demotion feedback is skipped so the requested counts hold. */
+  const _cnt=id=>{ const e=document.getElementById(id); if(!e||e.value==='') return null; return Math.max(0,e.value|0); };
+  const wantCounts=(()=>{ const c={capital:_cnt('civNCap'),city:_cnt('civNCity'),town:_cnt('civNTown'),village:_cnt('civNVil'),hamlet:_cnt('civNHam')};
+    return Object.values(c).some(v=>v!=null)?{capital:c.capital||0,city:c.city||0,town:c.town||0,village:c.village||0,hamlet:c.hamlet||0}:null; })();
+  const wantTotal=wantCounts?(wantCounts.capital+wantCounts.city+wantCounts.town+wantCounts.village+wantCounts.hamlet):0;
+  if(wantCounts&&wantTotal<1){ alert('All settlement counts are 0 — nothing to place.'); return; }
+  const maxPlaces=wantCounts?wantTotal:Math.min(40,Math.max(8,(GW*GH/65536*20)|0));
+  /* many requested settlements need a tighter suppression radius + lower seed threshold */
+  const suppR=wantCounts?Math.max(3,Math.round((GW/22)*Math.sqrt(33/Math.max(8,wantTotal)))):Math.max(6,(GW/22)|0);
+  const seeds=findSettlementSeeds(suit,GW,GH,{thresh:wantCounts?0.35:0.42,suppR});
   if(!seeds.length){ alert('No suitable settlement sites found. Generate a world first.'); return; }
+  if(wantCounts&&seeds.length<wantTotal)
+    console.warn(`auto-populate: only ${seeds.length} viable sites found for ${wantTotal} requested settlements`);
 
   // DFS land-component labelling (identical to _civAutoPopulate)
   const wrapX=!!state.world;
@@ -10200,10 +10338,12 @@ function _civIterativeAutoWorld(passes){
     }
   }
 
-  const _wb=typeof currentWaterBodies==='function'?currentWaterBodies():null;
-  const candidates=seeds.slice(0,maxPlaces).map(s=>({
-    x:s.x,y:s.y,suit:s.score,contId:comp[s.y*GW+s.x]
-  })).filter(c=>c.contId>=0&&(!_wb||_wb[c.y*GW+c.x]===0));
+  /* snap each seed onto dry land (a shore-hugging suitability maximum can round into a
+     lake at full res) instead of silently dropping it */
+  const candidates=seeds.slice(0,maxPlaces).map(s=>{
+    const sn=_civSnapLand(s.x,s.y,6);
+    return sn?{x:sn[0],y:sn[1],suit:s.score,contId:comp[sn[1]*GW+sn[0]]}:null;
+  }).filter(c=>c&&c.contId>=0);
   if(!candidates.length){ alert('No candidates after filtering. Try regenerating the world.'); return; }
 
   const contFirst={};
@@ -10215,22 +10355,30 @@ function _civIterativeAutoWorld(passes){
   const coastR=Math.max(6,(GW/60)|0);
   const tierOrder=['capital','city','town','village','hamlet'];
 
-  // Initial placement (same classification as _civAutoPopulate)
+  // Initial placement — user-fixed tier quotas when given, else the legacy rank classification
+  const quota=wantCounts?Object.assign({},wantCounts):null;
   let places=candidates.map((c,rank)=>{
-    const isCapital=contFirst[c.contId]===c;
-    const isCity=!isCapital&&rank<4;
-    const isTown=!isCapital&&!isCity&&rank<12;
-    const isVillage=!isCapital&&!isCity&&!isTown&&rank<24;
-    const kind=isCapital?'capital':isCity?'city':isTown?'town':isVillage?'village':'hamlet';
+    let kind;
+    if(quota){
+      if(quota.capital>0&&contFirst[c.contId]===c){ kind='capital'; quota.capital--; }   /* capitals spread across continents first */
+      else{ kind='hamlet';
+        for(const k of ['capital','city','town','village','hamlet']) if(quota[k]>0){ kind=k; quota[k]--; break; } }
+    } else {
+      const isCapital=contFirst[c.contId]===c;
+      const isCity=!isCapital&&rank<4;
+      const isTown=!isCapital&&!isCity&&rank<12;
+      const isVillage=!isCapital&&!isCity&&!isTown&&rank<24;
+      kind=isCapital?'capital':isCity?'city':isTown?'town':isVillage?'village':'hamlet';
+    }
     const h=(field[c.y*GW+c.x]-sea)/(1-sea);
     const coastal=_civIsCoastal(c.x,c.y,coastR);
     const traits=[];
     if(coastal) traits.push('port');
     if(h>0.55) traits.push('mining');
     if(h>0.62) traits.push('fortified');
-    if(isCapital||isCity) traits.push('trade_hub');
+    if(kind==='capital'||kind==='city') traits.push('trade_hub');
     const faction=contFaction[c.contId]||1;
-    const basePop=isCapital?15000:isCity?6000:isTown?1500:isVillage?400:120;
+    const basePop=kind==='capital'?15000:kind==='city'?6000:kind==='town'?1500:kind==='village'?400:120;
     return {x:c.x,y:c.y,name:_civSettleName(rng),kind,klass:kind,category:'settlement',
             faction,pop:Math.round(basePop*(0.7+c.suit*0.8)*(0.8+rng()*0.4)),traits};
   });
@@ -10238,11 +10386,12 @@ function _civIterativeAutoWorld(passes){
   let ways=[];
   let lastNet=null;
 
-  // Iterative centrality → tier feedback
+  // Iterative centrality → tier feedback (skipped when the user fixed the tier counts)
   for(let pass=0;pass<passes;pass++){
     const net=_civHierarchicalNetwork(places,{});
     ways=net.ways;
     lastNet=net;
+    if(wantCounts) break;   /* counts are explicit — one network pass, no promote/demote */
     if(pass<passes-1){
       const metrics=_civNetworkMetrics(places,ways);
       const maxBtw=Math.max(...metrics.map(m=>m.betweenness),1e-9);
@@ -10291,11 +10440,12 @@ function _civIterativeAutoWorld(passes){
       if(!near) chosen.push(c);
     }
     const coastR2=Math.max(6,(GW/60)|0);
-    const _wb2=(typeof currentWaterBodies==='function')?currentWaterBodies():null;
     for(const c of chosen){
-      const gx=Math.min(GW-1,Math.max(0,Math.round(c.x))), gy=Math.min(GH-1,Math.max(0,Math.round(c.y)));
-      if(field[gy*GW+gx]<sea) continue;
-      if(_wb2&&_wb2[gy*GW+gx]!==0) continue;   /* never seed a crossroads town in a lake */
+      /* the crossroads cell comes from the coarse routing grid — snap onto dry land so
+         the settlement never lands in a lake/sea when the coordinate scales up */
+      const sn=_civSnapLand(Math.min(GW-1,Math.max(0,Math.round(c.x))),Math.min(GH-1,Math.max(0,Math.round(c.y))),6);
+      if(!sn) continue;
+      const gx=sn[0], gy=sn[1];
       const coastal=_civIsCoastal(gx,gy,coastR2);
       const kind=c.u>=7?'village':'hamlet';
       const basePop=kind==='village'?400:120;
@@ -10412,6 +10562,24 @@ function _civDijkstraPath(sx,sy,ex,ey){
       const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
       if(wb[fy*GW+fx]!==0) cost[y*RW+x]=Infinity;
     } } }catch(e){}
+  /* Ride the existing infrastructure: cells on land ways cost ×0.25 (routes strongly
+     prefer roads), and cells on sea lanes become traversable corridors over open water
+     (a ferry/coaster leg along the lane) — so a route between two way-connected
+     settlements follows the way instead of plotting its own direct line.
+     Collected into sets first so each cell is discounted exactly once. */
+  {
+    const landSet=new Set(), seaSet=new Set();
+    const mark=(px,py,set)=>{ const rx=Math.min(RW-1,Math.max(0,Math.round(px*sc))), ry=Math.min(RH-1,Math.max(0,Math.round(py*sc)));
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const nx=rx+dx, ny=ry+dy; if(nx<0||nx>=RW||ny<0||ny>=RH) continue; set.add(ny*RW+nx); } };
+    for(const w of civWays){ if(!w.pts||w.hidden) continue;
+      const set=(w.sea||w.type==='sea-lane')?seaSet:landSet;
+      _civWalkWayCells(w,(px,py)=>mark(px,py,set)); }
+    if(state.roads&&state.roads.edges) for(const e of state.roads.edges){ if(!e.path) continue;
+      for(const[px,py] of e.path) mark(px,py,landSet); }
+    for(const i of landSet) if(isFinite(cost[i])) cost[i]*=0.25;
+    for(const i of seaSet) cost[i]=Math.min(isFinite(cost[i])?cost[i]:1e9,1.0);
+  }
   const rsx=Math.min(RW-1,Math.round(sx*sc)), rsy=Math.min(RH-1,Math.round(sy*sc));
   const rex=Math.min(RW-1,Math.round(ex*sc)), rey=Math.min(RH-1,Math.round(ey*sc));
   const {prev}=roadDijkstra(cost,RW,RH,rsx,rsy,!!state.world);
@@ -10496,7 +10664,7 @@ function _civSyncToState(){
   state.civ={
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
-    ways:civWays.map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,manual:!!r.manual,name:r.name||''})),
+    ways:civWays.map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,aIdx:r.aIdx,bIdx:r.bIdx,hidden:r.hidden||undefined,manual:!!r.manual,name:r.name||''})),
     journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):null})),
     year:civYear,
     factionNames:[...civFactionNames],
@@ -10511,7 +10679,7 @@ function _civSyncFromState(){
   } else { civTerritory=null; }
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
   // backwards compat: old saves used c.routes — treat them as ways
-  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,manual:!!r.manual,name:r.name||''}));
+  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,aIdx:r.aIdx,bIdx:r.bIdx,hidden:r.hidden||undefined,manual:!!r.manual,name:r.name||''}));
   civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):undefined}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];

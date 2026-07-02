@@ -8058,14 +8058,25 @@ function drawCivLayer(){
   // folds in inverse-zoom + a user-facing "Way width" slider (state.viz.civWayScale).
   const rsc=Math.max(1,GW/512)*_civZoomK()*_civWayScale();
   civCtx.save(); civCtx.lineCap='round'; civCtx.lineJoin='round';
+  /* trace a polyline lifting the pen at stored run breaks (brks) and, belt-and-braces,
+     at any |Δx| > GW/2 jump — a world-mode path crossing the X seam must never be drawn
+     as a straight streak across the map */
+  const tracePts=(pts,brks)=>{
+    const bs=brks&&brks.length?new Set(brks):null;
+    civCtx.beginPath();
+    for(let k=0;k<pts.length;k++){
+      const jump=k>0&&Math.abs(pts[k][0]-pts[k-1][0])>GW/2;
+      if(k===0||(bs&&bs.has(k))||jump) civCtx.moveTo(pts[k][0]+.5,pts[k][1]+.5);
+      else civCtx.lineTo(pts[k][0]+.5,pts[k][1]+.5);
+    }
+  };
   // 2a. Ways — road hierarchy with LOD filtering
   civWays.forEach(rt=>{
     if(!rt.pts||rt.pts.length<2) return;
     const wtype=rt.type||(rt.sea?'sea-lane':'road');
     const lodMin=CIV_LOD_ROAD[wtype]!=null?CIV_LOD_ROAD[wtype]:0.35;
     if(zoom<lodMin) return; // LOD: skip minor roads at low zoom
-    civCtx.beginPath();
-    rt.pts.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
+    tracePts(rt.pts,rt.brks);
     if(wtype==='sea-lane'){
       civCtx.strokeStyle='rgba(10,30,60,.4)'; civCtx.lineWidth=1.5*rsc; civCtx.stroke();
       civCtx.strokeStyle='rgba(30,130,200,.7)';
@@ -8097,8 +8108,7 @@ function drawCivLayer(){
   civJourneys.forEach((jn,ji)=>{
     if(!jn.pts||jn.pts.length<2) return;
     const sel=(ji===_civSelectedJourneyIdx);
-    civCtx.beginPath();
-    jn.pts.forEach(([x,y],k)=>{ k?civCtx.lineTo(x+.5,y+.5):civCtx.moveTo(x+.5,y+.5); });
+    tracePts(jn.pts,jn.brks);
     civCtx.strokeStyle='rgba(40,25,5,.5)'; civCtx.lineWidth=(sel?5:3)*rsc; civCtx.stroke();
     civCtx.strokeStyle=sel?'rgba(255,210,80,.98)':'rgba(200,160,60,.85)';
     civCtx.setLineDash([5*rsc,3*rsc]); civCtx.lineWidth=(sel?2.5:1.5)*rsc; civCtx.stroke();
@@ -8149,9 +8159,18 @@ function drawCivLayer(){
   };
   for(const p of sortedForDraw){
     const lodMin=CIV_LOD_PLACE[p.kind]!=null?CIV_LOD_PLACE[p.kind]:0.5;
-    if(zoom<lodMin) continue; // LOD: hide low-tier places at low zoom
     const px=p.x+0.5, py=p.y+0.5;
     const isPoi=CIV_POI_KEYS.has(p.kind);
+    if(zoom<lodMin){
+      /* below the LOD threshold: render a small faction-tinted dot instead of hiding the
+         place entirely — road endpoints stay anchored to a visible marker at any zoom;
+         the full pin + label takes over once zoomed past the threshold */
+      const col=(!isPoi&&p.faction)?(CIV_FACTIONS[p.faction]?.[1]||[200,180,130]):[170,150,110];
+      const dr=(isPoi?1.4:1.9)*lsc;
+      civCtx.beginPath(); civCtx.arc(px,py,dr+0.6*lsc,0,Math.PI*2); civCtx.fillStyle='rgba(12,10,7,.65)'; civCtx.fill();
+      civCtx.beginPath(); civCtx.arc(px,py,dr,0,Math.PI*2); civCtx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`; civCtx.fill();
+      continue;
+    }
     let sz;
     if(isPoi) sz=5*lsc;
     else{
@@ -8785,7 +8804,8 @@ function _jpDeriveStages(jn,plan){
       const f=info[k], key=f.cat+'|'+f.biome+'|'+f.terrain+'|'+(f.cond||'');
       if(!cur||cur.key!==key){ cur={key,cat:f.cat,biome:f.biome,terrain:f.terrain,cond:f.cond,km:0,i0:k,i1:k,rx:0,gain:0,loss:0,_inRiv:false}; chunks.push(cur); }
       cur.i1=k;
-      if(k>0){ const dx=pts[k][0]-pts[k-1][0], dy=pts[k][1]-pts[k-1][1]; cur.km+=Math.hypot(dx,dy)*cellKm;
+      if(k>0){ const adx=Math.abs(pts[k][0]-pts[k-1][0]), dy=pts[k][1]-pts[k-1][1];
+        cur.km+=Math.hypot(Math.min(adx,GW-adx),dy)*cellKm;   /* wrap-aware (cylinder) */
         const dh=hM(k)-hM(k-1); if(dh>0)cur.gain+=dh; else cur.loss-=dh; }
       if(f.cat==='land'){ if(f.riv&&!cur._inRiv){ cur.rx++; cur._inRiv=true; } else if(!f.riv) cur._inRiv=false; }
     }
@@ -9421,11 +9441,16 @@ function _civEnhancedTravelCost(dfld, W, H, sea, usageCount, opts){
   const flow=(typeof flowField!=='undefined'&&flowField)?flowField:null;
   const flowThresh=flow?GW*GH*0.0004:0;
   const riverOrder=(typeof _riverNet!=='undefined'&&_riverNet&&_riverNet.order)?_riverNet.order:null;
-  let biomeR=null;
+  let biomeR=null, wb=null;
   try{ if(typeof buildBiomeRaster==='function') biomeR=buildBiomeRaster(); }catch(e){}
+  try{ if(typeof currentWaterBodies==='function') wb=currentWaterBodies(); }catch(e){}
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const i=y*W+x;
     if(dfld[i]<sea){ cost[i]=Infinity; continue; }
+    /* lakes pool ABOVE sea level, so the field<sea check misses them — consult the
+       water-body raster (1=ocean, 2=lake) so roads never cross standing water */
+    if(wb){ const fx0=Math.min(GW-1,Math.round(x*scX)), fy0=Math.min(GH-1,Math.round(y*scY));
+      if(wb[fy0*GW+fx0]!==0){ cost[i]=Infinity; continue; } }
     const xl=x>0?dfld[i-1]:dfld[i], xr=x<W-1?dfld[i+1]:dfld[i];
     const yt=y>0?dfld[i-W]:dfld[i], yb=y<H-1?dfld[i+W]:dfld[i];
     const sl=Math.hypot((xr-xl)*0.5,(yb-yt)*0.5);
@@ -9662,12 +9687,16 @@ function _civMstRoutes(places, isSea){
   // land to Infinity keeps the path strictly on water; snapToFinite (below) is what makes
   // a land-based port reachable at all.
   // If no sea path exists (disconnected ports), dist stays Infinity → no MST edge → correct.
+  let wb=null; try{ if(typeof currentWaterBodies==='function') wb=currentWaterBodies(); }catch(e){}
   let cost;
   if(isSea){
     cost=new Float32Array(RW*RH);
     for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-      cost[y*RW+x]=field[fy*GW+fx]<sea?1:Infinity;
+      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0), fi=fy*GW+fx;
+      /* navigable = any water body (ocean or lake) — lakes pool above sea level so the
+         bare field<sea test misses them */
+      const water=wb?wb[fi]!==0:field[fi]<sea;
+      cost[y*RW+x]=water?1:Infinity;
     }
   } else {
     const dfld=new Float32Array(RW*RH);
@@ -9676,6 +9705,11 @@ function _civMstRoutes(places, isSea){
       dfld[y*RW+x]=field[fy*GW+fx];
     }
     cost=buildTravelCost(dfld,RW,RH,sea);
+    /* land roads must not cross above-sea lakes either */
+    if(wb) for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+      if(wb[fy*GW+fx]!==0) cost[y*RW+x]=Infinity;
+    }
   }
 
   // Snap a downsampled (rx,ry) to the nearest cell with finite cost — e.g. a coastal
@@ -9733,16 +9767,13 @@ function _civMstRoutes(places, isSea){
     raw.push({x:pa.x,y:pa.y}); raw.reverse();
     if(raw[raw.length-1].x!==pb.x||raw[raw.length-1].y!==pb.y) raw.push({x:pb.x,y:pb.y});
     if(raw.length<2) continue;
-    // Smooth: RDP simplify then Catmull-Rom resample
-    const simplified=rdpSimplify(raw,1.5);
-    const smooth=catmullRomSample(simplified,3);
-    const pts=smooth.map(p=>[Math.round(p.x),Math.round(p.y)]);
-    if(pts.length>1){
-      const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
+    // Smooth wrap-aware: splits at the X seam so world-mode routes never streak across the map
+    const sm=_civSmoothPath(raw);
+    if(sm&&sm.pts.length>1){
       // Auto-name: "PlaceA → PlaceB" from endpoint settlements
       const nameA=pa.name||'', nameB=pb.name||'';
       const name=(nameA&&nameB)?nameA+' → '+nameB:(nameA||nameB||'');
-      routes.push({pts,km,sea:!!isSea,name});
+      routes.push({pts:sm.pts,km:sm.km,brks:sm.brks.length?sm.brks:undefined,sea:!!isSea,name});
     }
   }
   return routes;
@@ -9897,6 +9928,47 @@ function _civHierarchicalNetwork(places, opts){
     }
   }
 
+  /* --- PASS 3: shortcut edges (detour relief) ---
+     The MST + degree-fill leaves A—B—C chains where A and C are themselves close;
+     historically a direct road emerges once the through-B detour is long enough to
+     justify it. For every unconnected pair whose DIRECT cost-distance is short
+     (≤ 2.5× the median existing edge) but whose THROUGH-NETWORK distance exceeds
+     1.7× the direct cost, add the direct road — worst detour first, recomputing
+     network distances after each addition so parallel shortcuts don't pile up. */
+  {
+    const edgeCost=(a,b)=>{ const d=res2[a].dist[rp2[b]]; return isFinite(d)?d:Infinity; };
+    const edgeList=allEdges.map(e=>({a:e.a,b:e.b,w:edgeCost(e.a,e.b)}));
+    const sorted=edgeList.map(e=>e.w).filter(isFinite).sort((x,y)=>x-y);
+    const med=sorted.length?sorted[(sorted.length/2)|0]:Infinity;
+    const NEAR=med*2.5, DETOUR=1.7, maxAdd=Math.max(2,Math.round(n/6));
+    const netDists=()=>{   /* Floyd–Warshall over the settlement graph (n is small) */
+      const D=Array.from({length:n},()=>new Float64Array(n).fill(Infinity));
+      for(let i=0;i<n;i++) D[i][i]=0;
+      for(const e of edgeList){ if(e.w<D[e.a][e.b]){ D[e.a][e.b]=e.w; D[e.b][e.a]=e.w; } }
+      for(let k=0;k<n;k++) for(let i=0;i<n;i++){ const dik=D[i][k]; if(!isFinite(dik)) continue;
+        for(let j=0;j<n;j++){ const v=dik+D[k][j]; if(v<D[i][j]){ D[i][j]=v; D[j][i]=v; } } }
+      return D;
+    };
+    for(let added=0;added<maxAdd;added++){
+      const D=netDists();
+      let bestSc=null;
+      for(let a=0;a<n;a++) for(let b=a+1;b<n;b++){
+        if(edgeSet.has(a*n+b)) continue;
+        const direct=edgeCost(a,b);
+        if(!isFinite(direct)||direct<=0||direct>NEAR) continue;
+        const gain=D[a][b]/direct;
+        if(gain>DETOUR&&(!bestSc||gain>bestSc.gain)) bestSc={a,b,w:direct,gain};
+      }
+      if(!bestSc) break;
+      edgeSet.add(bestSc.a*n+bestSc.b);
+      const path=tracePath(res2[bestSc.a].prev,rp2[bestSc.a],rp2[bestSc.b]);
+      for(const ci of path) usageCount[ci]++;
+      allEdges.push({a:bestSc.a,b:bestSc.b,path});
+      edgeList.push({a:bestSc.a,b:bestSc.b,w:bestSc.w});
+      degreeOf[bestSc.a]++; degreeOf[bestSc.b]++;
+    }
+  }
+
   // Classify routes by max usageCount and smooth
   const ways=[];
   for(const {a,b,path} of allEdges){
@@ -9905,15 +9977,40 @@ function _civHierarchicalNetwork(places, opts){
     const wtype=maxU>=8?'highway':maxU>=5?'regional':maxU>=3?'road':'track';
     const raw=path.map(ci=>({x:((ci%RW)+0.5)/sc, y:(((ci/RW)|0)+0.5)/sc}));
     if(raw.length<2) continue;
-    const simplified=rdpSimplify(raw,1.5);
-    const smooth=catmullRomSample(simplified,3);
-    const pts=smooth.map(p=>[Math.round(p.x),Math.round(p.y)]);
-    if(pts.length<2) continue;
-    const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
+    const sm=_civSmoothPath(raw);
+    if(!sm||sm.pts.length<2) continue;
     const name=(pa.name&&pb.name)?pa.name+' → '+pb.name:(pa.name||pb.name||'');
-    ways.push({pts,km,sea:false,name,type:wtype});
+    ways.push({pts:sm.pts,km:sm.km,brks:sm.brks.length?sm.brks:undefined,sea:false,name,type:wtype});
   }
   return {ways,usageCount,degreeOf,RW,RH,sc};
+}
+
+/* Wrap-aware path smoothing. In Whole-world mode roadDijkstra legitimately crosses the
+   X seam (the map is a cylinder), but feeding the resulting coordinate jump through
+   rdpSimplify + catmullRomSample interpolated phantom points clear across the map —
+   the "roads that wrap the entire map" artifact. Split the raw path into runs at any
+   |Δx| > GW/2 jump, smooth each run independently, and record the run boundaries in
+   `brks` so the renderer lifts the pen at the seam. km sums within runs only. */
+function _civSmoothPath(raw){
+  const runs=[]; let run=[raw[0]];
+  for(let k=1;k<raw.length;k++){
+    if(Math.abs(raw[k].x-raw[k-1].x)>GW/2){ if(run.length>1)runs.push(run); run=[]; }
+    run.push(raw[k]);
+  }
+  if(run.length>1) runs.push(run);
+  if(!runs.length) return null;
+  const pts=[], brks=[]; let km=0;
+  for(const r of runs){
+    const smooth=catmullRomSample(rdpSimplify(r,1.5),3);
+    if(smooth.length<2) continue;
+    if(pts.length) brks.push(pts.length);
+    for(let k=0;k<smooth.length;k++){
+      const p=[Math.round(smooth[k].x),Math.round(smooth[k].y)];
+      if(k>0) km+=Math.hypot(p[0]-pts[pts.length-1][0],p[1]-pts[pts.length-1][1])*(state.mapWidthKm||12000)/GW;
+      pts.push(p);
+    }
+  }
+  return pts.length>=2?{pts,brks,km}:null;
 }
 
 /* Network analysis: Brandes 2001 BFS betweenness centrality + degree + closeness + connected components.
@@ -10126,9 +10223,11 @@ function _civIterativeAutoWorld(passes){
       if(!near) chosen.push(c);
     }
     const coastR2=Math.max(6,(GW/60)|0);
+    const _wb2=(typeof currentWaterBodies==='function')?currentWaterBodies():null;
     for(const c of chosen){
       const gx=Math.min(GW-1,Math.max(0,Math.round(c.x))), gy=Math.min(GH-1,Math.max(0,Math.round(c.y)));
       if(field[gy*GW+gx]<sea) continue;
+      if(_wb2&&_wb2[gy*GW+gx]!==0) continue;   /* never seed a crossroads town in a lake */
       const coastal=_civIsCoastal(gx,gy,coastR2);
       const kind=c.u>=7?'village':'hamlet';
       const basePop=kind==='village'?400:120;
@@ -10136,8 +10235,12 @@ function _civIterativeAutoWorld(passes){
       // Inherit faction from the nearest existing settlement (political influence spreads outward)
       let faction=1,fd=Infinity;
       for(const p of places){ const d=Math.hypot(p.x-gx,p.y-gy); if(d<fd){ fd=d; faction=p.faction||1; } }
+      /* Crossroads settlements live off trade and taxes, not farmland — their population
+         scales with route traffic through the junction (usageCount), unlike the
+         suitability-seeded settlements whose pop comes from the land's carrying capacity. */
+      const tradeK=1+0.18*Math.min(12,c.u);
       places.push({x:gx,y:gy,name:_civSettleName(rng),kind,klass:kind,category:'settlement',
-        faction,pop:Math.round(basePop*(0.9+rng()*0.3)),traits});
+        faction,pop:Math.round(basePop*tradeK*(0.9+rng()*0.3)),tradePop:Math.round(basePop*tradeK),traits});
     }
     if(chosen.length){
       lastNet=_civHierarchicalNetwork(places,{});
@@ -10169,7 +10272,10 @@ function _civIterativeAutoWorld(passes){
     // settlement isolated on its own island gets a mild population penalty, one in the
     // dominant connected component gets the full multiplier.
     const normCompSize=m?m.componentSize/places.length:1;
-    p.pop=Math.round(basePop*(0.7+s*0.8)*(0.8+rng()*0.4)*(1+normB*1.5)*(0.85+0.15*normCompSize));
+    /* crossroads-born settlements (p.tradePop) live off through-trade and taxes — their
+       seed pop comes from route traffic, not land suitability */
+    const seedPop=p.tradePop!=null?p.tradePop:basePop*(0.7+s*0.8);
+    p.pop=Math.round(seedPop*(0.8+rng()*0.4)*(1+normB*1.5)*(0.85+0.15*normCompSize));
     // Economic importance: weighted blend of betweenness (trade-through), closeness (market
     // reach), degree (route connections) and connected-component size (trade-network reach),
     // each normalized to [0,1].
@@ -10232,6 +10338,12 @@ function _civDijkstraPath(sx,sy,ex,ey){
     dfld[y*RW+x]=field[fy*GW+fx];
   }
   const cost=buildTravelCost(dfld,RW,RH,sea);
+  /* above-sea lakes are water too — impassable for the click-routed path */
+  try{ if(typeof currentWaterBodies==='function'){ const wb=currentWaterBodies();
+    for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+      if(wb[fy*GW+fx]!==0) cost[y*RW+x]=Infinity;
+    } } }catch(e){}
   const rsx=Math.min(RW-1,Math.round(sx*sc)), rsy=Math.min(RH-1,Math.round(sy*sc));
   const rex=Math.min(RW-1,Math.round(ex*sc)), rey=Math.min(RH-1,Math.round(ey*sc));
   const {prev}=roadDijkstra(cost,RW,RH,rsx,rsy,!!state.world);
@@ -10264,7 +10376,8 @@ function _civCommitRoute(){
       if(k>0) seg.shift(); // avoid duplicate junction point
       pts.push(...seg);
     }
-    const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
+    const km=pts.reduce((s,[x,y],k)=>{ if(!k)return 0; const adx=Math.abs(x-pts[k-1][0]);
+      return s+Math.hypot(Math.min(adx,GW-adx),y-pts[k-1][1])*(state.mapWidthKm||12000)/GW; },0);   /* wrap-aware (cylinder) */
     civJourneys.push({pts,km,name:'',sea:false,mode:'Mounted',terrain:'Dirt',condition:'Standard',groupSize:10});
     _civSelectedJourneyIdx=civJourneys.length-1;
     _civRenderJourneyList();
@@ -10284,7 +10397,8 @@ function _civCommitWay(){
       if(k>0) seg.shift();
       pts.push(...seg);
     }
-    const km=pts.reduce((s,[x,y],k)=>k?s+Math.hypot(x-pts[k-1][0],y-pts[k-1][1])*(state.mapWidthKm||12000)/GW:0,0);
+    const km=pts.reduce((s,[x,y],k)=>{ if(!k)return 0; const adx=Math.abs(x-pts[k-1][0]);
+      return s+Math.hypot(Math.min(adx,GW-adx),y-pts[k-1][1])*(state.mapWidthKm||12000)/GW; },0);   /* wrap-aware (cylinder) */
     const wayType=document.getElementById('civWayType')?.value||'road';
     const sea=(wayType==='sea-lane');
     civWays.push({pts,km,sea,type:wayType,manual:true,name:''});
@@ -10314,7 +10428,7 @@ function _civSyncToState(){
   state.civ={
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
-    ways:civWays.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''})),
+    ways:civWays.map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''})),
     journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):null})),
     year:civYear,
     factionNames:[...civFactionNames],
@@ -10329,7 +10443,7 @@ function _civSyncFromState(){
   } else { civTerritory=null; }
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
   // backwards compat: old saves used c.routes — treat them as ways
-  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''}));
+  civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''}));
   civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):undefined}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];

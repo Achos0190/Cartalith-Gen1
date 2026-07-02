@@ -779,6 +779,7 @@ details.cat-acc[open]>summary{color:var(--accent)}
         <button data-d="bclass">Biomes</button>
         <button data-d="cterrain">Terrain</button>
         <button data-d="lith">Lithology</button>
+        <button data-d="landform">Landforms</button>
         <button data-d="fjord">Fjord</button>
         <button data-d="soil">Soil</button>
         <button data-d="water">Water</button>
@@ -802,6 +803,14 @@ details.cat-acc[open]>summary{color:var(--accent)}
       <div class="row"><label>Surface texture</label><input type="range" id="texR" min="0" max="100" step="1" value="0"><span class="val" id="texV">off</span></div>
       <div class="row"><label>Minor channels</label><input type="range" id="minorR" min="0" max="100" step="1" value="0"><span class="val" id="minorV">off</span></div>
       <div class="row"><label>Ridged relief</label><input type="range" id="ridgeR" min="0" max="100" step="1" value="0"><span class="val" id="ridgeV">off</span></div>
+      <div class="row"><label>Sky view factor</label><input type="range" id="svfR" min="0" max="100" step="1" value="0"><span class="val" id="svfV">off</span></div>
+      <div class="row"><label>Cast shadows</label><input type="range" id="shadowsR" min="0" max="100" step="1" value="0"><span class="val" id="shadowsV">off</span></div>
+      <div class="row"><label>Curvature shading</label><input type="range" id="curveShadeR" min="0" max="100" step="1" value="0"><span class="val" id="curveShadeV">off</span></div>
+      <div class="row"><label>Geology materials</label><input type="range" id="geologyR" min="0" max="100" step="1" value="0"><span class="val" id="geologyV">off</span></div>
+      <div class="row"><label>Wetness</label><input type="range" id="wetnessR" min="0" max="100" step="1" value="0"><span class="val" id="wetnessV">off</span></div>
+      <div class="row"><label>Season (render)</label><input type="range" id="seasonR" min="-100" max="100" step="5" value="0"><span class="val" id="seasonV">annual</span></div>
+      <div class="hint"><b>Sky view factor</b> darkens enclosed valleys/gorges that see less sky; <b>cast shadows</b> throw long soft shadows off major ranges toward the sun azimuth; <b>curvature shading</b> brightens convex ridges and darkens concave hollows; <b>geology materials</b> recolours exposed rock by the lithology underneath (granite speckle, basalt fields, sandstone strata, karst limestone, gneiss banding + dune ripples) so mountains read geological; <b>wetness</b> darkens persistently saturated ground (high TWI); <b>season</b> blends the <i>rendered</i> climate toward January&nbsp;⇠&nbsp;annual&nbsp;⇢&nbsp;July when <b>Seasons</b> (Weather) is on — snowlines migrate, vegetation dries/greens. All render-only, default off.</div>
+      <div class="row"><label>Contour interval</label><input type="range" id="contourMR" min="0" max="50" step="5" value="0"><span class="val" id="contourMV">auto</span></div>
       <div class="row"><label>SDF coastlines</label><input type="range" id="sdfCoastR" min="0" max="100" step="1" value="0"><span class="val" id="sdfCoastV">off</span></div>
       <div class="row"><label>SDF river bands</label><input type="range" id="sdfRiversR" min="0" max="100" step="1" value="0"><span class="val" id="sdfRiversV">off</span></div>
       <div class="row"><label>SDF biome blend</label><input type="range" id="sdfBiomesR" min="0" max="100" step="1" value="0"><span class="val" id="sdfBiomesV">off</span></div>
@@ -1076,7 +1085,7 @@ const state = {
   showRivers: true,
   carveRivers: true,   /* v0.145: carve real valleys in generate() by default (off → bit-identical to v0.144) */
   places: [], roads: null,   /* v0.128: designated places + their road network — persistent data (saved with the project, unlike the transient _placeMode tool) */
-  viz:{ parchment:0, icons:false, waves:false, waveDist:1, zoomDetail:1, scaleBar:true, splat:0.7, sharpBiomes:true, showLakes:true, multiSun:false, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0, contours:0, ink:0, hachure:0, watercolor:0, cel:0, crosshatch:0, stipple:0, sepia:0, risograph:0, pointillism:0, waterAnim:false, riverDensity:1, minRiverOrder:1, civIconScale:1, civWayScale:1 },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome + v0.108 Painter NPR contours/ink/hachure/watercolor + v0.129 cel/crosshatch/stipple + v0.131 sepia/risograph/pointillism (all default 0 = off; blueprint removed v0.141); civIconScale/civWayScale: user-adjustable civ-layer settlement/label and way line-width multipliers (both default 1) */
+  viz:{ parchment:0, icons:false, waves:false, waveDist:1, zoomDetail:1, scaleBar:true, splat:0.7, sharpBiomes:true, showLakes:true, multiSun:false, ao:0, crest:0, rockSlope:0, texture:0, minorStreams:0, ridgedRelief:0, svf:0, shadows:0, curveShade:0, geology:0, wetness:0, season:0, contourM:0, sdfCoast:0, sdfRivers:0, sdfBiomes:0, contours:0, ink:0, hachure:0, watercolor:0, cel:0, crosshatch:0, stipple:0, sepia:0, risograph:0, pointillism:0, waterAnim:false, riverDensity:1, minRiverOrder:1, civIconScale:1, civWayScale:1 },   /* B1/B3/B4 layers + splat + river overlay + lakes + R1 AO + R2 crests/slope-rock + R3 texture/minor channels + R4 ridged relief + v0.096 SDF coast/river/biome + v0.108 Painter NPR contours/ink/hachure/watercolor + v0.129 cel/crosshatch/stipple + v0.131 sepia/risograph/pointillism (all default 0 = off; blueprint removed v0.141); civIconScale/civWayScale: user-adjustable civ-layer settlement/label and way line-width multipliers (both default 1) */
   climate:{ latN:55, latS:5, equatorTemp:30, poleTemp:-25, lapseRate:6.5, rainK:1.0, rainDep:0.35, oceanHum:1.0, windDir:0, windMode:'auto', pressK:0.6, zonalK:0.5, bulkEvap:true, seasons:false, maxRainMm:3000, currents:false, currentK:1.0, albedo:0, evap:0.12, ocean:1.0, wIters:70 }   /* L6: ice-albedo cooling feedback (0 = off → bit-identical) */
 };
 
@@ -1752,7 +1761,7 @@ function centerLandmasses(){
      a straight vertical line. Feather a few columns there (wrap-aware) to dissolve the discontinuity. */
   { const sc=((GW-off)%GW+GW)%GW; for(const a of [field,tempField,rainField,geoidField]) if(a) featherSeamX(a,GW,GH,sc,2); }
   _riverNet=null; _waterBody=null; lakeMask=null; _cartBiome=null; _cartTerrain=null; _biomeRaster=null;
-  _lithField=null; _soilField=null; _waterField=null; _resourcePots=null; _carryCapField=null; _settleSuitField=null; _wildlife=null; _nppField=null; _triField=null;
+  _lithField=null; _soilField=null; _waterField=null; _landformF=null; _seasonsReady=false; _resourcePots=null; _carryCapField=null; _settleSuitField=null; _wildlife=null; _nppField=null; _triField=null;
   _boundaryGraph=null; _oroPrev=null; _aoField=null; _crestField=null; _seaH=null; _seaShade=null;
   if(typeof lodCacheClear==='function') lodCacheClear();
   renderNow(); hideBusy();
@@ -1873,7 +1882,7 @@ async function generate(){
   if(riverMask){ riverMask.fill(0); _riverAny=false; }                       // v0.077: new world ⇒ no locked rivers
   _veloVx=_veloVy=_veloWater=null;                                            // v0.112: velocity-erosion field is stale once terrain is rebuilt
   _cartBiome=null; _cartTerrain=null; _waterBody=null; lakeMask=null; _biomeRaster=null;        // v0.078/0.102/0.103: invalidate auto-filled biome/terrain-paint PoCs + water bodies; v0.130: cached biome raster; deposited lakes don't survive a regenerate (terrain rebuilt)
-  _lithField=null; _soilField=null; _waterField=null;                        // v0.104: affordance fields stale on regenerate
+  _lithField=null; _soilField=null; _waterField=null; _landformF=null; _seasonsReady=false;                        // v0.104: affordance fields stale on regenerate
   _resourcePots=null; _carryCapField=null; _settleSuitField=null; _wildlife=null; _nppField=null; _triField=null;             // v0.105: resource/carry/settle stale too
   refreshGeoid();                                                            // G2: rebuild (or clear) the sea-level offset for current res/seed/planet
   generateContinentalityField();
@@ -2983,7 +2992,7 @@ function clearRoads(){ state.roads=null; renderNow(); }
 function clearPlaces(){ state.places=[]; state.roads=null; renderNow(); }
 function computeFlow(useRain){
   _riverNet=null; _waterBody=null; _cartBiome=null; _cartTerrain=null;   // flow/field changed → Strahler river network + water-body + cart PoCs stale
-  _lithField=null; _soilField=null; _waterField=null; _fjordMask=null; _biomeRaster=null;   // v0.104: lithology(rain)/soil/water-access stale when flow/climate changes; v0.120: fjord mask; v0.130: cached biome raster too
+  _lithField=null; _soilField=null; _waterField=null; _landformF=null; _seasonsReady=false; _fjordMask=null; _biomeRaster=null;   // v0.104: lithology(rain)/soil/water-access stale when flow/climate changes; v0.120: fjord mask; v0.130: cached biome raster too
   _resourcePots=null; _carryCapField=null; _settleSuitField=null; _wildlife=null; _nppField=null; _triField=null;           // v0.105
   const n=GW*GH, order=new Array(n); for(let i=0;i<n;i++) order[i]=i;
   order.sort((a,b)=>field[b]-field[a]);
@@ -4050,7 +4059,7 @@ function inferTectonics(){
   volcanicField=stampVolcanicArcs(boundaryType, W, H, {});
   inferPlateVelocities();
   _boundaryGraph=null; _oroPrev=null;                               // T1/T2 caches stale
-  _lithField=null; _soilField=null; _waterField=null;              // affordance caches stale
+  _lithField=null; _soilField=null; _waterField=null; _landformF=null; _seasonsReady=false;              // affordance caches stale
   _resourcePots=null; _carryCapField=null; _settleSuitField=null; _wildlife=null; _nppField=null; _triField=null;
   _cartBiome=null; _cartTerrain=null;
   _tectInverted=true;
@@ -4529,7 +4538,7 @@ function bioJitter(x,y){
     ? 0.6*vnoise(x/GW*44,y/GW*44,31)+0.4*vnoise(x/GW*150,y/GW*150,33)
     : vnoise(x/GW*40,y/GW*40,31);
 }
-function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py,ao,ecoK,gx,gy){
+function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,px,py,ao,ecoK,gx,gy,lith){
   /* noise-jitter the climate driving material edges → organic ecotone boundaries.
      ecoK (v0.096, default 1 ⇒ bit-identical) widens the jitter near biome boundaries for an
      SDF-distance-proportional ecotone — the engine passes >1 only when state.viz.sdfBiomes is on. */
@@ -4583,6 +4592,48 @@ function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,p
   const rsK=(state.viz&&state.viz.rockSlope>0)?state.viz.rockSlope:0;
   if(rsK>0 && r>0){ const gr=Math.pow(Math.min(1,slope/0.08),1.5)*rsK; if(gr>0) col=mix(col, rockCol(Te,Me,r,t), clamp01(gr)); }
 
+  /* R5 wetness rendering (rendering-modernization §6): darken + cool land where water persistently
+     accumulates — high TWI (ln(area/slope), already threaded through every render path) marks valley
+     bottoms, seeps and saturated soils. Material-space (before the hillshade) so lighting stays honest.
+     Gated on state.viz.wetness; default 0 ⇒ skipped ⇒ bit-identical. */
+  const wtK=(state.viz&&state.viz.wetness>0)?state.viz.wetness:0;
+  if(wtK>0 && r>0){ const wv=clamp01((twi+1)/4);   /* calibrated to the engine's TWI range — the wetland material itself ramps over twi≈−1..2 */
+    if(wv>0){ const dk=1-0.30*wtK*wv; col=[col[0]*dk*0.95, col[1]*dk, col[2]*dk*1.05]; } }
+
+  /* R5 geology material rendering (rendering-modernization §2/§7): where rock is exposed (steep ground
+     G^1.5 + bare high elevations), recolour by the LITHOLOGY under the cell with a per-material
+     procedural microtexture (§3) — granite speckle+fractures, basalt lava-field patchiness, andesite
+     ash + cinder darkening, limestone karst pitting, sandstone/shale strata bands (layered by
+     elevation), metamorphic folded gneiss banding — so mountain ranges read geological rather than
+     painted; the biome/climate mix stays the base everywhere vegetation covers the ground. Snow-covered
+     cells keep their snow. Evaluated in world coords (px,py) ⇒ seamless across tiles/bakes. Gated on
+     state.viz.geology (lith undefined or slider 0 ⇒ skipped ⇒ bit-identical). */
+  const geoK=(state.viz&&state.viz.geology>0&&lith!==undefined)?state.viz.geology:0;
+  if(geoK>0 && r>0 && px!==undefined){
+    const gr2=Math.pow(Math.min(1,slope/0.08),1.5);
+    const expo=clamp01(gr2*0.85+smoothstep(0.5,0.8,r)*0.45)*(1-w.snow);
+    if(expo>0.02){
+      const fx=px/(GW||1), fy=py/(GW||1);
+      let mc, mt=0;
+      switch(lith){
+        case 0: mc=[176,158,148]; mt=(vnoise(fx*420,fy*420,211)-0.5)*0.22+(ridgedFbm(fx*40,fy*40,4,213)-0.5)*0.12; break;   /* granite: mineral speckle + fracture creases */
+        case 1: mc=[70,72,80];    mt=(fbm(fx*26,fy*26,217)-0.5)*0.20; break;                                                /* basalt: broad lava-field patchiness */
+        case 2: mc=[108,96,88];   mt=(vnoise(fx*300,fy*300,219)-0.5)*0.16-smoothstep(0.6,0.95,fbm(fx*18,fy*18,221))*0.18; break;   /* andesite: volcanic ash + cinder darkening */
+        case 3: mc=[206,198,168]; mt=-smoothstep(0.72,0.95,vnoise(fx*240,fy*240,223))*0.25; break;                          /* limestone: pale karst pitting */
+        case 4: mc=[196,168,120]; mt=Math.sin(r*90+fbm(fx*30,fy*30,227)*6)*0.13; break;                                     /* sandstone: warm strata bands layered by elevation */
+        case 5: mc=[128,130,118]; mt=Math.sin(r*160+fbm(fx*36,fy*36,229)*4)*0.08; break;                                    /* shale: thin dense strata */
+        default: mc=[150,128,150]; mt=Math.sin(fx*70+fbm(fx*12,fy*12,233)*9)*0.12; break;                                   /* metamorphic: folded gneiss banding */
+      }
+      col=mix(col,[mc[0]*(1+mt),mc[1]*(1+mt),mc[2]*(1+mt)],Math.min(0.85,geoK*expo));
+    }
+    /* landform treatment — dune ripples (§4/§7): gentle sandy ground gets wind-ripple banding */
+    if(w.sand>0.4 && slope<0.03){
+      const fx=px/(GW||1), fy=py/(GW||1);
+      const rip=Math.sin(px*0.55+py*0.25+fbm(fx*22,fy*22,235)*8)*0.5+0.5;
+      const dk=1-geoK*w.sand*0.12*rip; col=[col[0]*dk,col[1]*dk,col[2]*dk];
+    }
+  }
+
   /* tan coastal rim */
   const beachT=smoothstep(0.03,0,r)*0.6; if(beachT>0){ const bc=ramp3(Te>22?SAND_TROP:SAND_BEACH,t); col=mix(col,bc,beachT); }
 
@@ -4618,6 +4669,14 @@ function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,p
   let lit=[col[0]*light,col[1]*light,col[2]*light];
   if(blend<1){ const grey=185*light; lit=mix([grey,grey,grey],lit,blend); }
 
+  /* R5 curvature shading (rendering-modernization §1/§6): brighten convex ridges, darken concave
+     valleys — a sun-independent lighting cue from the Laplacian (already threaded to every render
+     path), complementing AO (broad basins) with sharp local landform relief. Gated on
+     state.viz.curveShade; default 0 ⇒ skipped ⇒ bit-identical. */
+  const cvK=(state.viz&&state.viz.curveShade>0&&r>0)?state.viz.curveShade:0;
+  if(cvK>0){ const cc=Math.max(-1,Math.min(1,-curv*90));
+    const m=1+cvK*0.28*cc; lit=[lit[0]*m,lit[1]*m,lit[2]*m]; }
+
   /* atmospheric perspective (doc §13): fade to sky-blue toward map edge */
   if(px!==undefined){
     const dx=px/(GW||1)-0.5, dy=py/(GH||1)-0.5;
@@ -4637,7 +4696,7 @@ function landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,blend,vig,p
       const bloom=Math.min(1,Math.abs(curv)*40)*wcK*0.25;
       if(bloom>0) lit=[lit[0]*(1-bloom*0.40),lit[1]*(1-bloom*0.35),lit[2]*(1-bloom*0.30)]; }
     const cnK=viz.contours>0?viz.contours:0;                /* D-contours: constant-(map)-width elevation isolines, every Nth an index line */
-    if(cnK>0){ const iv=0.05, fpos=r/iv, d=Math.abs(fpos-Math.round(fpos))*iv;
+    if(cnK>0){ const iv=(viz.contourM>=5)?Math.min(0.2,Math.max(0.001,viz.contourM/(state.peakM||4000))):0.05, fpos=r/iv, d=Math.abs(fpos-Math.round(fpos))*iv;   /* R5: metre-based interval (5–50 m via peak altitude); 0 ⇒ legacy 0.05 ⇒ bit-identical */
       const cw=Math.max(iv*0.04, slope*0.5); let t=1-Math.min(1,d/cw); t*=t;
       if(t>0){ const idxLine=(((Math.round(fpos))%5)===0)?1.4:1.0, a=Math.min(0.9,cnK*0.55*t*idxLine);
         lit=[lit[0]*(1-a),lit[1]*(1-a),lit[2]*(1-a)]; } }
@@ -4729,6 +4788,91 @@ function buildCrestField(fld, W, H, sea, sx, sy){
 }
 /* apply a crest highlight (thin bright sunlit-rock stroke) to a colour in place; s already folded with the slider */
 function applyCrest(c, s){ if(s>0){ const k=s>1?1:s; c[0]=c[0]*(1-k)+240*k; c[1]=c[1]*(1-k)+238*k; c[2]=c[2]*(1-k)+232*k; } return c; }
+
+/* ===== R5 terrain-lighting fields (rendering-modernization §1/§5/§6) ======================== */
+/* Sky View Factor: fraction of the sky hemisphere visible from each cell — enclosed valleys and
+   gorge floors receive less diffuse skylight than open ridgetops (Zakšek et al. 2011, algorithm
+   studied, no code copied). 8 azimuths × log-spaced distance samples find each direction's horizon
+   angle; SVF = 1 − mean(sin θ_horizon). Returns a per-cell brightness MULTIPLIER (like buildAOField):
+   1 on open ground, down to 1−SVF_MAX·k in fully enclosed terrain. Pure (fld,W,H in, field out). */
+const SVF_MAX=0.55, SVF_RELK_DIV=6;
+function buildSVFField(fld,W,H,k){
+  const out=new Float32Array(W*H), relK=W/SVF_RELK_DIV;
+  const DIRS=8, dcos=[],dsin=[]; for(let d=0;d<DIRS;d++){ const a=d*Math.PI*2/DIRS; dcos.push(Math.cos(a)); dsin.push(Math.sin(a)); }
+  const DIST=[2,4,8,16,32,64];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x, h=fld[i];
+    let sum=0;
+    for(let d=0;d<DIRS;d++){
+      let maxS=0;
+      for(const st of DIST){
+        const nx=Math.round(x+dcos[d]*st), ny=Math.round(y+dsin[d]*st);
+        if(nx<0||nx>=W||ny<0||ny>=H) break;
+        const dh=fld[ny*W+nx]-h; if(dh<=0) continue;
+        const s=(dh*relK)/st; if(s>maxS) maxS=s;                 // tan of the horizon angle
+      }
+      sum+=maxS/Math.hypot(1,maxS);                              // sin θ from tan θ
+    }
+    const svf=1-sum/DIRS;                                        // 1 = open sky, →0 enclosed
+    out[i]=1-Math.min(1,k)*SVF_MAX*(1-svf);
+  }
+  return out;
+}
+/* Horizon (cast) shadows: march each cell toward the sun; terrain that rises above the sun ray
+   shadows it — long soft distance-field shadows off major mountain systems (§5/§6). Returns a
+   multiplier field (1 = lit, down to 1−SHADOW_MAX·k in full shadow). Pure. */
+const SHADOW_MAX=0.45;
+function buildSunShadowField(fld,W,H,azDeg,altDeg,k){
+  const out=new Float32Array(W*H), relK=W/SVF_RELK_DIV;
+  const az=azDeg*Math.PI/180, dx=Math.sin(az), dy=-Math.cos(az);       // toward the sun (same convention as shadeFactor's light vector)
+  const tanAlt=Math.tan(altDeg*Math.PI/180);
+  const DIST=[2,3,5,8,12,18,27,40,60,90];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x, h=fld[i];
+    let block=0;
+    for(const st of DIST){
+      const nx=Math.round(x+dx*st), ny=Math.round(y+dy*st);
+      if(nx<0||nx>=W||ny<0||ny>=H) break;
+      const dh=fld[ny*W+nx]-h; if(dh<=0) continue;
+      const s=(dh*relK)/st, over=s-tanAlt;                             // how far above the sun ray the blocker rises
+      if(over>block) block=over;
+    }
+    out[i]=1-Math.min(1,k)*SHADOW_MAX*smoothstep(0,0.25,block);        // soft penumbra
+  }
+  return out;
+}
+/* ===== R5 landform classification (rendering-modernization §4/§7) =========================== */
+/* Morphometric classification of distinct landforms from fields the simulation already produces
+   (slope, elevation, curvature, temperature, moisture, discharge) — cliffs, mesas, cirques, dunes,
+   badlands, floodplains. First-match-wins priority (steep forms outrank climatic ones). Pure
+   (amplifyRegion mold; resolution-independent thresholds via slope·W). The classified raster feeds
+   the Landforms debug view; the RENDER treatment for the classes lives in the geology/materials
+   pass (dune ripples, strata, karst) + curvature/wetness shading, which act on the same signals. */
+const LANDFORM_KEYS=['none','cliff','mesa','cirque','dune','badlands','floodplain'];   // frozen append-only
+const LANDFORM_COLS=[[30,32,38],[200,60,50],[220,150,60],[130,190,230],[235,205,120],[170,110,80],[110,180,110]];
+function buildLandformField(fld,temp,rain,flow,W,H,sea){
+  const out=new Uint8Array(W*H), flowHi=W*H*0.0004;
+  const sn=new Float32Array(W*H);                                   // slope in height-units·W (resolution-independent)
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x;
+    const L=fld[y*W+(x>0?x-1:x)],R=fld[y*W+(x<W-1?x+1:x)],U=fld[(y>0?y-1:y)*W+x],D=fld[(y<H-1?y+1:y)*W+x];
+    sn[i]=Math.hypot((R-L)*0.5,(D-U)*0.5)*W; }
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){ const i=y*W+x, h=fld[i];
+    if(h<sea) continue;
+    const r=(1-sea)<=0?0:(h-sea)/(1-sea), T=temp?temp[i]:15, M=rain?rain[i]:0.4;
+    const L=fld[y*W+(x>0?x-1:x)],R=fld[y*W+(x<W-1?x+1:x)],U=fld[(y>0?y-1:y)*W+x],D=fld[(y<H-1?y+1:y)*W+x];
+    const curv=(L+R+U+D-4*h)*W;                                     // Laplacian, resolution-scaled
+    let mx=0; for(let dy2=-2;dy2<=2;dy2++)for(let dx2=-2;dx2<=2;dx2++){ const xx=x+dx2,yy=y+dy2;
+      if(xx<0||xx>=W||yy<0||yy>=H) continue; const v=sn[yy*W+xx]; if(v>mx) mx=v; }
+    if(sn[i]>4.5) out[i]=1;                                                       // cliff: very steep face
+    else if(sn[i]<0.8&&r>0.45&&mx>3.5) out[i]=2;                                  // mesa: flat cap ringed by steep breaks
+    else if(r>0.55&&curv>0.9&&T<2) out[i]=3;                                      // cirque: high, cold, strongly concave hollow
+    else if(T>18&&M<0.12&&sn[i]>0.3&&sn[i]<2.5&&r<0.5) out[i]=4;                  // dune: hot arid rolling sand country
+    else if(M<0.22&&sn[i]>1.4&&r<0.55&&mx>2.2) out[i]=5;                          // badlands: dry, densely dissected slopes
+    else if(sn[i]<0.5&&r<0.35&&flow&&(()=>{ for(let dy2=-1;dy2<=1;dy2++)for(let dx2=-1;dx2<=1;dx2++){ const xx=x+dx2,yy=y+dy2;
+      if(xx<0||xx>=W||yy<0||yy>=H) continue; if(flow[yy*W+xx]>flowHi) return true; } return false; })()) out[i]=6;   // floodplain: flat low valley floor beside a trunk channel
+  }
+  return out;
+}
+let _landformF=null;   // cached; cleared with the affordance caches; built lazily by the Landforms debug view
+function currentLandform(){ if(!_landformF) _landformF=buildLandformField(field,tempField,rainField,flowField,GW,GH,state.seaLevel); return _landformF; }
 /* v0.065: hillshade computed from the SMOOTHED sea floor (same lighting as shadeFactor). v0.063 smoothed
    the depth the water colour reads, but the water hillshade still lit the raw, bumpy seabed — that residual
    per-cell shading is what kept the seas reading "busy". Shading the broad bathymetry instead matches the
@@ -4768,7 +4912,13 @@ function applyCoastRiverSDFv(c,coastv,riverv){
 }
 function surfaceColor(x,y,i,vw){
   const h=vw!=null?vw:field[i];                                  /* G2: height relative to local sea level */
-  const T=tempField[i], M=rainField[i], r=(1-state.seaLevel)<=0?0:(h-state.seaLevel)/(1-state.seaLevel);
+  let T=tempField[i], M=rainField[i];
+  /* R5 seasonal rendering (§6): blend the RENDERER's climate inputs toward July (+) or January (−)
+     when the W3 seasonal fields exist — snowlines migrate and vegetation dries/greens through the
+     material mix, simulation untouched. _seasonK=0 (default) ⇒ annual fields ⇒ bit-identical. */
+  if(_seasonK){ const f=Math.abs(_seasonK), TT=_seasonK>0?tempJulField:tempJanField, RR=_seasonK>0?rainJulField:rainJanField;
+    if(TT&&RR){ T=T*(1-f)+TT[i]*f; M=M*(1-f)+RR[i]*f; } }
+  const r=(1-state.seaLevel)<=0?0:(h-state.seaLevel)/(1-state.seaLevel);
   const sl=slopeAt(x,y);
   /* TWI = ln(a / tan β) — drainage area over slope angle (doc §11) */
   const a=Math.max(1e-4,flowField[i]/(GW*GH)), beta=Math.max(0.002,sl);
@@ -4782,8 +4932,9 @@ function surfaceColor(x,y,i,vw){
      the v0.068 sea bug). Now map-relative (×96/GW = resolution-independent) and lower frequency (~5-cell
      coherent grain instead of ~2-cell white noise) ⇒ ~3× less palette-ramp grain, smoother mountain slopes,
      same texture character, constant at any resolution. */
+  const aoC=(_aoField?_aoField[i]:1)*(_svfField?_svfField[i]:1)*(_shadowField?_shadowField[i]:1);   /* R5: AO × sky-view × cast shadows (each null when off ⇒ 1) */
   const c=landColorCore(T,M,sl,r, vnoise(x*0.06,y*0.06,11),vnoise(x*96/GW,y*96/GW,23),bioJitter(x,y),
-    macroShade(x,y), shadeFactor2(x,y), twi, asp, curv, state.bioBlend, vignetteAt(x,y), x, y, _aoField?_aoField[i]:1, sdfEcoKv(_biomeBD?_biomeBD[i]:null), hgx, hgy);
+    macroShade(x,y), shadeFactor2(x,y), twi, asp, curv, state.bioBlend, vignetteAt(x,y), x, y, aoC, sdfEcoKv(_biomeBD?_biomeBD[i]:null), hgx, hgy, _geoLith?_geoLith[i]:undefined);
   if(_crestField) applyCrest(c, _crestField[i]*state.viz.crest*0.7);   /* R2: thin bright ridge-crest strokes (null when off ⇒ skipped) */
   applyCoastRiverSDFv(c, _coastSDF?_coastSDF[i]:null, _riverSDF?_riverSDF[i]:null);   /* B2 coast bands + B3 river bands (null SDFs ⇒ no-op ⇒ bit-identical) */
   /* river overlay — Pillar 1 Strahler/Rosgen widths + Pillar 3 Beer–Lambert depth water (shallow reaches
@@ -5008,6 +5159,11 @@ function renderNow(){
   _seaShade=_seaH?seaShadeFrom(_seaH):null;   /* v0.065: hillshade the smoothed sea floor (broad relief, no seabed bumps) */
   _aoField=(mapView&&state.mode==='biome'&&state.viz&&state.viz.ao>0)?buildAOField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, state.viz.ao):null;   /* R1: ambient occlusion (off ⇒ null ⇒ ao=1) */
   _crestField=(mapView&&state.mode==='biome'&&state.viz&&state.viz.crest>0)?buildCrestField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.seaLevel):null;   /* R2: ridge crests (off ⇒ null ⇒ no overlay) */
+  _svfField=(mapView&&state.mode==='biome'&&state.viz&&state.viz.svf>0)?buildSVFField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.viz.svf):null;   /* R5: sky view factor (off ⇒ null ⇒ 1) */
+  _shadowField=(mapView&&state.mode==='biome'&&state.viz&&state.viz.shadows>0)?buildSunShadowField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.sunAz, 20, state.viz.shadows):null;   /* R5: horizon cast shadows (off ⇒ null ⇒ 1) */
+  _geoLith=(mapView&&state.mode==='biome'&&state.viz&&state.viz.geology>0)?currentLithology():null;   /* R5: geology materials (off ⇒ null ⇒ lith undefined ⇒ skipped) */
+  _seasonK=(mapView&&state.mode==='biome'&&state.viz&&state.viz.season&&state.climate.seasons)?state.viz.season:0;   /* R5: seasonal render blend (needs W3 seasons on) */
+  if(_seasonK&&!_seasonsReady){ try{ computeSeasons(); _seasonsReady=true; }catch(_){ _seasonK=0; } }
   const coastD=wavesOn?computeCoastDistance(effFld,GW,GH,state.seaLevel):null;
   const waveDist=(state.viz&&state.viz.waveDist>0)?state.viz.waveDist:1;   /* v0.132: how far foam reaches offshore (1 = legacy, bit-identical) */
   const WAVE_BAND=Math.max(8,GW/40)*waveDist, WAVE_PER=Math.max(2.5,GW/180);
@@ -5021,6 +5177,7 @@ function renderNow(){
   let _cartDbg=null; if(dbg==='bclass') _cartDbg=currentCartBiome();                        /* v0.138: unified Biomes view = auto-filled Cartalith paint grid (merge target) */
   let _terrDbg=null, _terrWB=null; if(dbg==='cterrain'){ _terrDbg=currentCartTerrain(); _terrWB=currentWaterBodies(); }   /* v0.102/0.103: terrain PoC + water bodies (lakes shown lighter) */
   let _lithDbg=null; if(dbg==='lith') _lithDbg=currentLithology();                         /* v0.104: rock-type field */
+  let _lfDbg=null; if(dbg==='landform') _lfDbg=currentLandform();                          /* R5: morphometric landform classes */
   let _fjordDbg=null; if(dbg==='fjord') _fjordDbg=currentFjordMask();                       /* v0.120: fjord-probability mask */
   let _soilDbg=null; if(dbg==='soil') _soilDbg=currentSoil();                               /* v0.104: soil fertility */
   let _waterDbg=null; if(dbg==='water') _waterDbg=currentWaterAccess();                     /* v0.104: hydrological access */
@@ -5048,6 +5205,8 @@ function renderNow(){
       if(isWater(vw)){ const u=Math.min(1,_tideDbg.f[i]/_tideDbg.max); r=20+u*215; g=70+u*100; b=150-u*120; } else { r=32;g=35;b=40; } }
     else if(dbg==='cterrain'){ const t=_terrDbg[i]; if(t===0){ if(_terrWB[i]===2){ r=78;g=132;b=190; } else { r=30;g=70;b=110; } } else { const c=CART_TERRAIN_COLS[t-1]; r=c[0];g=c[1];b=c[2]; } }   /* v0.102/0.103: terrain PoC; lakes (wb=2) lighter than sea */
     else if(dbg==='lith'){ if(isWater(vw)){ r=20;g=26;b=40; } else { const c=LITH_COLS[_lithDbg[i]]; r=c[0];g=c[1];b=c[2]; } }   /* v0.104: rock type */
+    else if(dbg==='landform'){ if(isWater(vw)){ r=20;g=26;b=40; } else { const lf=_lfDbg[i], s=0.35+0.65*shadeFactor(x,y);
+      if(lf===0){ r=44*s;g=48*s;b=54*s; } else { const c=LANDFORM_COLS[lf]; r=c[0]*s;g=c[1]*s;b=c[2]*s; } } }   /* R5: landform classes over hillshade */
     else if(dbg==='fjord'){ if(isWater(vw)){ r=18;g=34;b=58; } else { const m=_fjordDbg[i]; if(m>0.02){ const t=Math.min(1,m); r=20+40*t; g=120+80*t; b=190+50*t; } else { const s=0.32+0.30*shadeFactor(x,y),cc=v*235*s; r=cc*0.9;g=cc*0.93;b=cc; } } }   /* v0.120: fjord probability (cyan = cold·steep·crystalline coast) over dim terrain */
     else if(dbg==='bclass'){ const c=CART_BIOME_COLS[(_cartDbg[i]||15)-1]; r=c[0];g=c[1];b=c[2]; }   /* v0.138: unified Biomes view — the Cartalith 15-biome paint grid (buildCartBiome: climate + elevation overrides + lake/ocean), the merge target */
     else if(dbg==='soil'){ if(isWater(vw)){ r=18;g=34;b=64; } else { const u=_soilDbg[i]; r=70+u*30; g=66+u*124; b=48+u*42; } }   /* v0.104: pale → rich green = fertile */
@@ -5727,6 +5886,7 @@ function updateLegend(){
   if(state.debug==='tides'){ el.innerHTML=`${sw([235,170,30])}large tidal range · coastal shelf<br>${sw([20,70,150])}small range · open ocean<br><span style="opacity:.7">land = dark · requires Tides on</span>`; return; }
   if(state.debug==='cterrain'){ el.innerHTML=`Cartalith terrain-paint grid<br>${sw(CART_TERRAIN_COLS[7])}mountain pass<br>${sw(CART_TERRAIN_COLS[6])}rocky terrain<br>${sw(CART_TERRAIN_COLS[5])}hills<br>${sw(CART_TERRAIN_COLS[3])}open plains<br>${sw(CART_TERRAIN_COLS[9])}swamp / marsh<br>${sw([78,132,190])}lake<br>${sw([30,70,110])}ocean`; return; }   /* v0.116: "ocean" (was "sea") to match the CBiome legend + biome/Cartalith category labels (canonical: ocean = open water body · lake = inland · "sea level" = the datum) */
   if(state.debug==='lith'){ el.innerHTML=`Lithology (rock type)<br>${sw(LITH_COLS[0])}granite / shield<br>${sw(LITH_COLS[1])}basalt (oceanic)<br>${sw(LITH_COLS[2])}andesite (arc)<br>${sw(LITH_COLS[3])}limestone<br>${sw(LITH_COLS[4])}sandstone<br>${sw(LITH_COLS[5])}shale<br>${sw(LITH_COLS[6])}metamorphic`; return; }
+  if(state.debug==='landform'){ el.innerHTML=`Landform classes (morphometric)<br>${sw(LANDFORM_COLS[1])}cliff<br>${sw(LANDFORM_COLS[2])}mesa / caprock<br>${sw(LANDFORM_COLS[3])}cirque<br>${sw(LANDFORM_COLS[4])}dunes<br>${sw(LANDFORM_COLS[5])}badlands<br>${sw(LANDFORM_COLS[6])}floodplain<br><span style="opacity:.7">slope · relief · curvature · climate · discharge<br>render treatment rides the <b>Geology materials</b> slider</span>`; return; }
   if(state.debug==='soil'){ el.innerHTML=`Soil fertility<br>${sw([100,190,90])}fertile<br>${sw([85,130,70])}moderate<br>${sw([70,70,50])}poor<br><span style="opacity:.7">climate × lithology × moisture / slope</span>`; return; }
   if(state.debug==='water'){ el.innerHTML=`Water access<br>${sw([50,140,220])}near rivers / coast<br>${sw([200,200,160])}dry interior<br><span style="opacity:.7">exp. decay from surface water</span>`; return; }
   if(state.debug==='rsrc'){ el.innerHTML=`Resource potentials (highest at cell)<br>${sw(RESOURCE_COLS[0])}Copper — subduction/arc zones<br>${sw(RESOURCE_COLS[1])}Tin — old granite shields<br>${sw(RESOURCE_COLS[2])}Iron — cratons / bog iron<br>${sw(RESOURCE_COLS[3])}Gold — transform faults + shear<br>${sw(RESOURCE_COLS[4])}Salt — arid evaporite basins<br>${sw(RESOURCE_COLS[5])}Timber — closed-canopy forest`; return; }
@@ -6839,6 +6999,7 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
   const lakeWB=(state.mode==='biome'&&state.viz&&state.viz.showLakes!==false)?currentWaterBodies():null;   // v0.103: coarse water-body lake mask, sampled (nearest) per tile pixel at world coords
   const aoK=(state.viz&&state.viz.ao>0)?state.viz.ao:0;                      // R1: local AO from the tile's own heightmap
   let aoB=null; if(aoK>0){ const rad=Math.max(2,(Math.min(W,H)/24)|0); aoB=tile.slice(); const tmp=new Float32Array(W*H); for(let p=0;p<2;p++){ boxH(aoB,tmp,W,H,rad,false); boxV(tmp,aoB,W,H,rad); } }
+  const geoT=(state.viz&&state.viz.geology>0)?currentLithology():null;       // R5: geology materials in tiles — coarse lith sampled (nearest) at world coords
   const crestK=(state.viz&&state.viz.crest>0)?state.viz.crest:0;             // R2: local ridge crests from the tile's own heightmap (coarse-scaled by cx,cy)
   const crestB=crestK>0?buildCrestField(tile,W,H,sl,cx,cy):null;
   const coastK=(state.viz&&state.viz.sdfCoast>0)?state.viz.sdfCoast:0;       // v0.096 B5: local coast SDF from the tile → constant-width coastlines at any zoom (reverse-mipmap)
@@ -6889,7 +7050,8 @@ function renderBiomeTileRGBA(tile,W,H,bounds){
       const ao=aoB?aoMul(aoB[i]-h,aoK):1;
       const ecoKt=biomeBD?sdfEcoKv(biomeBD[i]*cx):1;                          // B4 in tiles: tile-px → coarse-cell units for sdfEcoKv (off ⇒ 1 ⇒ unchanged)
       let hgx=0,hgy=0; if(state.viz&&state.viz.hachure>0){ hgx=(R-L)/(2*cx); hgy=(D-U)/(2*cy); }   /* v0.108 hachure: world-space ∇ (coarse-cell units, matches main map) */
-      const c=landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,state.bioBlend,vig,wx,wy,ao,ecoKt,hgx,hgy);
+      const lithT=geoT?geoT[Math.min(GH-1,Math.max(0,Math.round(wy)))*GW+Math.min(GW-1,Math.max(0,Math.round(wx)))]:undefined;
+      const c=landColorCore(T,M,slope,r,nLow,nHi,nBio,sh,shM,twi,asp,curv,state.bioBlend,vig,wx,wy,ao,ecoKt,hgx,hgy,lithT);
       if(crestB) applyCrest(c, crestB[i]*crestK*0.7);                          // R2: ridge crests on the tile
       /* B5 coast + B3 river bands via the shared helper — tile-px SDFs scaled to coarse cells (×cx) so the
          band widths read identically to the main map (din=-coastv/(GW/256) ≡ the old -coastB·cx·256/GW). */
@@ -6973,6 +7135,11 @@ function buildGridFields(){ gridSlope=new Float32Array(GW*GH); gridShade=new Flo
   _seaH=smoothSeaH(field); _seaShade=seaShadeFrom(_seaH);   /* v0.063/v0.065: smoothed bathymetry + its hillshade so PNG bakes match the screen seas */
   _aoField=(state.mode==='biome'&&state.viz&&state.viz.ao>0)?buildAOField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, state.viz.ao):null;   /* R1: bake AO consistently with the on-screen biome map */
   _crestField=(state.mode==='biome'&&state.viz&&state.viz.crest>0)?buildCrestField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.seaLevel):null;   /* R2: bake ridge crests consistently */
+  _svfField=(state.mode==='biome'&&state.viz&&state.viz.svf>0)?buildSVFField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.viz.svf):null;   /* R5: bake SVF consistently */
+  _shadowField=(state.mode==='biome'&&state.viz&&state.viz.shadows>0)?buildSunShadowField(geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field, GW, GH, state.sunAz, 20, state.viz.shadows):null;   /* R5: bake cast shadows consistently */
+  _geoLith=(state.mode==='biome'&&state.viz&&state.viz.geology>0)?currentLithology():null;   /* R5: bake geology materials consistently */
+  _seasonK=(state.mode==='biome'&&state.viz&&state.viz.season&&state.climate.seasons)?state.viz.season:0;
+  if(_seasonK&&!_seasonsReady){ try{ computeSeasons(); _seasonsReady=true; }catch(_){ _seasonK=0; } }
   /* v0.097: build SDF control fields for bakes too (mirrors the renderNow prologue, gated identically; off ⇒ null ⇒ bake unchanged) */
   { const sdfOn=(state.mode==='biome'&&state.viz), eff=geoidField?(()=>{ const a=new Float32Array(GW*GH); for(let i=0;i<a.length;i++)a[i]=field[i]-geoidField[i]; return a; })():field;
     _coastSDF=(sdfOn&&state.viz.sdfCoast>0)?buildCoastSDF(eff,GW,GH,state.seaLevel,{euclid:true}):null;
@@ -6980,7 +7147,10 @@ function buildGridFields(){ gridSlope=new Float32Array(GW*GH); gridShade=new Flo
     _biomeBD =(sdfOn&&state.viz.sdfBiomes>0)?buildBiomeBoundaryDist(buildBiomeRaster(),GW,GH,{euclid:true}):null; }
   for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){ const i=y*GW+x; gridSlope[i]=slopeAt(x,y); gridShade[i]=macroShade(x,y); gridShadeMeso[i]=shadeFactor2(x,y); } }
 function bakePixel(gx,gy){
-  const h=sampleArr(field,gx,gy), T=sampleArr(tempField,gx,gy), M=sampleArr(rainField,gx,gy);
+  const h=sampleArr(field,gx,gy);
+  let T=sampleArr(tempField,gx,gy), M=sampleArr(rainField,gx,gy);
+  if(_seasonK){ const f=Math.abs(_seasonK), TT=_seasonK>0?tempJulField:tempJanField, RR=_seasonK>0?rainJulField:rainJanField;
+    if(TT&&RR){ T=T*(1-f)+sampleArr(TT,gx,gy)*f; M=M*(1-f)+sampleArr(RR,gx,gy)*f; } }   /* R5 seasonal render blend — bakes match the screen */
   const sl=sampleArr(gridSlope,gx,gy), shd=sampleArr(gridShade,gx,gy), shdM=sampleArr(gridShadeMeso,gx,gy);
   const fl=sampleArr(flowField,gx,gy);
   const nLow=vnoise(gx*0.06,gy*0.06,11), nHi=vnoise(gx*96/GW,gy*96/GW,23), nBio=bioJitter(gx,gy), vig=vignetteAt(gx,gy);   /* v0.142: map-relative low-freq grain (matches surfaceColor) */
@@ -6990,7 +7160,9 @@ function bakePixel(gx,gy){
   const a=Math.max(1e-4,fl/(GW*GH)), beta=Math.max(0.002,sl), twi=Math.log(a/beta);
   const asp=aspectFactor(Math.round(gx),Math.round(gy)), curv=curvatureAt(Math.round(gx),Math.round(gy));
   let hgx=0,hgy=0; if(state.viz&&state.viz.hachure>0){ hgx=(sampleArr(field,gx+1,gy)-sampleArr(field,gx-1,gy))*0.5; hgy=(sampleArr(field,gx,gy+1)-sampleArr(field,gx,gy-1))*0.5; }   /* v0.108 hachure */
-  const c=landColorCore(T,M,sl,r,nLow,nHi,nBio,shd,shdM,twi,asp,curv,state.bioBlend,vig,gx,gy,_aoField?sampleArr(_aoField,gx,gy):1,sdfEcoKv(_biomeBD?sampleArr(_biomeBD,gx,gy):null),hgx,hgy);
+  const aoC=(_aoField?sampleArr(_aoField,gx,gy):1)*(_svfField?sampleArr(_svfField,gx,gy):1)*(_shadowField?sampleArr(_shadowField,gx,gy):1);   /* R5: AO × SVF × cast shadows */
+  const lithB=_geoLith?_geoLith[Math.min(GH-1,Math.max(0,Math.round(gy)))*GW+Math.min(GW-1,Math.max(0,Math.round(gx)))]:undefined;
+  const c=landColorCore(T,M,sl,r,nLow,nHi,nBio,shd,shdM,twi,asp,curv,state.bioBlend,vig,gx,gy,aoC,sdfEcoKv(_biomeBD?sampleArr(_biomeBD,gx,gy):null),hgx,hgy,lithB);
   if(_crestField) applyCrest(c, sampleArr(_crestField,gx,gy)*state.viz.crest*0.7);   /* R2: bake ridge crests */
   applyCoastRiverSDFv(c, _coastSDF?sampleArr(_coastSDF,gx,gy):null, _riverSDF?sampleArr(_riverSDF,gx,gy):null);   /* v0.097: bake SDF coast/river bands to match the screen */
   return c;
@@ -7041,6 +7213,11 @@ let _lakeWB = null;              // v0.103: water-body classification used to re
 let _seaH = null;                // v0.063: smoothed sea-floor height for water shading (render-only; null ⇒ seaColor falls back to raw field)
 let _seaShade = null;            // v0.065: hillshade of the smoothed sea floor (null ⇒ seaColor falls back to raw shadeFactor)
 let _aoField = null;             // R1: per-cell ambient-occlusion multiplier for the biome map (null ⇒ ao=1, render unchanged)
+let _svfField = null;            // R5: per-cell sky-view-factor multiplier (null ⇒ 1, render unchanged)
+let _shadowField = null;         // R5: per-cell horizon cast-shadow multiplier (null ⇒ 1, render unchanged)
+let _geoLith = null;             // R5: lithology raster for the geology-materials render (null ⇒ lith undefined ⇒ skipped)
+let _seasonK = 0;                // R5: seasonal render blend, −1 (January) … +1 (July); 0 ⇒ annual fields ⇒ bit-identical
+let _seasonsReady = false;       // R5: whether computeSeasons() has run for the current climate (cleared with the affordance caches)
 let _crestField = null;          // R2: per-cell ridge-crest strength [0,1] for the biome map (null ⇒ no crest overlay)
 let _coastSDF = null;            // v0.096: signed coast distance (cells; <0 inland, >0 offshore). null ⇒ off ⇒ render unchanged
 let _riverSDF = null;            // v0.096: signed river distance (cells; <0 in channel). null ⇒ off
@@ -7295,7 +7472,7 @@ async function exportZip(){
 }
 async function loadZip(file){ showBusy('loading…');
   try{ const z=unzipStore(await file.arrayBuffer()); if(!z['params.json']) throw new Error('not an Elevation Foundation save');
-    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); state.velo=Object.assign({iters:60,strength:0.5,meander:0.6},state.velo||{}); if(state.lodMaxLevel==null)state.lodMaxLevel=8; if(typeof state.lodAuto!=='boolean')state.lodAuto=true; if(!Array.isArray(state.places))state.places=[]; if(state.roads===undefined)state.roads=null; if(typeof state.showRivers!=='boolean')state.showRivers=true; if(typeof state.carveRivers!=='boolean')state.carveRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; if(state.debugOpacity==null)state.debugOpacity=1; state.viz=Object.assign({parchment:0,icons:false,waves:false,waveDist:1,zoomDetail:1,scaleBar:true,splat:0.7,sharpBiomes:true,showLakes:true,multiSun:false,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0,contours:0,ink:0,hachure:0,watercolor:0,cel:0,crosshatch:0,stipple:0,sepia:0,risograph:0,pointillism:0,waterAnim:false,riverDensity:1,minRiverOrder:1,civIconScale:1,civWayScale:1},state.viz||{}); delete state.viz.smoothRivers; delete state.viz.blueprint; if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.faultBlock==null)state.tect.faultBlock=0.6; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
+    const pk=JSON.parse(new TextDecoder().decode(z['params.json'])); GW=pk.GW; GH=pk.GH; Object.assign(state,pk.state); state.climate=Object.assign({windDir:0,evap:0.12,ocean:1.0,wIters:70,oceanHum:1.0},state.climate); if(state.climate.windMode==null)state.climate.windMode='manual'; if(state.climate.pressK==null)state.climate.pressK=0; if(state.climate.zonalK==null)state.climate.zonalK=1.0; if(state.climate.bulkEvap==null)state.climate.bulkEvap=false; if(state.climate.seasons==null)state.climate.seasons=false; if(state.climate.maxRainMm==null)state.climate.maxRainMm=3000; if(state.climate.currents==null)state.climate.currents=false; if(state.climate.currentK==null)state.climate.currentK=1.0; if(state.climate.albedo==null)state.climate.albedo=0; state.stream=Object.assign({uplift:0.0,deposit:0.3,climateK:0.5,cycles:5},state.stream); state.velo=Object.assign({iters:60,strength:0.5,meander:0.6},state.velo||{}); if(state.lodMaxLevel==null)state.lodMaxLevel=8; if(typeof state.lodAuto!=='boolean')state.lodAuto=true; if(!Array.isArray(state.places))state.places=[]; if(state.roads===undefined)state.roads=null; if(typeof state.showRivers!=='boolean')state.showRivers=true; if(typeof state.carveRivers!=='boolean')state.carveRivers=true; state.glacial=Object.assign({kg:0.15,mg:0.4,snowline:0.65,uFactor:0.6,passes:8},state.glacial||{}); state.coastal=Object.assign({waveStr:0.5,estuaryDepth:0.08,marshBand:0.03,passes:4},state.coastal||{}); state.planet=Object.assign({g:1.0,rotationHours:24,axialTiltDeg:23.4,radiusRel:1.0},state.planet||{}); state.planet.geoid=Object.assign({enabled:false,amp:0.015},state.planet.geoid||{}); state.planet.tides=Object.assign({enabled:false,k2:1.0,moons:[{massRel:1.0,distRel:1.0,phase:0}]},state.planet.tides||{}); state.world_structure=Object.assign({enabled:false,archetype:'earth',continentality:0.30,fragmentation:0.50,tectonicEnergy:0.60,oceanDepth:0.60,hotspotDensity:0.20},state.world_structure||{}); if(typeof state.world!=='boolean')state.world=false; if(state.debugOpacity==null)state.debugOpacity=1; state.viz=Object.assign({parchment:0,icons:false,waves:false,waveDist:1,zoomDetail:1,scaleBar:true,splat:0.7,sharpBiomes:true,showLakes:true,multiSun:false,ao:0,crest:0,rockSlope:0,texture:0,minorStreams:0,ridgedRelief:0,svf:0,shadows:0,curveShade:0,geology:0,wetness:0,season:0,contourM:0,sdfCoast:0,sdfRivers:0,sdfBiomes:0,contours:0,ink:0,hachure:0,watercolor:0,cel:0,crosshatch:0,stipple:0,sepia:0,risograph:0,pointillism:0,waterAnim:false,riverDensity:1,minRiverOrder:1,civIconScale:1,civWayScale:1},state.viz||{}); delete state.viz.smoothRivers; delete state.viz.blueprint; if(state.tect.tectonicGraph==null)state.tect.tectonicGraph=false; if(state.tect.foldIntensity==null)state.tect.foldIntensity=1.0; if(state.tect.trenchDepth==null)state.tect.trenchDepth=1.0; if(state.tect.faultBlock==null)state.tect.faultBlock=0.6; if(state.tect.dynamicLithology==null)state.tect.dynamicLithology=false; state.resW=GW; allocate(); refreshGeoid(); refreshTides();
     if(z['heightmap.f32']){ const fa=new Float32Array(z['heightmap.f32'].buffer); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }
     else if(z['heightmap_rg16.bin']){ const fa=unpackHeight16(z['heightmap_rg16.bin'],GW*GH); field.set(fa.subarray(0,Math.min(fa.length,GW*GH))); }   /* portable 16-bit fallback */
     if(z['temperature.f32']){ const fa=new Float32Array(z['temperature.f32'].buffer); tempField.set(fa.subarray(0,Math.min(fa.length,GW*GH))); } else computeTemperature();
@@ -7348,7 +7525,7 @@ function syncUI(){ suspendRender=true;
   v('bioBlend',Math.round(state.bioBlend*100)); lab('bioBlendV',state.bioBlend.toFixed(2)); v('brad',state.radius); lab('bradV',state.radius);
   v('bstr',Math.round(state.strength*100)); lab('bstrV',Math.round(state.strength*100)+'%'); const sh=document.getElementById('shadeOnHypso'); if(sh)sh.checked=state.shadeHypso;
   { const dao=state.debugOpacity==null?1:state.debugOpacity; v('dbgOpacity',Math.round(dao*100)); lab('dbgOpacityV',Math.round(dao*100)+'%'); }   /* v0.110 */
-  { const vz=state.viz||{parchment:0,icons:false,waves:false,scaleBar:true}; v('parch',Math.round((vz.parchment||0)*100)); lab('parchV',vz.parchment>0?vz.parchment.toFixed(2):'off'); v('aoR',Math.round((vz.ao||0)*100)); lab('aoV',vz.ao>0?vz.ao.toFixed(2):'off'); v('crestR',Math.round((vz.crest||0)*100)); lab('crestV',vz.crest>0?vz.crest.toFixed(2):'off'); v('rockR',Math.round((vz.rockSlope||0)*100)); lab('rockV',vz.rockSlope>0?vz.rockSlope.toFixed(2):'off'); v('texR',Math.round((vz.texture||0)*100)); lab('texV',vz.texture>0?vz.texture.toFixed(2):'off'); v('minorR',Math.round((vz.minorStreams||0)*100)); lab('minorV',vz.minorStreams>0?vz.minorStreams.toFixed(2):'off'); { const rd=vz.riverDensity==null?1:vz.riverDensity; v('riverDensR',Math.round(rd*100)); lab('riverDensV',rd.toFixed(2)+'×'); const mo=vz.minRiverOrder==null?1:vz.minRiverOrder; v('minOrderR',mo); lab('minOrderV',mo>1?('≥ '+mo):'all'); } v('ridgeR',Math.round((vz.ridgedRelief||0)*100)); lab('ridgeV',vz.ridgedRelief>0?vz.ridgedRelief.toFixed(2):'off'); v('contoursR',Math.round((vz.contours||0)*100)); lab('contoursV',vz.contours>0?vz.contours.toFixed(2):'off'); v('inkR',Math.round((vz.ink||0)*100)); lab('inkV',vz.ink>0?vz.ink.toFixed(2):'off'); v('hachureR',Math.round((vz.hachure||0)*100)); lab('hachureV',vz.hachure>0?vz.hachure.toFixed(2):'off'); v('watercolorR',Math.round((vz.watercolor||0)*100)); lab('watercolorV',vz.watercolor>0?vz.watercolor.toFixed(2):'off'); v('celR',Math.round((vz.cel||0)*100)); lab('celV',vz.cel>0?vz.cel.toFixed(2):'off'); v('crosshatchR',Math.round((vz.crosshatch||0)*100)); lab('crosshatchV',vz.crosshatch>0?vz.crosshatch.toFixed(2):'off'); v('stippleR',Math.round((vz.stipple||0)*100)); lab('stippleV',vz.stipple>0?vz.stipple.toFixed(2):'off'); const ic=document.getElementById('iconsChk'); if(ic)ic.checked=!!vz.icons; const wc=document.getElementById('wavesChk'); if(wc)wc.checked=!!vz.waves; { const wd=vz.waveDist==null?1:vz.waveDist; v('waveDistR',Math.round(wd*100)); lab('waveDistV',wd.toFixed(2)+'×'); } const wa=document.getElementById('waterAnimChk'); if(wa)wa.checked=!!vz.waterAnim; const sb=document.getElementById('scaleBarChk'); if(sb)sb.checked=vz.scaleBar!==false; const sp=document.getElementById('splat'); if(sp){ sp.value=Math.round((vz.splat==null?0.7:vz.splat)*100); const spv=document.getElementById('splatV'); if(spv)spv.textContent=(vz.splat==null?0.7:vz.splat).toFixed(2); } { const cis=vz.civIconScale==null?1:vz.civIconScale; v('civIconScaleR',Math.round(cis*100)); lab('civIconScaleV',cis.toFixed(2)+'×'); const cws=vz.civWayScale==null?1:vz.civWayScale; v('civWayScaleR',Math.round(cws*100)); lab('civWayScaleV',cws.toFixed(2)+'×'); } } { const se=document.getElementById('seasons'); if(se)se.checked=!!state.climate.seasons; } { const cu=document.getElementById('currents'); if(cu)cu.checked=!!state.climate.currents; }
+  { const vz=state.viz||{parchment:0,icons:false,waves:false,scaleBar:true}; v('parch',Math.round((vz.parchment||0)*100)); lab('parchV',vz.parchment>0?vz.parchment.toFixed(2):'off'); v('aoR',Math.round((vz.ao||0)*100)); lab('aoV',vz.ao>0?vz.ao.toFixed(2):'off'); v('crestR',Math.round((vz.crest||0)*100)); lab('crestV',vz.crest>0?vz.crest.toFixed(2):'off'); v('rockR',Math.round((vz.rockSlope||0)*100)); lab('rockV',vz.rockSlope>0?vz.rockSlope.toFixed(2):'off'); v('texR',Math.round((vz.texture||0)*100)); lab('texV',vz.texture>0?vz.texture.toFixed(2):'off'); v('minorR',Math.round((vz.minorStreams||0)*100)); lab('minorV',vz.minorStreams>0?vz.minorStreams.toFixed(2):'off'); { const rd=vz.riverDensity==null?1:vz.riverDensity; v('riverDensR',Math.round(rd*100)); lab('riverDensV',rd.toFixed(2)+'×'); const mo=vz.minRiverOrder==null?1:vz.minRiverOrder; v('minOrderR',mo); lab('minOrderV',mo>1?('≥ '+mo):'all'); } v('ridgeR',Math.round((vz.ridgedRelief||0)*100)); lab('ridgeV',vz.ridgedRelief>0?vz.ridgedRelief.toFixed(2):'off'); v('svfR',Math.round((vz.svf||0)*100)); lab('svfV',vz.svf>0?vz.svf.toFixed(2):'off'); v('shadowsR',Math.round((vz.shadows||0)*100)); lab('shadowsV',vz.shadows>0?vz.shadows.toFixed(2):'off'); v('curveShadeR',Math.round((vz.curveShade||0)*100)); lab('curveShadeV',vz.curveShade>0?vz.curveShade.toFixed(2):'off'); v('geologyR',Math.round((vz.geology||0)*100)); lab('geologyV',vz.geology>0?vz.geology.toFixed(2):'off'); v('wetnessR',Math.round((vz.wetness||0)*100)); lab('wetnessV',vz.wetness>0?vz.wetness.toFixed(2):'off'); { const sk=vz.season||0; v('seasonR',Math.round(sk*100)); lab('seasonV',sk===0?'annual':(sk>0?'Jul ':'Jan ')+Math.round(Math.abs(sk)*100)+'%'); } { const cm=vz.contourM||0; v('contourMR',cm); lab('contourMV',cm>=5?cm+' m':'auto'); } v('contoursR',Math.round((vz.contours||0)*100)); lab('contoursV',vz.contours>0?vz.contours.toFixed(2):'off'); v('inkR',Math.round((vz.ink||0)*100)); lab('inkV',vz.ink>0?vz.ink.toFixed(2):'off'); v('hachureR',Math.round((vz.hachure||0)*100)); lab('hachureV',vz.hachure>0?vz.hachure.toFixed(2):'off'); v('watercolorR',Math.round((vz.watercolor||0)*100)); lab('watercolorV',vz.watercolor>0?vz.watercolor.toFixed(2):'off'); v('celR',Math.round((vz.cel||0)*100)); lab('celV',vz.cel>0?vz.cel.toFixed(2):'off'); v('crosshatchR',Math.round((vz.crosshatch||0)*100)); lab('crosshatchV',vz.crosshatch>0?vz.crosshatch.toFixed(2):'off'); v('stippleR',Math.round((vz.stipple||0)*100)); lab('stippleV',vz.stipple>0?vz.stipple.toFixed(2):'off'); const ic=document.getElementById('iconsChk'); if(ic)ic.checked=!!vz.icons; const wc=document.getElementById('wavesChk'); if(wc)wc.checked=!!vz.waves; { const wd=vz.waveDist==null?1:vz.waveDist; v('waveDistR',Math.round(wd*100)); lab('waveDistV',wd.toFixed(2)+'×'); } const wa=document.getElementById('waterAnimChk'); if(wa)wa.checked=!!vz.waterAnim; const sb=document.getElementById('scaleBarChk'); if(sb)sb.checked=vz.scaleBar!==false; const sp=document.getElementById('splat'); if(sp){ sp.value=Math.round((vz.splat==null?0.7:vz.splat)*100); const spv=document.getElementById('splatV'); if(spv)spv.textContent=(vz.splat==null?0.7:vz.splat).toFixed(2); } { const cis=vz.civIconScale==null?1:vz.civIconScale; v('civIconScaleR',Math.round(cis*100)); lab('civIconScaleV',cis.toFixed(2)+'×'); const cws=vz.civWayScale==null?1:vz.civWayScale; v('civWayScaleR',Math.round(cws*100)); lab('civWayScaleV',cws.toFixed(2)+'×'); } } { const se=document.getElementById('seasons'); if(se)se.checked=!!state.climate.seasons; } { const cu=document.getElementById('currents'); if(cu)cu.checked=!!state.climate.currents; }
   const segOn=(sel,fn)=>document.querySelectorAll(sel+' button').forEach(b=>b.classList.toggle('on',fn(b)));
   segOn('#resSeg',b=>+b.dataset.w===state.resW); segOn('#extentSeg',b=>(b.dataset.world==='1')===state.world); segOn('#modeSeg',b=>b.dataset.mode===state.mode); segOn('#debugSeg',b=>b.dataset.d===state.debug); segOn('#brushSeg',b=>b.dataset.brush===state.brush);
   segOn('#windModeSeg',b=>b.dataset.wm===(cl.windMode||'auto'));
@@ -7404,6 +7581,13 @@ bind('sun',e=>{ state.sunAz=+e.target.value; document.getElementById('sunV').tex
 document.getElementById('shadeOnHypso').addEventListener('change',e=>{ state.shadeHypso=e.target.checked; render(); });
 bind('parch',e=>{ state.viz.parchment=+e.target.value/100; document.getElementById('parchV').textContent=state.viz.parchment>0?state.viz.parchment.toFixed(2):'off'; render(); });
 bind('aoR',e=>{ state.viz.ao=+e.target.value/100; document.getElementById('aoV').textContent=state.viz.ao>0?state.viz.ao.toFixed(2):'off'; render(); });   /* R1 ambient occlusion */
+bind('svfR',e=>{ state.viz.svf=+e.target.value/100; document.getElementById('svfV').textContent=state.viz.svf>0?state.viz.svf.toFixed(2):'off'; render(); });   /* R5 sky view factor */
+bind('shadowsR',e=>{ state.viz.shadows=+e.target.value/100; document.getElementById('shadowsV').textContent=state.viz.shadows>0?state.viz.shadows.toFixed(2):'off'; render(); });   /* R5 horizon cast shadows */
+bind('curveShadeR',e=>{ state.viz.curveShade=+e.target.value/100; document.getElementById('curveShadeV').textContent=state.viz.curveShade>0?state.viz.curveShade.toFixed(2):'off'; render(); });   /* R5 curvature shading */
+bind('geologyR',e=>{ state.viz.geology=+e.target.value/100; document.getElementById('geologyV').textContent=state.viz.geology>0?state.viz.geology.toFixed(2):'off'; render(); });   /* R5 geology materials */
+bind('wetnessR',e=>{ state.viz.wetness=+e.target.value/100; document.getElementById('wetnessV').textContent=state.viz.wetness>0?state.viz.wetness.toFixed(2):'off'; render(); });   /* R5 wetness */
+bind('seasonR',e=>{ state.viz.season=+e.target.value/100; const s=state.viz.season; document.getElementById('seasonV').textContent=s===0?'annual':(s>0?'Jul ':'Jan ')+Math.round(Math.abs(s)*100)+'%'; render(); });   /* R5 seasonal render blend */
+bind('contourMR',e=>{ state.viz.contourM=+e.target.value; document.getElementById('contourMV').textContent=state.viz.contourM>=5?state.viz.contourM+' m':'auto'; render(); });   /* R5 metre-based contour interval */
 bind('crestR',e=>{ state.viz.crest=+e.target.value/100; document.getElementById('crestV').textContent=state.viz.crest>0?state.viz.crest.toFixed(2):'off'; render(); });   /* R2 ridge crests */
 bind('rockR',e=>{ state.viz.rockSlope=+e.target.value/100; document.getElementById('rockV').textContent=state.viz.rockSlope>0?state.viz.rockSlope.toFixed(2):'off'; render(); });   /* R2 slope rock */
 bind('texR',e=>{ state.viz.texture=+e.target.value/100; document.getElementById('texV').textContent=state.viz.texture>0?state.viz.texture.toFixed(2):'off'; render(); });   /* R3 surface texture */

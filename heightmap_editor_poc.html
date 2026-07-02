@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Heightmap Sculpting Sandbox — POC</title>
+<style>
+  :root{
+    --bg:#0e1015; --panel:#171a22; --panel2:#1f232e; --line:#2c313d;
+    --ink:#d7dce5; --dim:#8b93a3; --faint:#5c6473; --accent:#d9a45b; --accent2:#5f9bd1;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:ui-sans-serif,-apple-system,"Segoe UI",sans-serif;
+    font-size:13px;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:baseline;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-family:ui-monospace,monospace;font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:0}
+  header .tag{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint)}
+  .stage{flex:1;display:flex;min-height:0;gap:0;overflow:auto}
+  .view2d-wrap,.view3d-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:16px;min-width:280px;position:relative}
+  .view3d-wrap{border-left:1px solid var(--line)}
+  .canvas-stack{position:relative;line-height:0;max-width:100%}
+  #view2d,#overlay2d{width:100%;height:auto;max-width:640px;display:block;border:1px solid var(--line)}
+  #view2d{background:#000}
+  #overlay2d{position:absolute;top:0;left:0;pointer-events:none;border-color:transparent}
+  #view3d{width:100%;max-width:640px;height:auto;aspect-ratio:4/3;display:block;background:#0b0d12;border:1px solid var(--line);cursor:grab}
+  #view3d:active{cursor:grabbing}
+  .pane-label{font-family:ui-monospace,monospace;font-size:10px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+  .view3d-controls{position:absolute;top:26px;right:26px;display:flex;gap:6px}
+  aside{width:260px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
+  .sec{padding:12px 14px;border-bottom:1px solid var(--line)}
+  .sec h2{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 9px}
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row label{flex:0 0 62px;color:var(--dim);font-size:11.5px}
+  .row input[type=range]{flex:1;accent-color:var(--accent)}
+  .row .val{flex:0 0 42px;text-align:right;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ink)}
+  input[type=number],input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+    border-radius:5px;padding:5px 7px;font-family:ui-monospace,monospace;font-size:12px}
+  select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:5px;padding:6px 7px;font-size:12px}
+  .btnrow{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:6px 10px;
+    font-size:11.5px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--faint)}
+  button:disabled{opacity:.45;cursor:default}
+  button.on{background:var(--accent);border-color:var(--accent);color:#1a1206;font-weight:600}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{flex:1;border:0;border-radius:0;border-right:1px solid var(--line);padding:7px 4px;font-size:11px}
+  .seg button:last-child{border-right:0}
+  .hint{font-size:10.5px;color:var(--faint);line-height:1.5;margin-top:6px}
+  #status{position:absolute;left:0;bottom:-20px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+</style>
+</head>
+<body>
+<header>
+  <h1>Heightmap Sculpting Sandbox</h1>
+  <span class="tag">proof of concept — fractal terrain · brush &amp; line-trace features · 3D orbit preview</span>
+</header>
+
+<div class="stage">
+  <div class="view2d-wrap">
+    <div class="pane-label">2D edit — click / drag to sculpt</div>
+    <div class="canvas-stack">
+      <canvas id="view2d"></canvas>
+      <canvas id="overlay2d"></canvas>
+      <div id="status"></div>
+    </div>
+  </div>
+  <div class="view3d-wrap">
+    <div class="pane-label">3D preview — drag orbit · shift-drag pan · wheel zoom</div>
+    <canvas id="view3d" width="640" height="480"></canvas>
+    <div class="view3d-controls"><button id="resetCamBtn">Reset camera</button></div>
+  </div>
+  <aside>
+    <div class="sec">
+      <h2>Terrain</h2>
+      <div class="row"><label>Seed</label><input type="number" id="seedInput" value="12345"></div>
+      <div class="btnrow">
+        <button id="regenBtn">Regenerate</button>
+        <button id="randomBtn">🎲 Randomize</button>
+      </div>
+      <div class="row"><label>Resolution</label>
+        <select id="resSelect">
+          <option value="0">Low (256×160)</option>
+          <option value="1" selected>Medium (384×240)</option>
+          <option value="2">High (512×320)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h2>Feature</h2>
+      <div class="seg" id="featureSeg">
+        <button data-f="mountain" class="on">Mountain</button>
+        <button data-f="hill">Hill</button>
+        <button data-f="canyon">Canyon</button>
+        <button data-f="river">River</button>
+      </div>
+      <div class="hint" id="featureHint"></div>
+    </div>
+
+    <div class="sec">
+      <h2>Mode</h2>
+      <div class="seg" id="modeSeg">
+        <button data-m="brush" class="on">Brush</button>
+        <button data-m="trace">Line-trace</button>
+      </div>
+      <div class="row"><label>Radius</label><input type="range" id="radiusR" min="4" max="80" value="24"><span class="val" id="radiusV">24</span></div>
+      <div class="row"><label>Strength</label><input type="range" id="strengthR" min="1" max="100" value="50"><span class="val" id="strengthV">0.50</span></div>
+      <div class="btnrow" id="guideActions" style="display:none">
+        <button id="applyGuideBtn" disabled>Apply Guide</button>
+        <button id="clearGuideBtn">Clear Guide</button>
+      </div>
+      <div class="hint">Mountain/Hill: click and drag to paint continuously. Canyon/River: click-drag a short stroke, or switch to Line-trace and draw a longer guide, then Apply.</div>
+    </div>
+
+    <div class="sec">
+      <h2>History</h2>
+      <div class="btnrow"><button id="undoBtn" disabled>Undo / Redo</button></div>
+    </div>
+
+    <div class="sec">
+      <h2>Export</h2>
+      <div class="btnrow">
+        <button id="exportPngBtn">Export PNG</button>
+        <button id="exportRawBtn">Export Raw Heightmap</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================================
+ * Heightmap Sculpting Sandbox — proof of concept.
+ * Terrain generation + curve/brush feature stamping ported from Cartalith Gen1's plotline
+ * feature-brush system (fbm/ridged noise, rdpSimplify, catmullRomSample, applyFeatureAlongCurve) —
+ * algorithms studied and reused, trimmed to the four requested features (mountain/hill/canyon/
+ * river). The 3D preview pane is a from-scratch software (Canvas 2D, no WebGL) orbit-camera
+ * heightmap renderer.
+ * ============================================================================================ */
+
+/* ---------------------------------------------------------------- state */
+let GW = 384, GH = 240;
+let field = new Float32Array(GW * GH);
+let seed = 12345;
+const SEA = 0.42;
+
+let mode = 'brush';        // 'brush' | 'trace'
+let feature = 'mountain';  // 'mountain' | 'hill' | 'canyon' | 'river'
+let radius = 24, strength = 0.5;
+
+let brushDragging = false, brushStartPt = null, brushLastDabPt = null;
+let guideCapturing = false, guideRaw = [], guidePts = [];
+let hoverPt = null;
+
+let prevField = null;
+
+let dirty = true, dirty3d = true;
+
+/* 3D preview: orbit camera + decimated mesh */
+const PW = 80, PH = 50;
+let previewField = new Float32Array(PW * PH);
+let cam3d = { az: 0.9, el: 0.55, dist: 3.2, target: { x: 0, y: 0, z: 0 } };
+const CAM3D_DEFAULT = { az: 0.9, el: 0.55, dist: 3.2, target: { x: 0, y: 0, z: 0 } };
+let cam3dDragging = null, cam3dLastPt = null;
+
+const view2d = document.getElementById('view2d'), overlay2d = document.getElementById('overlay2d');
+const view3d = document.getElementById('view3d');
+const statusEl = document.getElementById('status');
+
+/* ---------------------------------------------------------------- small utilities */
+function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+function sstep(e0, e1, x) { let t = (x - e0) / (e1 - e0); t = t < 0 ? 0 : (t > 1 ? 1 : t); return t * t * (3 - 2 * t); }
+function setStatus(msg) { statusEl.textContent = msg; }
+
+/* ---------------------------------------------------------------- noise (ported verbatim
+   from Cartalith Gen1 v0.57.html:1094-1101) */
+function hash(x, y, s) { let h = (x | 0) * 374761393 + (y | 0) * 668265263 + (s | 0) * 362437; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; }
+function vnoise(x, y, s) { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi; const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); const a = hash(xi, yi, s), b = hash(xi + 1, yi, s), c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s); return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v; }
+function fbm(x, y, s) { let amp = .5, freq = 1, sum = 0, nrm = 0; for (let o = 0; o < 6; o++) { sum += amp * vnoise(x * freq, y * freq, s + o * 131); nrm += amp; amp *= .5; freq *= 2; } return sum / nrm; }
+function ridged(x, y, s) { let amp = .5, freq = 1, sum = 0, nrm = 0; for (let o = 0; o < 6; o++) { let n = vnoise(x * freq, y * freq, s + o * 131); n = 1 - Math.abs(2 * n - 1); sum += amp * n * n; nrm += amp; amp *= .5; freq *= 2; } return sum / nrm; }
+
+/* ---------------------------------------------------------------- terrain generation */
+function generateTerrain() {
+  const freq = 3.2 / GW;
+  let mn = Infinity, mx = -Infinity;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    let h = 0.65 * fbm(x * freq, y * freq, seed) + 0.35 * fbm(x * freq * 3.5, y * freq * 3.5, seed + 900);
+    field[y * GW + x] = h;
+    if (h < mn) mn = h; if (h > mx) mx = h;
+  }
+  const range = Math.max(1e-6, mx - mn);
+  for (let i = 0; i < field.length; i++) field[i] = clamp01((field[i] - mn) / range);
+  markFieldDirty();
+}
+
+/* ---------------------------------------------------------------- undo (single-level, swap-based) */
+function markFieldDirty() { dirty = true; dirty3d = true; }
+function snapshotUndo() { prevField = field.slice(); document.getElementById('undoBtn').disabled = false; }
+function invalidateUndo() { prevField = null; document.getElementById('undoBtn').disabled = true; }
+function doUndo() {
+  if (!prevField) return;
+  const tmp = field; field = prevField; prevField = tmp;
+  markFieldDirty();
+  setStatus('Undo / Redo');
+}
+
+/* ---------------------------------------------------------------- 2D shading + render
+   (shadeFactor ported from Cartalith Gen1 v0.57.html:5099-5107) */
+const EXAG = 2.4, LIGHT_AZ = 315 * Math.PI / 180, LIGHT_ALT = 40 * Math.PI / 180;
+const LX = Math.cos(LIGHT_ALT) * Math.sin(LIGHT_AZ), LY = -Math.cos(LIGHT_ALT) * Math.cos(LIGHT_AZ), LZ = Math.sin(LIGHT_ALT);
+function shadeFactor(x, y) {
+  const xl = x > 0 ? x - 1 : x, xr = x < GW - 1 ? x + 1 : x, yu = y > 0 ? y - 1 : y, yd = y < GH - 1 ? y + 1 : y;
+  const L = field[y * GW + xl], R = field[y * GW + xr], U = field[yu * GW + x], D = field[yd * GW + x];
+  let nx = -(R - L) * EXAG, ny = -(D - U) * EXAG, nz = 1;
+  const il = 1 / Math.hypot(nx, ny, nz); nx *= il; ny *= il; nz *= il;
+  return Math.max(0, nx * LX + ny * LY + nz * LZ);
+}
+function landColor(x, y, h) {
+  const sh = shadeFactor(x, y);
+  const lum = (0.22 + 0.85 * Math.pow(sh, 0.85)) * 235;
+  return [lum, lum, lum];
+}
+function waterColor(h) {
+  const depth = clamp01((SEA - h) / SEA);
+  return [20 + 12 * (1 - depth), 58 + 42 * (1 - depth), 108 + 62 * (1 - depth)];
+}
+function renderNow() {
+  const ctx = view2d.getContext('2d');
+  const img = ctx.createImageData(GW, GH), d = img.data;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+    const i = y * GW + x, h = field[i], p = i * 4;
+    const c = h < SEA ? waterColor(h) : landColor(x, y, h);
+    d[p] = c[0]; d[p + 1] = c[1]; d[p + 2] = c[2]; d[p + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* ---------------------------------------------------------------- curve helpers, ported verbatim
+   (Cartalith Gen1 v0.57.html:5479-5497 rdpSimplify, 5662-5692 catmullRomSample) */
+function rdpSimplify(pts, eps) {
+  if (pts.length < 3) return pts.slice();
+  const keep = new Uint8Array(pts.length); keep[0] = 1; keep[pts.length - 1] = 1;
+  const stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const seg = stack.pop(), a = seg[0], b = seg[1];
+    if (b - a < 2) continue;
+    const ax = pts[a].x, ay = pts[a].y, dx = pts[b].x - ax, dy = pts[b].y - ay, L2 = dx * dx + dy * dy;
+    let worst = -1, wd = -1;
+    for (let i = a + 1; i < b; i++) {
+      const d = L2 < 1e-12 ? Math.hypot(pts[i].x - ax, pts[i].y - ay)
+        : Math.abs(dx * (pts[i].y - ay) - dy * (pts[i].x - ax)) / Math.sqrt(L2);
+      if (d > wd) { wd = d; worst = i; }
+    }
+    if (wd > eps) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
+  }
+  const out = []; for (let i = 0; i < pts.length; i++) if (keep[i]) out.push(pts[i]);
+  return out;
+}
+function catmullRomSample(pts, step) {
+  if (pts.length < 2) return pts.slice();
+  const p = [
+    { x: 2 * pts[0].x - pts[1].x, y: 2 * pts[0].y - pts[1].y },
+    ...pts,
+    { x: 2 * pts[pts.length - 1].x - pts[pts.length - 2].x, y: 2 * pts[pts.length - 1].y - pts[pts.length - 2].y }
+  ];
+  const out = [];
+  const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  for (let s = 0; s < pts.length - 1; s++) {
+    const P0 = p[s], P1 = p[s + 1], P2 = p[s + 2], P3 = p[s + 3];
+    const t0 = 0, t1 = t0 + Math.sqrt(dist(P0, P1));
+    const t2 = t1 + Math.sqrt(dist(P1, P2));
+    const t3 = t2 + Math.sqrt(dist(P2, P3));
+    if (t2 - t1 < 1e-6) continue;
+    const segLen = dist(P1, P2), n = Math.max(2, Math.ceil(segLen / step));
+    const addPt = (s < pts.length - 2) ? n : n + 1;
+    for (let i = 0; i < addPt; i++) {
+      const t = t1 + (t2 - t1) * i / n;
+      const A1 = { x: P0.x + (P1.x - P0.x) * (t - t0) / (t1 - t0), y: P0.y + (P1.y - P0.y) * (t - t0) / (t1 - t0) };
+      const A2 = { x: P1.x + (P2.x - P1.x) * (t - t1) / (t2 - t1), y: P1.y + (P2.y - P1.y) * (t - t1) / (t2 - t1) };
+      const A3 = { x: P2.x + (P3.x - P2.x) * (t - t2) / (t3 - t2), y: P2.y + (P3.y - P2.y) * (t - t2) / (t3 - t2) };
+      const B1 = { x: A1.x + (A2.x - A1.x) * (t - t0) / (t2 - t0), y: A1.y + (A2.y - A1.y) * (t - t0) / (t2 - t0) };
+      const B2 = { x: A2.x + (A3.x - A2.x) * (t - t1) / (t3 - t1), y: A2.y + (A3.y - A2.y) * (t - t1) / (t3 - t1) };
+      out.push({ x: B1.x + (B2.x - B1.x) * (t - t1) / (t2 - t1), y: B1.y + (B2.y - B1.y) * (t - t1) / (t2 - t1) });
+    }
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------- applyFeatureAlongCurve — ported
+   from Cartalith Gen1 v0.57.html:5506-5593, trimmed to mountain (was 'mountainRange')/hills/canyon/
+   river; ridge/plateau/escarpment and their side-sign/meanH bookkeeping removed (not requested). */
+function applyFeatureAlongCurve(fld, W, H, curve, feat, radius, strength, seed, opts) {
+  opts = opts || {};
+  if (!curve || curve.length < 2) return;
+  const sea = opts.sea !== undefined ? opts.sea : SEA;
+  const R = Math.max(1, radius), str = Math.max(0, Math.min(1, strength)), sd = seed | 0;
+  const n = curve.length, cum = new Float64Array(n);
+  let total = 0;
+  for (let i = 1; i < n; i++) { total += Math.hypot(curve[i].x - curve[i - 1].x, curve[i].y - curve[i - 1].y); cum[i] = total; }
+  if (total <= 1e-9) return;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < n; i++) { const p = curve[i]; if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+  const pad = R + 2;
+  const x0 = Math.max(0, Math.floor(minX - pad)), x1 = Math.min(W - 1, Math.ceil(maxX + pad));
+  const y0 = Math.max(0, Math.floor(minY - pad)), y1 = Math.min(H - 1, Math.ceil(maxY + pad));
+  if (x1 < x0 || y1 < y0) return;
+  const sx0 = new Float64Array(n - 1), sx1 = new Float64Array(n - 1), sy0 = new Float64Array(n - 1), sy1 = new Float64Array(n - 1);
+  for (let s = 0; s < n - 1; s++) {
+    sx0[s] = Math.min(curve[s].x, curve[s + 1].x) - R - 1; sx1[s] = Math.max(curve[s].x, curve[s + 1].x) + R + 1;
+    sy0[s] = Math.min(curve[s].y, curve[s + 1].y) - R - 1; sy1[s] = Math.max(curve[s].y, curve[s + 1].y) + R + 1;
+  }
+  const NF = 48 / W;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    let best = Infinity, bu = 0;
+    for (let s = 0; s < n - 1; s++) {
+      if (x < sx0[s] || x > sx1[s] || y < sy0[s] || y > sy1[s]) continue;
+      const ax = curve[s].x, ay = curve[s].y, dx = curve[s + 1].x - ax, dy = curve[s + 1].y - ay, L2 = dx * dx + dy * dy;
+      let t = L2 > 1e-12 ? ((x - ax) * dx + (y - ay) * dy) / L2 : 0; t = t < 0 ? 0 : (t > 1 ? 1 : t);
+      const ddx = x - (ax + t * dx), ddy = y - (ay + t * dy), d2 = ddx * ddx + ddy * ddy;
+      if (d2 < best) { best = d2; bu = (cum[s] + t * (cum[s + 1] - cum[s])) / total; }
+    }
+    const d = Math.sqrt(best);
+    if (d > R) continue;
+    const i = y * W + x, h = fld[i];
+    const nx = x * NF, ny = y * NF;
+    const tEnd = sstep(0, 0.12, bu) * sstep(0, 0.12, 1 - bu);
+    const landT = 0.15 + 0.85 * sstep(sea - 0.04, sea + 0.04, h);
+    if (feat === 'mountain') {
+      const dEff = Math.max(0, d + (fbm(nx * 0.5 + bu * 3, ny * 0.5, sd) - 0.5) * 0.5 * R);
+      const q = Math.min(1, dEff / R), fall = (1 - q * q) * (1 - q * q);
+      const m = ridged(nx, ny, sd + 7);
+      const a = 0.55 + 0.45 * fbm(bu * 6, 0.37, sd + 13);
+      fld[i] = clamp01(h + str * 0.38 * fall * (0.45 + 0.55 * m) * a * tEnd * landT);
+    } else if (feat === 'hill') {
+      const q = d / R, fall = (1 - q * q) * (1 - q * q);
+      fld[i] = clamp01(h + str * 0.16 * fall * (0.25 + 0.75 * fbm(nx, ny, sd + 3)) * tEnd * landT);
+    } else if (feat === 'canyon') {
+      const cW = R * 0.18, wW = R * 0.45;
+      let dh = 0;
+      if (d < cW) dh = -str * 0.30 * (1 - d / cW);
+      else if (d < wW) dh = str * 0.08 * (1 - (d - cW) / (wW - cW)) * landT;
+      fld[i] = clamp01(h + dh * tEnd * (0.8 + 0.4 * fbm(nx, ny, sd + 11)));
+    } else if (feat === 'river') {
+      if (h <= sea + 0.005) continue;
+      const tR = sstep(0, 0.06, bu);
+      const wR = R * (0.12 + 0.10 * bu);
+      const dep = str * 0.10 * (0.35 + 0.65 * bu);
+      if (d < wR) {
+        const t = d / wR;
+        fld[i] = clamp01(Math.max(h - dep * (1 - t * t) * tR, sea - 0.06));
+      } else if (d < wR * 2.2) {
+        const t = (d - wR) / (wR * 1.2);
+        fld[i] = clamp01(h - dep * 0.25 * (1 - t) * (1 - t) * tR);
+      }
+    }
+  }
+}
+
+/* ---------------------------------------------------------------- brush-mode point dabs — a radial
+   stand-in for mountain/hill (not a curve, no arc-length taper needed). Visual language matches the
+   curve-stamp branches above (same fbm/ridged detail + landT water-fade). */
+function dabMountain(fld, W, H, cx, cy, r, str, sd) {
+  const R = Math.max(1, r), s = Math.max(0, Math.min(1, str));
+  const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W - 1, Math.ceil(cx + R));
+  const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H - 1, Math.ceil(cy + R));
+  const NF = 48 / W;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy);
+    if (d > R) continue;
+    const dN = d / R, cone = Math.pow(Math.max(0, 1 - dN), 1.8);
+    const m = ridged(x * NF, y * NF, sd + 7);
+    const i = y * W + x, h = fld[i];
+    const landT = 0.15 + 0.85 * sstep(SEA - 0.04, SEA + 0.04, h);
+    fld[i] = clamp01(h + s * 0.34 * cone * (0.45 + 0.55 * m) * landT);
+  }
+}
+function dabHill(fld, W, H, cx, cy, r, str, sd) {
+  const R = Math.max(1, r), s = Math.max(0, Math.min(1, str));
+  const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W - 1, Math.ceil(cx + R));
+  const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H - 1, Math.ceil(cy + R));
+  const NF = 48 / W;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy);
+    if (d > R) continue;
+    const q = d / R, fall = (1 - q * q) * (1 - q * q);
+    const i = y * W + x, h = fld[i];
+    const landT = 0.15 + 0.85 * sstep(SEA - 0.04, SEA + 0.04, h);
+    fld[i] = clamp01(h + s * 0.16 * fall * (0.25 + 0.75 * fbm(x * NF, y * NF, sd + 3)) * landT);
+  }
+}
+
+/* ---------------------------------------------------------------- overlay (brush cursor / guide preview) */
+function renderOverlay() {
+  const ctx = overlay2d.getContext('2d');
+  ctx.clearRect(0, 0, GW, GH);
+  if (guideCapturing && guideRaw.length > 1) {
+    ctx.strokeStyle = 'rgba(255,210,80,0.9)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(guideRaw[0].x, guideRaw[0].y);
+    for (const p of guideRaw) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  } else if (guidePts.length > 1) {
+    const curve = catmullRomSample(guidePts, 4);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(120,180,255,0.28)'; ctx.lineWidth = radius * 2;
+    ctx.beginPath(); ctx.moveTo(curve[0].x, curve[0].y); for (const p of curve) ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  if (mode === 'brush' && hoverPt && !brushDragging) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(hoverPt.x, hoverPt.y, radius, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (brushDragging && brushStartPt && (feature === 'canyon' || feature === 'river') && hoverPt) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(brushStartPt.x, brushStartPt.y); ctx.lineTo(hoverPt.x, hoverPt.y); ctx.stroke();
+  }
+}
+
+/* ---------------------------------------------------------------- 2D coordinate mapping + events */
+function evtToGrid(e) {
+  const r = view2d.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * GW, y: (e.clientY - r.top) / r.height * GH };
+}
+function updateApplyBtn() { document.getElementById('applyGuideBtn').disabled = guidePts.length < 2; }
+function newSeed() { return (Math.random() * 1e9) | 0; }
+
+view2d.addEventListener('pointerdown', e => {
+  const p = evtToGrid(e);
+  if (mode === 'trace') {
+    guideCapturing = true; guideRaw = [p]; guidePts = [];
+    view2d.setPointerCapture(e.pointerId);
+    renderOverlay();
+    return;
+  }
+  if (feature === 'mountain' || feature === 'hill') {
+    snapshotUndo();
+    (feature === 'mountain' ? dabMountain : dabHill)(field, GW, GH, p.x, p.y, radius, strength, newSeed());
+    markFieldDirty();
+    brushDragging = true; brushLastDabPt = p;
+  } else {
+    brushDragging = true; brushStartPt = p;
+  }
+  view2d.setPointerCapture(e.pointerId);
+});
+view2d.addEventListener('pointermove', e => {
+  const p = evtToGrid(e);
+  hoverPt = p;
+  if (guideCapturing) {
+    const last = guideRaw[guideRaw.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) >= 0.5) { guideRaw.push(p); renderOverlay(); }
+    return;
+  }
+  if (brushDragging && (feature === 'mountain' || feature === 'hill')) {
+    const last = brushLastDabPt;
+    if (Math.hypot(p.x - last.x, p.y - last.y) >= radius * 0.25) {
+      (feature === 'mountain' ? dabMountain : dabHill)(field, GW, GH, p.x, p.y, radius, strength, newSeed());
+      markFieldDirty();
+      brushLastDabPt = p;
+    }
+  }
+  renderOverlay();
+});
+function endBrushDrag(e) {
+  const p = evtToGrid(e);
+  if (guideCapturing) {
+    guideCapturing = false;
+    const eps = GW / view2d.getBoundingClientRect().width;
+    guidePts = guideRaw.length >= 2 ? rdpSimplify(guideRaw, eps) : [];
+    guideRaw = [];
+    renderOverlay(); updateApplyBtn();
+    setStatus(guidePts.length >= 2 ? guidePts.length + ' control points — Apply Guide to commit' : '');
+    return;
+  }
+  if (brushDragging) {
+    if (feature === 'canyon' || feature === 'river') {
+      const len = Math.hypot(p.x - brushStartPt.x, p.y - brushStartPt.y);
+      if (len >= radius * 0.3) {
+        snapshotUndo();
+        applyFeatureAlongCurve(field, GW, GH, [brushStartPt, p], feature, radius, strength, newSeed(), { sea: SEA });
+        markFieldDirty();
+        setStatus('Applied ' + feature + ' (drag)');
+      } else {
+        setStatus(feature + ' needs a short drag — or switch to Line-trace');
+      }
+    }
+    brushDragging = false; brushStartPt = null; brushLastDabPt = null;
+    renderOverlay();
+  }
+}
+view2d.addEventListener('pointerup', endBrushDrag);
+view2d.addEventListener('pointercancel', endBrushDrag);
+view2d.addEventListener('pointerleave', () => { hoverPt = null; renderOverlay(); });
+
+/* ---------------------------------------------------------------- 3D preview: decimation, camera, projection */
+function decimatePreview() {
+  for (let py = 0; py < PH; py++) for (let px = 0; px < PW; px++) {
+    const fx = Math.min(GW - 1, Math.round(px / (PW - 1) * (GW - 1)));
+    const fy = Math.min(GH - 1, Math.round(py / (PH - 1) * (GH - 1)));
+    previewField[py * PW + px] = field[fy * GW + fx];
+  }
+}
+let L3 = { x: 0.35, y: 0.85, z: -0.4 };
+(function () { const l = Math.hypot(L3.x, L3.y, L3.z); L3.x /= l; L3.y /= l; L3.z /= l; })();
+
+function cameraBasis() {
+  const { az, el, dist, target } = cam3d;
+  const camPos = {
+    x: target.x + dist * Math.cos(el) * Math.sin(az),
+    y: target.y + dist * Math.sin(el),
+    z: target.z + dist * Math.cos(el) * Math.cos(az)
+  };
+  let fx = target.x - camPos.x, fy = target.y - camPos.y, fz = target.z - camPos.z;
+  const fl = Math.hypot(fx, fy, fz) || 1; fx /= fl; fy /= fl; fz /= fl;
+  let rx = fy * 0 - fz * 1, ry = fz * 0 - fx * 0, rz = fx * 1 - fy * 0;   // cross(forward, worldUp=(0,1,0))
+  const rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
+  const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;   // cross(right, forward)
+  return { camPos, fwd: { x: fx, y: fy, z: fz }, right: { x: rx, y: ry, z: rz }, up: { x: ux, y: uy, z: uz } };
+}
+
+function render3D() {
+  const canvas = view3d, ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0b0d12'; ctx.fillRect(0, 0, W, H);
+  const basis = cameraBasis();
+  const fov = 1.15;
+  function project(px, py, pz) {
+    const dx = px - basis.camPos.x, dy = py - basis.camPos.y, dz = pz - basis.camPos.z;
+    const vx = dx * basis.right.x + dy * basis.right.y + dz * basis.right.z;
+    const vy = dx * basis.up.x + dy * basis.up.y + dz * basis.up.z;
+    const vz = dx * basis.fwd.x + dy * basis.fwd.y + dz * basis.fwd.z;
+    if (vz <= 0.01) return null;
+    return { x: W / 2 + (vx / vz) * fov * W * 0.5, y: H / 2 - (vy / vz) * fov * H * 0.5, depth: vz };
+  }
+  const cellScale = 2.6 / Math.max(PW, PH), heightScale = 1.5;
+  const cx = (PW - 1) / 2, cz = (PH - 1) / 2;
+  function worldPt(px, py) {
+    const h = previewField[py * PW + px];
+    return { x: (px - cx) * cellScale, y: h * heightScale, z: (py - cz) * cellScale, h };
+  }
+  const quads = [];
+  for (let py = 0; py < PH - 1; py++) for (let px = 0; px < PW - 1; px++) {
+    const a = worldPt(px, py), b = worldPt(px + 1, py), c = worldPt(px + 1, py + 1), d = worldPt(px, py + 1);
+    const pa = project(a.x, a.y, a.z), pb = project(b.x, b.y, b.z), pc = project(c.x, c.y, c.z), pd = project(d.x, d.y, d.z);
+    if (!pa || !pb || !pc || !pd) continue;
+    const e1x = b.x - a.x, e1y = b.y - a.y, e1z = b.z - a.z;   // +x edge
+    const e2x = d.x - a.x, e2y = d.y - a.y, e2z = d.z - a.z;   // +z edge
+    let nx = e2y * e1z - e2z * e1y, ny = e2z * e1x - e2x * e1z, nz = e2x * e1y - e2y * e1x;   // cross(e2,e1) → +y for flat terrain
+    const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+    const shade = Math.max(0.12, nx * L3.x + ny * L3.y + nz * L3.z);
+    const avgH = (a.h + b.h + c.h + d.h) / 4;
+    let col;
+    if (avgH < SEA) col = waterColor(avgH);
+    else { const lum = (0.22 + 0.85 * Math.pow(shade, 0.85)) * 235; col = [lum, lum, lum]; }
+    const depth = (pa.depth + pb.depth + pc.depth + pd.depth) / 4;
+    quads.push({ pa, pb, pc, pd, col, depth });
+  }
+  quads.sort((q1, q2) => q2.depth - q1.depth);
+  for (const q of quads) {
+    ctx.fillStyle = 'rgb(' + (q.col[0] | 0) + ',' + (q.col[1] | 0) + ',' + (q.col[2] | 0) + ')';
+    ctx.beginPath();
+    ctx.moveTo(q.pa.x, q.pa.y); ctx.lineTo(q.pb.x, q.pb.y); ctx.lineTo(q.pc.x, q.pc.y); ctx.lineTo(q.pd.x, q.pd.y);
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+/* ---------------------------------------------------------------- 3D camera controls */
+view3d.addEventListener('contextmenu', e => e.preventDefault());
+view3d.addEventListener('pointerdown', e => {
+  cam3dDragging = (e.shiftKey || e.button === 2) ? 'pan' : 'orbit';
+  cam3dLastPt = { x: e.clientX, y: e.clientY };
+  view3d.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+view3d.addEventListener('pointermove', e => {
+  if (!cam3dDragging) return;
+  const dx = e.clientX - cam3dLastPt.x, dy = e.clientY - cam3dLastPt.y;
+  cam3dLastPt = { x: e.clientX, y: e.clientY };
+  if (cam3dDragging === 'orbit') {
+    cam3d.az -= dx * 0.008;
+    cam3d.el = Math.max(-1.4, Math.min(1.4, cam3d.el + dy * 0.008));
+  } else {
+    const basis = cameraBasis(), panScale = cam3d.dist * 0.0018;
+    cam3d.target.x -= dx * basis.right.x * panScale - dy * basis.up.x * panScale;
+    cam3d.target.y -= dx * basis.right.y * panScale - dy * basis.up.y * panScale;
+    cam3d.target.z -= dx * basis.right.z * panScale - dy * basis.up.z * panScale;
+  }
+  dirty3d = true;
+});
+view3d.addEventListener('pointerup', () => { cam3dDragging = null; });
+view3d.addEventListener('pointercancel', () => { cam3dDragging = null; });
+view3d.addEventListener('wheel', e => {
+  e.preventDefault();
+  cam3d.dist = Math.max(0.8, Math.min(14, cam3d.dist * (e.deltaY > 0 ? 1.1 : 1 / 1.1)));
+  dirty3d = true;
+}, { passive: false });
+document.getElementById('resetCamBtn').addEventListener('click', () => {
+  cam3d = { az: CAM3D_DEFAULT.az, el: CAM3D_DEFAULT.el, dist: CAM3D_DEFAULT.dist, target: { x: 0, y: 0, z: 0 } };
+  dirty3d = true;
+});
+
+/* ---------------------------------------------------------------- resolution / regenerate */
+const RES_OPTS = [[256, 160], [384, 240], [512, 320]];
+function setResolution(idx) {
+  const [w, h] = RES_OPTS[idx];
+  GW = w; GH = h;
+  field = new Float32Array(GW * GH);
+  view2d.width = GW; view2d.height = GH;
+  overlay2d.width = GW; overlay2d.height = GH;
+  invalidateUndo();
+  guidePts = []; guideRaw = []; guideCapturing = false; updateApplyBtn();
+  generateTerrain();
+}
+
+/* ---------------------------------------------------------------- UI wiring */
+document.querySelectorAll('#featureSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#featureSeg button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  feature = b.dataset.f;
+  const hint = document.getElementById('featureHint');
+  hint.textContent = (feature === 'canyon' || feature === 'river')
+    ? 'Linear feature — drag (not click) in Brush mode, or trace a guide line.'
+    : '';
+  renderOverlay();
+}));
+document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#modeSeg button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  mode = b.dataset.m;
+  document.getElementById('guideActions').style.display = mode === 'trace' ? 'flex' : 'none';
+  guideCapturing = false; guideRaw = []; guidePts = []; updateApplyBtn();
+  brushDragging = false; brushStartPt = null; brushLastDabPt = null;
+  renderOverlay();
+}));
+{
+  const r = document.getElementById('radiusR'), rv = document.getElementById('radiusV');
+  r.addEventListener('input', () => { radius = +r.value; rv.textContent = radius; renderOverlay(); });
+  const s = document.getElementById('strengthR'), sv = document.getElementById('strengthV');
+  s.addEventListener('input', () => { strength = +s.value / 100; sv.textContent = strength.toFixed(2); });
+}
+document.getElementById('applyGuideBtn').addEventListener('click', () => {
+  if (guidePts.length < 2) return;
+  const pts = guidePts.slice();
+  guidePts = []; renderOverlay(); updateApplyBtn();
+  const curve = catmullRomSample(pts, 2);
+  snapshotUndo();
+  applyFeatureAlongCurve(field, GW, GH, curve, feature, radius, strength, newSeed(), { sea: SEA });
+  markFieldDirty();
+  setStatus('Applied ' + feature + ' along guide · ' + curve.length + ' curve pts');
+});
+document.getElementById('clearGuideBtn').addEventListener('click', () => {
+  guidePts = []; guideRaw = []; guideCapturing = false; renderOverlay(); updateApplyBtn();
+  setStatus('');
+});
+document.getElementById('undoBtn').addEventListener('click', doUndo);
+document.getElementById('regenBtn').addEventListener('click', () => {
+  seed = (+document.getElementById('seedInput').value) | 0;
+  invalidateUndo();
+  generateTerrain();
+  setStatus('Regenerated · seed ' + seed);
+});
+document.getElementById('randomBtn').addEventListener('click', () => {
+  seed = newSeed();
+  document.getElementById('seedInput').value = seed;
+  invalidateUndo();
+  generateTerrain();
+  setStatus('Randomized · seed ' + seed);
+});
+document.getElementById('resSelect').addEventListener('change', e => {
+  setResolution(+e.target.value);
+  setStatus('Resolution: ' + GW + '×' + GH);
+});
+
+/* ---------------------------------------------------------------- export */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+document.getElementById('exportPngBtn').addEventListener('click', () => {
+  view2d.toBlob(blob => downloadBlob(blob, 'heightmap_render.png'));
+});
+document.getElementById('exportRawBtn').addEventListener('click', () => {
+  const oc = document.createElement('canvas'); oc.width = GW; oc.height = GH;
+  const octx = oc.getContext('2d'), img = octx.createImageData(GW, GH), d = img.data;
+  for (let i = 0; i < field.length; i++) {
+    const v = Math.round(clamp01(field[i]) * 255), p = i * 4;
+    d[p] = v; d[p + 1] = v; d[p + 2] = v; d[p + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  oc.toBlob(blob => downloadBlob(blob, 'heightmap_raw.png'));
+});
+
+/* ---------------------------------------------------------------- main loop */
+function tick() {
+  if (dirty) { renderNow(); dirty = false; }
+  if (dirty3d) { decimatePreview(); render3D(); dirty3d = false; }
+  requestAnimationFrame(tick);
+}
+
+/* ---------------------------------------------------------------- init */
+view2d.width = GW; view2d.height = GH;
+overlay2d.width = GW; overlay2d.height = GH;
+generateTerrain();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

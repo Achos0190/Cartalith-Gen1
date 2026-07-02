@@ -102,7 +102,7 @@
   </div>
   <div class="view3d-wrap">
     <div class="pane-label">3D preview — drag to orbit · wheel to zoom</div>
-    <canvas id="view3d" width="640" height="480"></canvas>
+    <canvas id="view3d" width="960" height="720"></canvas>
     <div class="pane-controls">
       <div class="pc-zoom">
         <button class="pc-btn" id="zoom3dIn" title="Zoom in">+</button>
@@ -136,6 +136,7 @@
         <button data-f="hill">Hill</button>
         <button data-f="canyon">Canyon</button>
         <button data-f="river">River</button>
+        <button data-f="smooth">Smooth</button>
       </div>
       <div class="hint" id="featureHint"></div>
     </div>
@@ -152,7 +153,27 @@
         <button id="applyGuideBtn" disabled>Apply Guide</button>
         <button id="clearGuideBtn">Clear Guide</button>
       </div>
-      <div class="hint">Mountain/Hill: click and drag to paint continuously. Canyon/River: click-drag a short stroke, or switch to Line-trace and draw a longer guide, then Apply.</div>
+      <div class="hint" id="modeHint">Mountain/Hill/Smooth: click and drag to paint continuously. Canyon/River: click-drag a short stroke, or switch to Line-trace and draw a longer guide, then Apply.</div>
+    </div>
+
+    <div class="sec">
+      <h2>Simulate</h2>
+      <div class="row"><label>Intensity</label><input type="range" id="erodeIntensityR" min="10" max="100" value="60"><span class="val" id="erodeIntensityV">0.60</span></div>
+      <div class="btnrow"><button id="erodeBtn">🌊 Erode terrain</button></div>
+      <div class="hint" id="erodeHint">Hydraulic droplet erosion (carves valleys/ridges downhill, deposits sediment) followed by thermal relaxation (settles loose material to a stable talus angle) — turns stamped bumps into geologically plausible relief. Undoable; may take a moment at higher resolutions.</div>
+    </div>
+
+    <div class="sec">
+      <h2>3D view</h2>
+      <div class="row"><label>Detail</label>
+        <select id="preview3dRes">
+          <option value="0">Standard</option>
+          <option value="1" selected>High</option>
+          <option value="2">Ultra</option>
+        </select>
+      </div>
+      <div class="row"><label>Relief</label><input type="range" id="vExagR" min="10" max="120" value="42"><span class="val" id="vExagV">0.42</span></div>
+      <div class="hint">Relief scales the vertical exaggeration of the 3D preview only — it's a visualization aid and never touches the heightmap data. Higher Detail resolves finer terrain but orbits slower; step down if it feels sluggish.</div>
     </div>
 
     <div class="sec">
@@ -199,9 +220,16 @@ let prevField = null;
 
 let dirty = true, dirty3d = true;
 
-/* 3D preview: orbit camera + decimated mesh */
-const PW = 80, PH = 50;
+/* 3D preview: orbit camera + decimated mesh. The preview mesh resolution (PW,PH) is independent of
+   the 2D edit grid (GW,GH) and of the vertical exaggeration — bumping mesh detail no longer changes
+   how steep the terrain looks, and vExag is a pure visualization dial that never touches `field`.
+   WORLD_SIZE is the mesh's fixed horizontal footprint in 3D world units regardless of PW/PH, so
+   raising detail only adds smoothness, never rescales the view. */
+const PREVIEW_W_OPTS = [130, 190, 250];   // Standard / High / Ultra long-edge sample count
+let PW = 190, PH = 119;
 let previewField = new Float32Array(PW * PH);
+const WORLD_SIZE = 3.4;
+let vExag = 0.42;
 let cam3d = { az: 0.9, el: 0.55, dist: 3.2, target: { x: 0, y: 0, z: 0 } };
 const CAM3D_DEFAULT = { az: 0.9, el: 0.55, dist: 3.2, target: { x: 0, y: 0, z: 0 } };
 let cam3dDragging = null, cam3dLastPt = null;
@@ -356,6 +384,9 @@ function applyFeatureAlongCurve(fld, W, H, curve, feat, radius, strength, seed, 
   const x0 = Math.max(0, Math.floor(minX - pad)), x1 = Math.min(W - 1, Math.ceil(maxX + pad));
   const y0 = Math.max(0, Math.floor(minY - pad)), y1 = Math.min(H - 1, Math.ceil(maxY + pad));
   if (x1 < x0 || y1 < y0) return;
+  /* smooth reads a snapshot of the touched band so it doesn't smear directionally from cells the
+     scan already updated earlier in the same pass */
+  const smoothSrc = feat === 'smooth' ? fld.slice(0) : null;
   const sx0 = new Float64Array(n - 1), sx1 = new Float64Array(n - 1), sy0 = new Float64Array(n - 1), sy1 = new Float64Array(n - 1);
   for (let s = 0; s < n - 1; s++) {
     sx0[s] = Math.min(curve[s].x, curve[s + 1].x) - R - 1; sx1[s] = Math.max(curve[s].x, curve[s + 1].x) + R + 1;
@@ -404,6 +435,12 @@ function applyFeatureAlongCurve(fld, W, H, curve, feat, radius, strength, seed, 
         const t = (d - wR) / (wR * 1.2);
         fld[i] = clamp01(h - dep * 0.25 * (1 - t) * (1 - t) * tR);
       }
+    } else if (feat === 'smooth') {
+      const q = d / R, fall = (1 - q * q) * (1 - q * q);
+      const xl = x > 0 ? x - 1 : x, xr = x < W - 1 ? x + 1 : x, yu = y > 0 ? y - 1 : y, yd = y < H - 1 ? y + 1 : y;
+      const at = (xx, yy) => smoothSrc[yy * W + xx];
+      const mean = (at(xl, y) + at(xr, y) + at(x, yu) + at(x, yd) + at(xl, yu) + at(xr, yu) + at(xl, yd) + at(xr, yd)) / 8;
+      fld[i] = clamp01(h + (mean - h) * str * fall * 0.9);
     }
   }
 }
@@ -439,6 +476,33 @@ function dabHill(fld, W, H, cx, cy, r, str, sd) {
     const landT = 0.15 + 0.85 * sstep(SEA - 0.04, SEA + 0.04, h);
     fld[i] = clamp01(h + s * 0.16 * fall * (0.25 + 0.75 * fbm(x * NF, y * NF, sd + 3)) * landT);
   }
+}
+/* Smooth — lerp each cell toward its local 3x3 neighbourhood mean, feathered by the same radial
+   falloff as the other brushes. A gentle box-blur dab; reads a snapshot so cells within the same
+   dab don't smear directionally from cells already updated earlier in the scan. */
+function dabSmooth(fld, W, H, cx, cy, r, str) {
+  const R = Math.max(1, r), s = Math.max(0, Math.min(1, str));
+  const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(W - 1, Math.ceil(cx + R));
+  const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(H - 1, Math.ceil(cy + R));
+  const src = fld.slice(y0 * W, Math.min(fld.length, (y1 + 1) * W));   // snapshot of the touched row band
+  const off = y0 * W;
+  const at = (x, y) => src[y * W + x - off];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy);
+    if (d > R) continue;
+    const q = d / R, fall = (1 - q * q) * (1 - q * q);
+    const xl = x > 0 ? x - 1 : x, xr = x < W - 1 ? x + 1 : x, yu = y > y0 ? y - 1 : y, yd = y < y1 ? y + 1 : y;
+    const mean = (at(xl, y) + at(xr, y) + at(x, yu) + at(x, yd) + at(xl, yu) + at(xr, yu) + at(xl, yd) + at(xr, yd)) / 8;
+    const i = y * W + x;
+    fld[i] = clamp01(fld[i] + (mean - fld[i]) * s * fall * 0.9);
+  }
+}
+/* dispatch the current brush feature to its dab fn (used by both the pointerdown first-dab and the
+   pointermove continuous-dab path, so the two never drift out of sync) */
+function applyDab(fld, W, H, x, y, r, str) {
+  if (feature === 'mountain') dabMountain(fld, W, H, x, y, r, str, newSeed());
+  else if (feature === 'hill') dabHill(fld, W, H, x, y, r, str, newSeed());
+  else if (feature === 'smooth') dabSmooth(fld, W, H, x, y, r, str);
 }
 
 /* ---------------------------------------------------------------- overlay (brush cursor / guide preview) */
@@ -570,9 +634,9 @@ view2d.addEventListener('pointerdown', e => {
     renderOverlay();
     return;
   }
-  if (feature === 'mountain' || feature === 'hill') {
+  if (feature === 'mountain' || feature === 'hill' || feature === 'smooth') {
     snapshotUndo();
-    (feature === 'mountain' ? dabMountain : dabHill)(field, GW, GH, p.x, p.y, radius, strength, newSeed());
+    applyDab(field, GW, GH, p.x, p.y, radius, strength);
     markFieldDirty();
     brushDragging = true; brushLastDabPt = p;
   } else {
@@ -595,10 +659,10 @@ view2d.addEventListener('pointermove', e => {
     if (Math.hypot(p.x - last.x, p.y - last.y) >= 0.5) { guideRaw.push(p); renderOverlay(); }
     return;
   }
-  if (brushDragging && (feature === 'mountain' || feature === 'hill')) {
+  if (brushDragging && (feature === 'mountain' || feature === 'hill' || feature === 'smooth')) {
     const last = brushLastDabPt;
     if (Math.hypot(p.x - last.x, p.y - last.y) >= radius * 0.25) {
-      (feature === 'mountain' ? dabMountain : dabHill)(field, GW, GH, p.x, p.y, radius, strength, newSeed());
+      applyDab(field, GW, GH, p.x, p.y, radius, strength);
       markFieldDirty();
       brushLastDabPt = p;
     }
@@ -647,6 +711,7 @@ function decimatePreview() {
 }
 let L3 = { x: 0.35, y: 0.85, z: -0.4 };
 (function () { const l = Math.hypot(L3.x, L3.y, L3.z); L3.x /= l; L3.y /= l; L3.z /= l; })();
+const _LUM_RGB = Array.from({ length: 256 }, (_, v) => 'rgb(' + v + ',' + v + ',' + v + ')');
 
 function cameraBasis() {
   const { az, el, dist, target } = cam3d;
@@ -677,7 +742,7 @@ function render3D() {
     if (vz <= 0.01) return null;
     return { x: W / 2 + (vx / vz) * fov * W * 0.5, y: H / 2 - (vy / vz) * fov * H * 0.5, depth: vz };
   }
-  const cellScale = 2.6 / Math.max(PW, PH), heightScale = 1.5;
+  const cellScale = WORLD_SIZE / Math.max(PW, PH), heightScale = vExag;
   const cx = (PW - 1) / 2, cz = (PH - 1) / 2;
   function worldPt(px, py) {
     const h = previewField[py * PW + px];
@@ -694,17 +759,28 @@ function render3D() {
     const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
     const shade = Math.max(0.12, nx * L3.x + ny * L3.y + nz * L3.z);
     const avgH = (a.h + b.h + c.h + d.h) / 4;
-    let col;
-    if (avgH < SEA) col = waterColor(avgH);
-    else { const lum = (0.22 + 0.85 * Math.pow(shade, 0.85)) * 235; col = [lum, lum, lum]; }
+    let colStr;
+    if (avgH < SEA) { const c = waterColor(avgH); colStr = 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')'; }
+    else { const lum = ((0.22 + 0.85 * Math.pow(shade, 0.85)) * 235) | 0; colStr = _LUM_RGB[lum < 255 ? lum : 255]; }
     const depth = (pa.depth + pb.depth + pc.depth + pd.depth) / 4;
-    quads.push({ pa, pb, pc, pd, col, depth });
+    quads.push({ pa, pb, pc, pd, colStr, depth });
   }
   quads.sort((q1, q2) => q2.depth - q1.depth);
+  /* Thousands of separately-filled adjacent quads leave hairline sub-pixel gaps at shared edges
+     (floating-point rounding differs a hair between the two fills touching that edge) — at a
+     shallow/grazing camera angle over a wide mesh those gaps line up into a visible moire "ripple"
+     across otherwise flat ground. Nudging each vertex outward from the quad's own screen centroid by
+     a fraction of a pixel makes neighbouring quads overlap slightly instead of gapping — same fix as
+     a matching-colour stroke, but one fill() per quad instead of fill()+stroke() (stroke path-building
+     roughly doubled render3D()'s cost at high tile counts). Land fillStyle strings come from a
+     precomputed lookup instead of rebuilding a template string per quad (thousands/frame). */
   for (const q of quads) {
-    ctx.fillStyle = 'rgb(' + (q.col[0] | 0) + ',' + (q.col[1] | 0) + ',' + (q.col[2] | 0) + ')';
+    ctx.fillStyle = q.colStr;
+    const mx = (q.pa.x + q.pb.x + q.pc.x + q.pd.x) / 4, my = (q.pa.y + q.pb.y + q.pc.y + q.pd.y) / 4;
+    const ex = (p) => { const dx = p.x - mx, dy = p.y - my, dl = Math.hypot(dx, dy) || 1; return { x: p.x + dx / dl * 0.75, y: p.y + dy / dl * 0.75 }; };
+    const qa = ex(q.pa), qb = ex(q.pb), qc = ex(q.pc), qd = ex(q.pd);
     ctx.beginPath();
-    ctx.moveTo(q.pa.x, q.pa.y); ctx.lineTo(q.pb.x, q.pb.y); ctx.lineTo(q.pc.x, q.pc.y); ctx.lineTo(q.pd.x, q.pd.y);
+    ctx.moveTo(qa.x, qa.y); ctx.lineTo(qb.x, qb.y); ctx.lineTo(qc.x, qc.y); ctx.lineTo(qd.x, qd.y);
     ctx.closePath(); ctx.fill();
   }
 }
@@ -748,6 +824,14 @@ function setResolution(idx) {
   invalidateUndo();
   guidePts = []; guideRaw = []; guideCapturing = false; updateApplyBtn();
   generateTerrain();
+}
+/* 3D preview mesh detail — independent of the 2D grid resolution and of vExag (see the state comment
+   above); higher detail only reduces facet aliasing, it never changes how steep the terrain looks. */
+function setPreviewRes(idx) {
+  PW = PREVIEW_W_OPTS[idx];
+  PH = Math.max(2, Math.round(PW * GH / GW));
+  previewField = new Float32Array(PW * PH);
+  dirty3d = true;
 }
 
 /* ---------------------------------------------------------------- UI wiring */
@@ -805,6 +889,158 @@ document.getElementById('randomBtn').addEventListener('click', () => {
 document.getElementById('resSelect').addEventListener('change', e => {
   setResolution(+e.target.value);
   setStatus('Resolution: ' + GW + '×' + GH);
+});
+document.getElementById('preview3dRes').addEventListener('change', e => {
+  setPreviewRes(+e.target.value);
+  setStatus('3D mesh: ' + PW + '×' + PH + ' facets');
+});
+{
+  const vr = document.getElementById('vExagR'), vv = document.getElementById('vExagV');
+  vr.addEventListener('input', () => { vExag = +vr.value / 100; vv.textContent = vExag.toFixed(2); dirty3d = true; });
+}
+{
+  const ir = document.getElementById('erodeIntensityR'), iv = document.getElementById('erodeIntensityV');
+  ir.addEventListener('input', () => { iv.textContent = (+ir.value / 100).toFixed(2); });
+}
+
+/* ---------------------------------------------------------------- geological simulation: hydraulic
+   droplet erosion (Beyer/SebLague method — spawn a droplet, follow the downhill gradient, pick up
+   sediment proportional to slope×velocity×water, deposit when capacity drops, evaporate) followed by
+   thermal relaxation (talus-angle slide) — the pair turns stamped bumps into ridge/valley networks
+   with natural scree slopes instead of blobby noise piles. */
+function heightAndGradient(fld, W, H, x, y) {
+  const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+  const ix0 = Math.max(0, Math.min(W - 1, x0)), iy0 = Math.max(0, Math.min(H - 1, y0));
+  const ix1 = Math.max(0, Math.min(W - 1, x0 + 1)), iy1 = Math.max(0, Math.min(H - 1, y0 + 1));
+  const h00 = fld[iy0 * W + ix0], h10 = fld[iy0 * W + ix1], h01 = fld[iy1 * W + ix0], h11 = fld[iy1 * W + ix1];
+  return {
+    h: h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy,
+    gx: (h10 - h00) * (1 - fy) + (h11 - h01) * fy,
+    gy: (h01 - h00) * (1 - fx) + (h11 - h10) * fx
+  };
+}
+/* Shared radius-falloff spreader for both erode (sign=-1) and deposit (sign=+1) — kept as one
+   function (unlike bilinearDeposit) because a wider, matching footprint for both directions is
+   exactly what stops sediment from pinpoint-stacking into spikes while erosion carves a broader area. */
+function radialSpread(fld, W, H, x, y, amount, radius, sign) {
+  const x0 = Math.floor(x), y0 = Math.floor(y), cells = [];
+  let totalW = 0;
+  for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+    const cx = x0 + dx, cy = y0 + dy;
+    if (cx < 0 || cx >= W || cy < 0 || cy >= H) continue;
+    const d = Math.hypot(cx - x, cy - y);
+    if (d > radius) continue;
+    const w = radius - d;
+    cells.push(cy * W + cx, w); totalW += w;
+  }
+  if (totalW <= 0) return;
+  for (let k = 0; k < cells.length; k += 2) {
+    const idx = cells[k], w = cells[k + 1];
+    fld[idx] = Math.max(0, fld[idx] + sign * amount * (w / totalW));
+  }
+}
+function radialErode(fld, W, H, x, y, amount, radius) { radialSpread(fld, W, H, x, y, amount, radius, -1); }
+function radialDeposit(fld, W, H, x, y, amount, radius) { radialSpread(fld, W, H, x, y, amount, radius, 1); }
+function hydraulicErode(fld, W, H, opts) {
+  const numDrops = opts.numDrops, sea = opts.sea, rng = opts.rng || Math.random;
+  /* Tuned gentler than the textbook SebLague/Beyer defaults: a lower capacityFactor + slower
+     erodeSpeed keep any single step's cut shallow, and depositing through the SAME radial footprint
+     as erosion (instead of a pinpoint bilinear 4-cell splat) stops sediment piling into spikes —
+     both directions now spread over the same ~13-cell disc. */
+  const inertia = 0.06, capacityFactor = 3.2, minSlope = 0.008, erodeSpeed = 0.22, depositSpeed = 0.3,
+    evaporateSpeed = 0.018, gravity = 4.5, erodeRadius = 2.4, maxLifetime = 32;
+  for (let drop = 0; drop < numDrops; drop++) {
+    let posX, posY, tries = 0;
+    do { posX = rng() * (W - 1); posY = rng() * (H - 1); tries++; }
+    while (fld[(posY | 0) * W + (posX | 0)] < sea && tries < 8);
+    let dirX = 0, dirY = 0, speed = 1, water = 1, sediment = 0;
+    for (let life = 0; life < maxLifetime; life++) {
+      const node = heightAndGradient(fld, W, H, posX, posY);
+      const oldX = posX, oldY = posY;
+      dirX = dirX * inertia - node.gx * (1 - inertia);
+      dirY = dirY * inertia - node.gy * (1 - inertia);
+      const len = Math.hypot(dirX, dirY);
+      if (len < 1e-8) break;
+      dirX /= len; dirY /= len;
+      posX += dirX; posY += dirY;
+      if (posX < 0 || posX >= W - 1 || posY < 0 || posY >= H - 1) break;
+      const newH = heightAndGradient(fld, W, H, posX, posY).h;
+      const deltaH = newH - node.h;
+      const capacity = Math.max(-deltaH * speed * water * capacityFactor, minSlope);
+      if (sediment > capacity || deltaH > 0) {
+        const depositAmt = deltaH > 0 ? Math.min(deltaH, sediment) : (sediment - capacity) * depositSpeed;
+        sediment -= depositAmt;
+        radialDeposit(fld, W, H, oldX, oldY, depositAmt, erodeRadius);
+      } else {
+        const erodeAmt = Math.min((capacity - sediment) * erodeSpeed, -deltaH);
+        radialErode(fld, W, H, oldX, oldY, erodeAmt, erodeRadius);
+        sediment += erodeAmt;
+      }
+      speed = Math.sqrt(Math.max(0, speed * speed - deltaH * gravity));
+      water *= (1 - evaporateSpeed);
+      if (water < 0.01) break;
+    }
+  }
+}
+/* Thermal (talus) erosion: any cell steeper than the stable talus angle slides half its excess
+   toward its lower 8-neighbours, proportionally. Jacobi-style (reads a frozen snapshot each pass) so
+   the result doesn't depend on scan order. */
+function thermalErode(fld, W, H, iterations, talus) {
+  const tmp = new Float32Array(W * H);
+  for (let it = 0; it < iterations; it++) {
+    tmp.set(fld);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, h = fld[i];
+      let totalExcess = 0;
+      const nbrs = [];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+        const nj = ny * W + nx, dist = Math.hypot(dx, dy), diff = h - fld[nj], t = talus * dist;
+        if (diff > t) { const ex = diff - t; nbrs.push(nj, ex); totalExcess += ex; }
+      }
+      if (totalExcess <= 0) continue;
+      const move = Math.min(h * 0.5, totalExcess * 0.5);
+      for (let k = 0; k < nbrs.length; k += 2) {
+        const nj = nbrs[k], ex = nbrs[k + 1], share = move * (ex / totalExcess);
+        tmp[nj] += share; tmp[i] -= share;
+      }
+    }
+    fld.set(tmp);
+  }
+}
+/* Final "settle" pass after erosion: droplet sims inherently leave 1-2 cell salt-and-pepper spikes
+   (deposits/cuts land on a discrete grid, and thousands of independent droplets don't average out
+   perfectly) — a single light whole-field 3x3 blend removes that residual noise without erasing the
+   valleys/ridges the simulation carved, the same way real terrain-tool pipelines finish a droplet
+   pass with a light smoothing step. */
+function boxBlurField(fld, W, H, strength) {
+  const src = fld.slice();
+  const at = (x, y) => src[Math.max(0, Math.min(H - 1, y)) * W + Math.max(0, Math.min(W - 1, x))];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    const mean = (at(x - 1, y) + at(x + 1, y) + at(x, y - 1) + at(x, y + 1) +
+      at(x - 1, y - 1) + at(x + 1, y - 1) + at(x - 1, y + 1) + at(x + 1, y + 1) + src[i]) / 9;
+    fld[i] += (mean - fld[i]) * strength;
+  }
+}
+document.getElementById('erodeBtn').addEventListener('click', () => {
+  snapshotUndo();
+  const btn = document.getElementById('erodeBtn'); btn.disabled = true;
+  setStatus('Simulating erosion…');
+  setTimeout(() => {
+    const t0 = performance.now();
+    const intensity = +document.getElementById('erodeIntensityR').value / 100;
+    const numDrops = Math.max(200, Math.round(GW * GH * 0.022 * intensity));
+    hydraulicErode(field, GW, GH, { numDrops, sea: SEA });
+    thermalErode(field, GW, GH, Math.max(3, Math.round(9 * intensity)), 0.02);
+    boxBlurField(field, GW, GH, 0.35);
+    for (let i = 0; i < field.length; i++) field[i] = clamp01(field[i]);
+    markFieldDirty();
+    btn.disabled = false;
+    setStatus('Eroded · ' + numDrops + ' droplets · ' + (performance.now() - t0).toFixed(0) + ' ms');
+  }, 20);
 });
 
 /* ---------------------------------------------------------------- export */

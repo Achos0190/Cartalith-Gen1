@@ -28,6 +28,10 @@
   .busy-wit{font-size:13px;color:var(--accent);text-align:center;padding:0 24px;max-width:360px;line-height:1.5}
   .busy-label{font-size:10px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase}
   #resOverlay{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:10px;color:rgba(200,169,110,.6);background:rgba(10,12,17,.55);border:1px solid rgba(200,169,110,.18);border-radius:5px;padding:6px 8px;line-height:1.8;pointer-events:none;display:none}
+  /* label/value stat rows used by the Info panel + Journey planner results */
+  .insp-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.78rem;padding:1px 0}
+  .insp-row .k{color:var(--muted);flex-shrink:0}
+  .insp-row .val{text-align:right;min-width:0;overflow-wrap:anywhere}
   /* v0.110: clickable settlement-seed "why" popup */
   .settle-info{position:fixed;z-index:60;width:220px;max-width:78vw;font-size:11px;line-height:1.5;color:#e8dcc4;background:rgba(14,17,23,.96);border:1px solid rgba(200,169,110,.4);border-radius:7px;padding:9px 11px 10px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
   .settle-info .si-close{position:absolute;top:4px;right:6px;background:none;border:none;color:#b08d54;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px}
@@ -615,21 +619,11 @@ details.cat-acc[open]>summary{color:var(--accent)}
 
     <div class="sec" id="civPlannerSec" style="display:none">
       <h2>Journey planner</h2>
-      <div class="row"><label>Transport</label>
-        <select id="civTransportMode" style="flex:1"></select>
-      </div>
-      <div class="row"><label>Terrain</label>
-        <select id="civTerrainType" style="flex:1"></select>
-      </div>
-      <div class="row"><label>Condition</label>
-        <select id="civCondition" style="flex:1"></select>
-      </div>
-      <div class="row"><label>Group size</label>
-        <input id="civGroupSize" type="number" min="1" max="10000" value="10" style="flex:1">
-        <span style="padding-left:4px;color:var(--muted);font-size:.8rem">people</span>
-      </div>
+      <div class="hint" style="margin-bottom:6px">The route is sampled from the generated world — terrain, biome, elevation, rivers, roads and settlements along the line drive the calculation (V1.915 travel framework).</div>
+      <div id="jpPresetRow" class="btnrow" style="flex-wrap:wrap;margin-bottom:6px"></div>
+      <div id="jpParty"></div>
       <canvas id="civProfileCv" width="220" height="48" style="width:100%;margin:4px 0;border-radius:4px;background:#14110c"></canvas>
-      <div id="civPlanner"><div class="hint">Select a journey above to plan it.</div></div>
+      <div id="jpResults"><div class="hint">Select a journey above to plan it.</div></div>
     </div>
 
     </div><!-- end explorePanel -->
@@ -8433,11 +8427,12 @@ function _civRenderJourneyList(){
     delBtn.onclick=e=>{ e.stopPropagation(); civJourneys.splice(ji,1); if(_civSelectedJourneyIdx>=civJourneys.length) _civSelectedJourneyIdx=-1; _civRenderJourneyList(); _civUpdatePlannerPanel(); renderNow(); };
     header.append(icon,nameInput,metaSpan,delBtn); card.appendChild(header);
     if(sel){
-      const plan=_civPlanJourneyV2(jn);
+      const plan=_jpPlan(jn);
       if(plan){
-        const dStr=plan.days<1?Math.round(plan.days*24)+' h':plan.days<60?plan.days.toFixed(1)+' days':(plan.days/30).toFixed(1)+' months';
         const summ=document.createElement('div'); summ.style.cssText='margin-top:3px;font-size:.73rem;color:var(--muted);';
-        summ.textContent=`${plan.km.toFixed(0)} km · ${dStr} · ${plan.speedKmDay.toFixed(0)} km/day · ${plan.tMin.toFixed(0)}–${plan.tMax.toFixed(0)} °C`;
+        summ.textContent=plan.blocked
+          ? `${plan.km.toFixed(0)} km · ⛔ ${plan.blockedMsg}`
+          : `${plan.km.toFixed(0)} km · ${jpFmtDays(plan.days)} · ${plan.avgKmDay.toFixed(0)} km/day · ${plan.stages.length} stage${plan.stages.length>1?'s':''}`;
         card.appendChild(summ);
       }
     }
@@ -8446,33 +8441,613 @@ function _civRenderJourneyList(){
   });
 }
 
-/* ---- V1.915-style journey planner ---- */
-function _civPlanJourneyV2(jn){
-  if(!jn||!jn.pts||jn.pts.length<2) return null;
-  const modeKey=jn.mode||'Mounted';
-  const m=CIV_TRANSPORT_MODES.find(t=>t.key===modeKey)||CIV_TRANSPORT_MODES[1];
-  const cat=m.cat==='both'?(jn.sea?'sea':'land'):m.cat;
-  const terrKey=jn.terrain||(cat==='sea'?'Coastal':cat==='river'?'Calm':'Dirt');
-  const condKey=jn.condition||(cat==='land'?'Standard':'Neutral');
-  const terrMod=(CIV_TERRAIN_OPTS[cat]||[]).find(t=>t.key===terrKey)?.mod||1.0;
-  const condMod=(CIV_CONDITION_OPTS[cat]||[]).find(c=>c.key===condKey)?.mod||1.0;
-  const sea=state.seaLevel||0.42;
-  let tSum=0,n=0,tMin=99,tMax=-99;
-  for(const[x,y] of jn.pts){ const T=tempField?tempField[y*GW+x]:15; tSum+=T; n++; if(T<tMin)tMin=T; if(T>tMax)tMax=T; }
-  const tMean=n>0?tSum/n:15;
-  const coldMod=tMean<-10?0.60:tMean<0?0.75:1.0;
-  const speedKmDay=m.kmh*m.hoursDay*terrMod*condMod*coldMod;
-  const km=jn.km||0;
-  const days=km/Math.max(0.1,speedKmDay);
-  const profile=jn.pts.map(([x,y])=>Math.max(0,(field[y*GW+x]-sea)/(1-sea)));
-  return {km,days,speedKmDay,mode:m.label,cat,terrMod,condMod,coldMod,tMean,tMin,tMax,profile};
+/* ═══════════════════════════════════════════════════════════════════════════
+   V1.915 JOURNEY PLANNER — Travel Framework migration
+   Reverse-engineered from Cartalith V1.915's logistics simulator (behavior
+   preserved, implementation rebuilt for the v0.57 architecture). The legacy
+   planner made the user hand-enter distance/terrain/biome per stage; here the
+   drawn route is SAMPLED FROM THE GENERATED WORLD instead — per-cell terrain
+   (currentCartTerrain), biome (currentCartBiome, whose names match the legacy
+   BIOMES keys 1:1), elevation, river crossings (flowField), roads (civWays +
+   state.roads) and settlement density (state.places) — then the legacy
+   multiplicative speed model, capacity/load convergence loop, seasonal
+   physiology and resupply assessment run over the derived stages.
+   Calibration anchors carried over from V1.915 (v9 audit): historical daily
+   bands — foot 24-32 km/d, mounted 40-60, Roman iter iustum 29-32, Saharan
+   caravan 32-48, barge downstream 30-60.
+   All tables are data-driven (JP_ prefix); nothing upstream depends on them.
+═══════════════════════════════════════════════════════════════════════════ */
+
+/* ---- data: land transports + top-level modes ---- */
+const JP_LAND_TRANSPORTS={ "Walking":4.0, "Mounted Rider":6.5, "Baggage Train":3.0 };
+const JP_TOP_MODES=["Walking","Mounted Rider","Baggage Train","River Transport","Sea Faring"];
+
+/* ---- data: ships (speed km/h cruise, cargo hard ceiling kg, mandatory crew) ---- */
+const JP_SHIPS={
+  "River Barge":   {speed:2,  cargo:30000,  crew:12,  modes:["river"],       openSea:false, invalidWater:["River with Rapids"]},
+  "Keelboat":      {speed:4,  cargo:8000,   crew:8,   modes:["river","sea"], openSea:false, invalidWater:[]},
+  "River Galley":  {speed:5,  cargo:3000,   crew:30,  modes:["river"],       openSea:false, invalidWater:["River with Rapids"]},
+  "Fishing Vessel":{speed:8,  cargo:1500,   crew:4,   modes:["sea"],         openSea:false, invalidWater:["Open Sea","Rough Open Sea"]},
+  "Longship":      {speed:11, cargo:5000,   crew:40,  modes:["river","sea"], openSea:true,  invalidWater:[]},
+  "Cog":           {speed:10, cargo:80000,  crew:20,  modes:["sea"],         openSea:true,  invalidWater:[]},
+  "Dhow":          {speed:12, cargo:20000,  crew:15,  modes:["sea"],         openSea:true,  invalidWater:[]},
+  "Caravel":       {speed:13, cargo:30000,  crew:20,  modes:["sea"],         openSea:true,  invalidWater:[]},
+  "Carrack":       {speed:11, cargo:200000, crew:80,  modes:["sea"],         openSea:true,  invalidWater:[]},
+  "Galleon":       {speed:13, cargo:300000, crew:150, modes:["sea"],         openSea:true,  invalidWater:[]},
+  "Fluyt":         {speed:11, cargo:250000, crew:50,  modes:["sea"],         openSea:true,  invalidWater:[]}
+};
+
+/* ---- data: pack & draft animals (cap kg, food kg/d, water L/d, ridden km/h) ---- */
+const JP_ANIMALS={
+  donkey:{cap:80,  food:4, water:15, mountedSpeed:4.0, label:"Donkey"},
+  mule:  {cap:110, food:5, water:20, mountedSpeed:5.0, label:"Mule"},
+  camel: {cap:300, food:6, water:30, mountedSpeed:4.5, label:"Camel"},
+  horse: {cap:120, food:7, water:25, mountedSpeed:6.0, label:"Horse"}
+};
+const JP_DESERT_ANIMAL_MOD={
+  donkey:{food:1.2, water:2.0}, mule:{food:1.2, water:2.0},
+  horse:{food:1.3, water:2.3},  camel:{food:0.9, water:0.35}
+};
+/* per-species seasonal physiology (winter camels carry far more; horses suffer in heat) */
+const JP_SEASONAL_ANIMAL={
+  Winter:{donkey:{cap:1.00,food:1.15,water:0.90}, mule:{cap:1.05,food:1.15,water:0.90}, horse:{cap:1.05,food:1.20,water:0.90}, camel:{cap:1.50,food:1.05,water:0.70}},
+  Spring:{donkey:{cap:1.00,food:1.00,water:1.00}, mule:{cap:1.00,food:1.00,water:1.00}, horse:{cap:1.00,food:1.00,water:1.00}, camel:{cap:1.30,food:1.00,water:0.85}},
+  Summer:{donkey:{cap:0.95,food:0.95,water:1.10}, mule:{cap:0.95,food:0.95,water:1.15}, horse:{cap:0.90,food:1.00,water:1.20}, camel:{cap:1.00,food:0.95,water:1.00}},
+  Autumn:{donkey:{cap:1.00,food:1.05,water:0.95}, mule:{cap:1.00,food:1.05,water:0.95}, horse:{cap:1.00,food:1.10,water:0.95}, camel:{cap:1.30,food:1.00,water:0.85}}
+};
+const JP_SEASONAL_HUMAN={ Winter:{food:1.30,water:0.85}, Spring:{food:1.00,water:1.00}, Summer:{food:0.95,water:1.25}, Autumn:{food:1.05,water:0.95} };
+/* per-animal terrain affinity overrides (replace the default TERRAIN value when mounted) */
+const JP_ANIMAL_TERRAIN_OVERRIDE={
+  camel:{"Deep Sand":0.85,"Desert Hardpack":0.95,"Swamp / Marsh":0.20,"Mountain Trails":0.30,"Mountain Pass":0.50,"Snow / Ice":0.30},
+  mule:{"Hills":0.85,"Rocky Terrain":0.75,"Mountain Pass":0.85,"Mountain Trails":0.65,"Deep Sand":0.45},
+  donkey:{"Hills":0.80,"Rocky Terrain":0.70,"Mountain Pass":0.75,"Mountain Trails":0.55,"Forest Path":0.85},
+  horse:{}
+};
+const JP_ANIMAL_WEATHER_OVERRIDE={ camel:{Sandstorm:0.70,Snow:0.30}, mule:{Snow:0.55}, donkey:{Snow:0.55}, horse:{} };
+
+/* ---- data: terrain + route-condition speed modifiers (per travel category) ----
+   land keys match CART_TERRAINS exactly, so world sampling feeds this directly */
+const JP_TERRAIN={
+  land:{ "Paved Road":1.20,"Dirt Track":1.00,"Open Plains":0.95,"Forest Path":0.75,"Hills":0.70,"Rocky Terrain":0.60,
+         "Mountain Pass":0.65,"Mountain Trails":0.45,"Swamp / Marsh":0.40,"Desert Hardpack":0.65,"Deep Sand":0.50,
+         "Snow / Ice":0.55,"Ruins / Debris":0.50 },
+  river:{ "Calm River":1.00,"Moderate River":0.90,"River with Shallows":0.75,"River Delta":0.65,"River with Rapids":0.50 },
+  sea:{ "Sheltered Bay":1.10,"Coastal Waters":1.00,"Open Sea":0.85,"Rough Open Sea":0.60 }
+};
+const JP_ROUTE={
+  land:{ "Maintained":1.20,"Standard":1.00,"Deteriorated":0.75,"Broken":0.55,"None / Wild":0.85 },
+  river:{ "Strong Downstream":1.40,"Mild Downstream":1.30,"Neutral":1.00,"Mild Upstream":0.80,"Strong Upstream":0.55 },
+  sea:{ "Favorable Wind & Current":1.40,"Favorable Wind":1.20,"Neutral":1.00,"Headwind":0.75,"Strong Headwind":0.50 }
+};
+const JP_WHEEL_BLOCKED=new Set(["Mountain Trails","Swamp / Marsh","Deep Sand","Forest Path","Ruins / Debris"]);
+const JP_MOUNT_BLOCKED=new Set(["Swamp / Marsh"]);
+
+/* ---- data: biomes — weather distributions per season (sum 100), water L/person/day
+   range, forage/grazing potential. Keys match CART_BIOMES names 1:1. ---- */
+const JP_BIOMES={
+  "Temperate Forest":{water:[2,3],forage:0.55,grazing:0.60,desertLike:false,weather:{
+    Spring:{Clear:50,Rain:40,Storm:10,Snow:0,Sandstorm:0}, Summer:{Clear:70,Rain:22,Storm:8,Snow:0,Sandstorm:0},
+    Autumn:{Clear:45,Rain:40,Storm:12,Snow:3,Sandstorm:0}, Winter:{Clear:30,Rain:18,Storm:7,Snow:45,Sandstorm:0}}},
+  "Tropical Jungle":{water:[3,5],forage:0.65,grazing:0.45,desertLike:false,weather:{
+    Spring:{Clear:35,Rain:50,Storm:15,Snow:0,Sandstorm:0}, Summer:{Clear:55,Rain:32,Storm:13,Snow:0,Sandstorm:0},
+    Autumn:{Clear:25,Rain:55,Storm:20,Snow:0,Sandstorm:0}, Winter:{Clear:60,Rain:28,Storm:12,Snow:0,Sandstorm:0}}},
+  "Boreal Taiga":{water:[2,3],forage:0.30,grazing:0.35,desertLike:false,weather:{
+    Spring:{Clear:40,Rain:30,Storm:10,Snow:20,Sandstorm:0}, Summer:{Clear:65,Rain:25,Storm:10,Snow:0,Sandstorm:0},
+    Autumn:{Clear:35,Rain:30,Storm:10,Snow:25,Sandstorm:0}, Winter:{Clear:20,Rain:5,Storm:5,Snow:70,Sandstorm:0}}},
+  "Tundra / Polar":{water:[2,4],forage:0.10,grazing:0.10,desertLike:false,weather:{
+    Spring:{Clear:30,Rain:15,Storm:10,Snow:45,Sandstorm:0}, Summer:{Clear:50,Rain:30,Storm:15,Snow:5,Sandstorm:0},
+    Autumn:{Clear:25,Rain:15,Storm:10,Snow:50,Sandstorm:0}, Winter:{Clear:10,Rain:2,Storm:3,Snow:85,Sandstorm:0}}},
+  "Steppe / Grassland":{water:[3,5],forage:0.22,grazing:0.65,desertLike:false,weather:{
+    Spring:{Clear:55,Rain:25,Storm:15,Snow:5,Sandstorm:0}, Summer:{Clear:70,Rain:15,Storm:15,Snow:0,Sandstorm:0},
+    Autumn:{Clear:60,Rain:20,Storm:15,Snow:5,Sandstorm:0}, Winter:{Clear:40,Rain:5,Storm:5,Snow:50,Sandstorm:0}}},
+  "Mediterranean Scrub":{water:[3,5],forage:0.32,grazing:0.45,desertLike:false,weather:{
+    Spring:{Clear:65,Rain:22,Storm:10,Snow:0,Sandstorm:3}, Summer:{Clear:88,Rain:3,Storm:4,Snow:0,Sandstorm:5},
+    Autumn:{Clear:60,Rain:25,Storm:10,Snow:0,Sandstorm:5}, Winter:{Clear:48,Rain:35,Storm:12,Snow:0,Sandstorm:5}}},
+  "Hot Desert":{water:[6,10],forage:0.04,grazing:0.00,desertLike:true,weather:{
+    Spring:{Clear:72,Rain:3,Storm:5,Snow:0,Sandstorm:20}, Summer:{Clear:78,Rain:0,Storm:2,Snow:0,Sandstorm:20},
+    Autumn:{Clear:75,Rain:4,Storm:4,Snow:0,Sandstorm:17}, Winter:{Clear:78,Rain:6,Storm:6,Snow:0,Sandstorm:10}}},
+  "Cold Desert / Badlands":{water:[4,7],forage:0.07,grazing:0.05,desertLike:true,weather:{
+    Spring:{Clear:55,Rain:10,Storm:8,Snow:8,Sandstorm:19}, Summer:{Clear:70,Rain:15,Storm:10,Snow:0,Sandstorm:5},
+    Autumn:{Clear:55,Rain:15,Storm:8,Snow:5,Sandstorm:17}, Winter:{Clear:38,Rain:5,Storm:5,Snow:35,Sandstorm:17}}},
+  "Mountain Highland":{water:[2,4],forage:0.18,grazing:0.25,desertLike:false,weather:{
+    Spring:{Clear:35,Rain:30,Storm:18,Snow:17,Sandstorm:0}, Summer:{Clear:55,Rain:28,Storm:14,Snow:3,Sandstorm:0},
+    Autumn:{Clear:35,Rain:25,Storm:15,Snow:25,Sandstorm:0}, Winter:{Clear:15,Rain:5,Storm:10,Snow:70,Sandstorm:0}}},
+  "Wetlands / Marshes":{water:[3,4],forage:0.50,grazing:0.40,desertLike:false,weather:{
+    Spring:{Clear:30,Rain:55,Storm:13,Snow:2,Sandstorm:0}, Summer:{Clear:55,Rain:33,Storm:12,Snow:0,Sandstorm:0},
+    Autumn:{Clear:30,Rain:50,Storm:15,Snow:5,Sandstorm:0}, Winter:{Clear:25,Rain:35,Storm:10,Snow:30,Sandstorm:0}}},
+  "Coastal Lowland":{water:[2,4],forage:0.40,grazing:0.50,desertLike:false,weather:{
+    Spring:{Clear:50,Rain:33,Storm:15,Snow:2,Sandstorm:0}, Summer:{Clear:65,Rain:23,Storm:10,Snow:0,Sandstorm:2},
+    Autumn:{Clear:45,Rain:33,Storm:20,Snow:2,Sandstorm:0}, Winter:{Clear:35,Rain:27,Storm:15,Snow:23,Sandstorm:0}}},
+  "Ruined Wastes":{water:[3,5],forage:0.15,grazing:0.18,desertLike:false,weather:{
+    Spring:{Clear:48,Rain:18,Storm:14,Snow:5,Sandstorm:15}, Summer:{Clear:62,Rain:12,Storm:13,Snow:0,Sandstorm:13},
+    Autumn:{Clear:48,Rain:18,Storm:14,Snow:5,Sandstorm:15}, Winter:{Clear:35,Rain:10,Storm:10,Snow:30,Sandstorm:15}}}
+};
+const JP_SEASONS={ Spring:{forageMod:1.10,grazingMod:1.10}, Summer:{forageMod:1.25,grazingMod:1.20},
+                   Autumn:{forageMod:1.00,grazingMod:0.90}, Winter:{forageMod:0.45,grazingMod:0.35} };
+const JP_DESERT_WATER={
+  "Dense Oasis Route":         {gap:1,   reserve:1.10, speed:1.25},
+  "Established Caravan Route": {gap:3,   reserve:1.45, speed:1.20},
+  "Sparse Wells":              {gap:6,   reserve:1.90, speed:0.85},
+  "Deep Desert Crossing":      {gap:999, reserve:2.50, speed:0.70}
+};
+const JP_PACE={ "Haste":1.35, "Forced March":1.25, "Standard Pace":1.00, "Cautious / Scouting":0.75, "Stealth / Night Travel":0.60 };
+const JP_INFRA={ "Operational Waystations":1.15, "Stable Settlements":1.00, "Sparse Settlements":0.85, "Ruined Region":0.70, "Hostile / Dead Zone":0.50 };
+const JP_WEATHER={Clear:1.00, Rain:0.90, Storm:0.65, Snow:0.50, Sandstorm:0.40};
+const JP_GRAZING={ "None — carry all fodder":{speedMod:1.00,fodderFrac:1.00}, "Partial — graze at camp":{speedMod:0.93,fodderFrac:0.50}, "Full — graze on route":{speedMod:0.85,fodderFrac:0.00} };
+const JP_FORAGING={ "None":{speedMod:1.00,take:0.00}, "Opportunistic":{speedMod:0.97,take:0.40}, "Active":{speedMod:0.88,take:1.00} };
+const JP_GROUP_CLASSES=[
+  {min:1,max:1,label:"Individual",coordMod:1.00},{min:2,max:5,label:"Small Party",coordMod:1.00},
+  {min:6,max:20,label:"Group",coordMod:0.97},{min:21,max:100,label:"Caravan",coordMod:0.93},
+  {min:101,max:Infinity,label:"Column / Large Force",coordMod:0.87}
+];
+/* Pandolf et al. (1977) metabolic terrain factors → ration/water demand multipliers */
+const JP_TERRAIN_CONSUMPTION={
+  "Paved Road":{food:1.00,water:1.00},"Dirt Track":{food:1.00,water:1.00},"Open Plains":{food:1.00,water:1.00},
+  "Forest Path":{food:1.05,water:1.00},"Hills":{food:1.10,water:1.05},"Rocky Terrain":{food:1.15,water:1.05},
+  "Mountain Pass":{food:1.20,water:1.15},"Mountain Trails":{food:1.30,water:1.20},"Swamp / Marsh":{food:1.20,water:1.10},
+  "Desert Hardpack":{food:1.00,water:1.10},"Deep Sand":{food:1.25,water:1.30},"Snow / Ice":{food:1.30,water:0.95},
+  "Ruins / Debris":{food:1.10,water:1.05}
+};
+const JP_FORAGE_TERRAIN={
+  "Paved Road":0.35,"Dirt Track":0.55,"Open Plains":0.70,"Forest Path":1.00,"Hills":0.65,"Rocky Terrain":0.40,
+  "Mountain Pass":0.45,"Mountain Trails":0.45,"Swamp / Marsh":0.70,"Desert Hardpack":0.15,"Deep Sand":0.05,
+  "Snow / Ice":0.30,"Ruins / Debris":0.25
+};
+/* vehicles: capacity kg + strict draft-animal slots (travois is flexible draft — excluded) */
+const JP_CART_CAP=750, JP_WAGON_CAP=1000, JP_TRAVOIS_CAP=100, JP_SLED_CAP=500;
+const JP_CART_DRAFT=2, JP_WAGON_DRAFT=3, JP_SLED_DRAFT=2;
+const JP_DRAFT_FOOD=6, JP_HUMAN_FOOD=1.5, JP_HUMAN_PORTER=30;
+/* settlement density (per 100 km of route) → infrastructure tier */
+const JP_INFRA_TIERS=[[8,"Operational Waystations"],[4,"Stable Settlements"],[1.5,"Sparse Settlements"],[0.25,"Ruined Region"],[-1,"Hostile / Dead Zone"]];
+const JP_PRESETS={
+  "Lone courier":{groupSize:1,transport:"Mounted Rider",mountAnimal:"horse",pace:"Haste",hours:10,cargoKg:5,supplyDays:2,grazing:"Full — graze on route",foraging:"None",animals:{donkey:0,mule:0,camel:0,horse:1},carts:0,wagons:0,travois:0,sleds:0},
+  "Foot traveller":{groupSize:1,transport:"Walking",pace:"Standard Pace",hours:8,cargoKg:10,supplyDays:4,grazing:"None — carry all fodder",foraging:"Opportunistic",animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0},
+  "Merchant caravan":{groupSize:12,transport:"Baggage Train",pace:"Standard Pace",hours:8,cargoKg:900,supplyDays:7,grazing:"Partial — graze at camp",foraging:"None",animals:{donkey:0,mule:8,camel:0,horse:2},carts:2,wagons:0,travois:0,sleds:0},
+  "Desert caravan":{groupSize:20,transport:"Baggage Train",pace:"Standard Pace",hours:8,cargoKg:3000,supplyDays:10,grazing:"None — carry all fodder",foraging:"None",desertWater:"Established Caravan Route",animals:{donkey:0,mule:0,camel:24,horse:0},carts:0,wagons:0,travois:0,sleds:0},
+  "Army column":{groupSize:400,transport:"Walking",pace:"Standard Pace",hours:8,cargoKg:15000,supplyDays:12,grazing:"Partial — graze at camp",foraging:"Opportunistic",animals:{donkey:0,mule:20,camel:0,horse:80},carts:0,wagons:30,travois:0,sleds:0},
+  "River trader":{groupSize:4,transport:"River Transport",vessel:"River Barge",pace:"Standard Pace",hours:10,cargoKg:15000,supplyDays:7,animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0},
+  "Sea merchant":{groupSize:6,transport:"Sea Faring",vessel:"Cog",pace:"Standard Pace",hours:14,cargoKg:40000,supplyDays:14,animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0}
+};
+
+/* ---- helpers (ported) ---- */
+function jpFmtKg(kg){ return kg>=1000?(kg/1000).toFixed(1)+" t":Math.round(kg)+" kg"; }
+function jpFmtDays(d){ if(d==null||!isFinite(d)) return "—"; if(d<1) return Math.max(1,Math.round(d*24))+" h"; if(d<60) return d.toFixed(1)+" days"; return (d/30).toFixed(1)+" months"; }
+function jpFatigue(hours){ if(hours<=9) return 1.0; return Math.max(0.70, 1.0-(hours-9)*0.05); }
+function jpLoadPenalty(ratio){
+  if(ratio<=0.80) return {mod:1.00,label:"Well loaded"};
+  if(ratio<=1.00) return {mod:0.93,label:"Near capacity"};
+  if(ratio<=1.20) return {mod:0.80,label:"Overloaded"};
+  if(ratio<=1.50) return {mod:0.65,label:"Heavily overloaded"};
+  return {mod:0.45,label:"Near immobile"};
+}
+function jpGroupClass(n){ return JP_GROUP_CLASSES.find(c=>n>=c.min&&n<=c.max)||JP_GROUP_CLASSES[0]; }
+function jpWxWeighted(biomeKey,season,mountKey){
+  const dist=JP_BIOMES[biomeKey]?.weather?.[season]; if(!dist) return 1.0;
+  const ov=mountKey?(JP_ANIMAL_WEATHER_OVERRIDE[mountKey]||{}):{};
+  let t=0; for(const k in JP_WEATHER){ const p=dist[k]||0; t+=(p/100)*(ov[k]!==undefined?ov[k]:JP_WEATHER[k]); }
+  return t;
+}
+/* slowest animal in the train sets the mounted pace (column moves at its slowest member) */
+function jpResolveMount(plan){
+  const c=plan.animals||{}; const present=Object.keys(JP_ANIMALS).filter(k=>(c[k]|0)>0);
+  if(present.length) return present.reduce((s,k)=>JP_ANIMALS[k].mountedSpeed<JP_ANIMALS[s].mountedSpeed?k:s,present[0]);
+  return (plan.mountAnimal&&JP_ANIMALS[plan.mountAnimal])?plan.mountAnimal:"horse";
+}
+function jpForaging(mode,biomeKey,terrain,season,people){
+  if(mode==="None") return {move:1.0,reduction:0.0};
+  const biome=JP_BIOMES[biomeKey]; if(!biome) return {move:1.0,reduction:0.0};
+  const seasonMod=JP_SEASONS[season]?.forageMod??1.0;
+  const terrainForage=JP_FORAGE_TERRAIN[terrain]??0.5;
+  const gsf=people<=1?1.00:people<=4?0.85:people<=15?0.70:people<=50?0.55:0.40;
+  const take=(biome.forage*terrainForage*gsf*seasonMod)*(JP_FORAGING[mode]?.take??0);
+  return {move:JP_FORAGING[mode]?.speedMod??1.0, reduction:Math.min(0.95,take)};
+}
+/* consumption factors: Pandolf terrain factor × velocity² surcharge (pace>1 costs disproportionately) */
+function jpConsumptionFactors(terrain,paceKey){
+  const tf=JP_TERRAIN_CONSUMPTION[terrain]||{food:1,water:1};
+  const pm=JP_PACE[paceKey]??1.0;
+  const vm=pm>1.0?1.0+Math.pow(pm-1.0,2)*2.0:1.0;
+  return {food:tf.food*vm, water:tf.water*vm};
 }
 
+/* ---- capacity model (port of V1.915 calcCapacity) ---- */
+function jpCapacity(plan,biomeKey,season){
+  const people=Math.max(1,plan.groupSize|0), cargo=Math.max(0,+plan.cargoKg||0), supplyDays=Math.max(1,plan.supplyDays|0);
+  const fodderFrac=JP_GRAZING[plan.grazing]?.fodderFrac??1.0;
+  const biome=JP_BIOMES[biomeKey];
+  const sa=JP_SEASONAL_ANIMAL[season]||null, sh=JP_SEASONAL_HUMAN[season]||{food:1,water:1};
+  const counts={donkey:plan.animals.donkey|0, mule:plan.animals.mule|0, camel:plan.animals.camel|0, horse:plan.animals.horse|0};
+  const carts=plan.carts|0, wagons=plan.wagons|0, travois=plan.travois|0, sleds=plan.sleds|0;
+  const dm=biome?.desertLike?JP_DESERT_ANIMAL_MOD:null;
+  const af=k=>JP_ANIMALS[k].food *(dm?dm[k].food :1)*(sa?sa[k].food :1);
+  const aw=k=>JP_ANIMALS[k].water*(dm?dm[k].water:1)*(sa?sa[k].water:1);
+  const ac=k=>JP_ANIMALS[k].cap*(sa?sa[k].cap:1);
+  const animalFoodDaily =Object.keys(counts).reduce((t,k)=>t+counts[k]*af(k),0);
+  const animalWaterDaily=Object.keys(counts).reduce((t,k)=>t+counts[k]*aw(k),0);
+  /* only the strict-draft shortfall counts as phantom animals (travois = flexible draft) */
+  const realAnimals=counts.donkey+counts.mule+counts.camel+counts.horse;
+  const strictDraftDemand=carts*JP_CART_DRAFT+wagons*JP_WAGON_DRAFT+sleds*JP_SLED_DRAFT;
+  const draftAnimals=realAnimals===0?0:Math.max(0,strictDraftDemand-realAnimals);
+  const draftFoodDaily=draftAnimals*JP_DRAFT_FOOD*(dm?1.2:1.0);
+  const draftWaterDaily=draftAnimals*(biome?.desertLike?35:25);
+  const humanWaterRate=biome?(biome.water[0]+biome.water[1])/2:2.5;
+  /* humans carry water; animals drink from surface water except in deserts */
+  const humanWaterCarryDays =biome?.desertLike?Math.min(supplyDays,4):Math.min(supplyDays,2);
+  const animalWaterCarryDays=biome?.desertLike?Math.min(supplyDays,4):0;
+  const humanFoodTotal  =people*JP_HUMAN_FOOD*supplyDays*sh.food;
+  const humanWaterTotal =people*humanWaterRate*humanWaterCarryDays*sh.water;
+  const fodderTotal     =(animalFoodDaily+draftFoodDaily)*supplyDays*fodderFrac;
+  const animalWaterTotal=(animalWaterDaily+draftWaterDaily)*animalWaterCarryDays;
+  const totalMass=cargo+humanFoodTotal+humanWaterTotal+fodderTotal+animalWaterTotal;
+  const capacity=counts.donkey*ac("donkey")+counts.mule*ac("mule")+counts.camel*ac("camel")+counts.horse*ac("horse")
+    +carts*JP_CART_CAP+wagons*JP_WAGON_CAP+travois*JP_TRAVOIS_CAP+sleds*JP_SLED_CAP+people*JP_HUMAN_PORTER;
+  return { totalMass, capacity,
+    draftShortfall:(realAnimals>0)?Math.max(0,strictDraftDemand-realAnimals):0,
+    breakdown:{cargo,humanFood:humanFoodTotal,humanWater:humanWaterTotal,fodder:fodderTotal,animalWater:animalWaterTotal},
+    animalFoodDaily, animalWaterDaily, draftFoodDaily, draftWaterDaily, humanWaterRate };
+}
+function jpAssessResupply(totalMass,capacity,tripDays,dailyKm,waterGapDays,settlementDays,carryFood){
+  if(totalMass>capacity) return {feasible:false,stopsNeeded:null,verdict:`Cannot carry sufficient supplies — over capacity by ${jpFmtKg(totalMass-capacity)}.`,limitedBy:null};
+  const bindingInterval=carryFood?Math.min(waterGapDays,settlementDays):waterGapDays;
+  const limitedBy=carryFood?(waterGapDays<settlementDays?"water":"food / settlement"):"water (no food carried)";
+  const intervalKm=bindingInterval*dailyKm;
+  const stopsNeeded=Math.max(0,Math.ceil(tripDays/bindingInterval)-1);
+  const usedPct=Math.round((totalMass/capacity)*100);
+  const verdict=stopsNeeded===0
+    ?`No stops required — supplies cover the full stage (${usedPct}% capacity).`
+    :`${stopsNeeded} resupply stop${stopsNeeded>1?'s':''} — every ~${intervalKm.toFixed(0)} km (~${bindingInterval.toFixed(1)} d). Binding: ${limitedBy}.`;
+  return {feasible:true,stopsNeeded,bindingInterval,intervalKm,verdict,limitedBy};
+}
+
+/* ---- plan defaults on the journey object (serialized with the project) ---- */
+function _jpEnsurePlan(jn){
+  if(!jn.plan) jn.plan={};
+  const p=jn.plan;
+  const D={groupSize:jn.groupSize||4,transport:jn.sea?"Sea Faring":"Walking",mountAnimal:"horse",vessel:jn.sea?"Cog":"Keelboat",
+    hours:8,pace:"Standard Pace",season:"Summer",cargoKg:0,supplyDays:7,carryFood:true,
+    grazing:"Partial — graze at camp",foraging:"None",desertWater:"Established Caravan Route",
+    routeCond:"auto",infra:"auto",animals:{donkey:0,mule:0,camel:0,horse:0},carts:0,wagons:0,travois:0,sleds:0};
+  for(const k in D){ if(p[k]===undefined) p[k]=D[k]; }
+  if(typeof p.animals!=='object'||!p.animals) p.animals={donkey:0,mule:0,camel:0,horse:0};
+  for(const a of ['donkey','mule','camel','horse']) if(p.animals[a]===undefined) p.animals[a]=0;
+  return p;
+}
+
+/* ---- world sampling: cart biome index → legacy planner biome key ---- */
+function jpLegacyBiomeOf(bIdx,i){
+  const name=CART_BIOMES[bIdx-1];
+  if(JP_BIOMES[name]) return name;                      /* 12 legacy biomes match by name */
+  if(bIdx===13){                                        /* Hills — classify from the climate under the cell */
+    const T=tempField?tempField[i]:15, M=rainField?rainField[i]:0.4;
+    const key=(typeof classifyBiome==='function')?classifyBiome(T,M):'tempForest';
+    return ({ice:"Tundra / Polar",tundra:"Tundra / Polar",boreal:"Boreal Taiga",conifer:"Boreal Taiga",
+      tempForest:"Temperate Forest",tempRain:"Temperate Forest",grass:"Steppe / Grassland",savanna:"Steppe / Grassland",
+      shrub:"Mediterranean Scrub",desert:T<10?"Cold Desert / Badlands":"Hot Desert",
+      tropDry:"Tropical Jungle",tropWet:"Tropical Jungle"})[key]||"Temperate Forest";
+  }
+  return "Coastal Lowland";
+}
+/* road cells from the civ way network + terrain reference roads (1-cell dilation).
+   Riding an existing road upgrades the sampled terrain + route condition. */
+function _jpRoadCells(){
+  const map=new Map();
+  const put=(x,y,rec,pri)=>{ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const k=(x+dx)+','+(y+dy);
+    const old=map.get(k); if(!old||old.pri<pri) map.set(k,{terr:rec[0],cond:rec[1],pri}); } };
+  for(const w of civWays){
+    if(!w.pts||w.sea||w.type==='sea-lane') continue;
+    const rec=w.type==='highway'?["Paved Road","Maintained"]:w.type==='regional'?["Paved Road","Standard"]
+      :w.type==='ancient'?["Dirt Track","Deteriorated"]:["Dirt Track","Standard"];
+    const pri=w.type==='highway'?3:w.type==='regional'?2:1;
+    for(const[x,y] of w.pts) put(x,y,rec,pri);
+  }
+  if(state.roads&&state.roads.edges) for(const e of state.roads.edges){ if(!e.path)continue;
+    for(const[x,y] of e.path) put(Math.round(x),Math.round(y),["Dirt Track","Standard"],1); }
+  return map;
+}
+function _jpSettlements(){ return state.places.filter(p=>p.kind&&CIV_SETTLE_KEYS.has(p.kind)); }
+
+/* ---- derive stages by sampling the drawn route against the world ---- */
+function _jpDeriveStages(jn,plan){
+  try{
+    if(!jn.pts||jn.pts.length<2||typeof currentCartBiome!=='function') return [];
+    const cb=currentCartBiome(), ctr=currentCartTerrain();
+    const cellKm=(state.mapWidthKm||12000)/GW;
+    const roadMap=_jpRoadCells();
+    const flowThresh=flowField?GW*GH*0.0004:Infinity;
+    const pts=jn.pts;
+    /* per-point classification */
+    const info=new Array(pts.length);
+    let lastLandBiome="Coastal Lowland";
+    for(let k=0;k<pts.length;k++){
+      const x=Math.max(0,Math.min(GW-1,Math.round(pts[k][0]))), y=Math.max(0,Math.min(GH-1,Math.round(pts[k][1])));
+      const i=y*GW+x, bIdx=cb[i];
+      if(bIdx===15){ /* ocean: water type from distance to nearest land */
+        let d=99; outer: for(let r=1;r<=8;r++){ for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
+          if(Math.max(Math.abs(dx),Math.abs(dy))!==r) continue;
+          const nx=x+dx,ny=y+dy; if(nx<0||nx>=GW||ny<0||ny>=GH) continue;
+          const nb=cb[ny*GW+nx]; if(nb>=1&&nb<=13){ d=r; break outer; } } }
+        info[k]={cat:'sea',biome:lastLandBiome,terrain:d<=2?"Sheltered Bay":d<=8?"Coastal Waters":"Open Sea",cond:null,riv:false};
+      } else if(bIdx===14){
+        info[k]={cat:'river',biome:lastLandBiome,terrain:"Calm River",cond:null,riv:false};
+      } else {
+        const biome=jpLegacyBiomeOf(bIdx,i); lastLandBiome=biome;
+        const tIdx=ctr[i]; let terrain=tIdx>0?CART_TERRAINS[tIdx-1]:"Open Plains", cond=null;
+        const road=roadMap.get(x+','+y); if(road){ terrain=road.terr; cond=road.cond; }
+        info[k]={cat:'land',biome,terrain,cond,riv:flowField?flowField[i]>flowThresh:false};
+      }
+    }
+    /* chunk contiguous runs of identical (cat|biome|terrain|cond) */
+    const sea=state.seaLevel||0.42, peakM=state.peakM||4000;
+    const hM=k=>{ const x=Math.max(0,Math.min(GW-1,Math.round(pts[k][0]))),y=Math.max(0,Math.min(GH-1,Math.round(pts[k][1])));
+      return Math.max(0,(field[y*GW+x]-sea)/(1-sea))*peakM; };
+    let chunks=[], cur=null;
+    for(let k=0;k<pts.length;k++){
+      const f=info[k], key=f.cat+'|'+f.biome+'|'+f.terrain+'|'+(f.cond||'');
+      if(!cur||cur.key!==key){ cur={key,cat:f.cat,biome:f.biome,terrain:f.terrain,cond:f.cond,km:0,i0:k,i1:k,rx:0,gain:0,loss:0,_inRiv:false}; chunks.push(cur); }
+      cur.i1=k;
+      if(k>0){ const dx=pts[k][0]-pts[k-1][0], dy=pts[k][1]-pts[k-1][1]; cur.km+=Math.hypot(dx,dy)*cellKm;
+        const dh=hM(k)-hM(k-1); if(dh>0)cur.gain+=dh; else cur.loss-=dh; }
+      if(f.cat==='land'){ if(f.riv&&!cur._inRiv){ cur.rx++; cur._inRiv=true; } else if(!f.riv) cur._inRiv=false; }
+    }
+    /* narrow water gaps on an otherwise-land journey collapse into river crossings */
+    const landKm=chunks.reduce((t,c)=>t+(c.cat==='land'?c.km:0),0);
+    const totalKm=chunks.reduce((t,c)=>t+c.km,0);
+    if(landKm>totalKm*0.5){
+      for(let i=chunks.length-1;i>=0;i--){ const c=chunks[i];
+        if(c.cat!=='land'&&c.km<=Math.max(3,cellKm*2)){ const nb=chunks[i-1]&&chunks[i-1].cat==='land'?chunks[i-1]:(chunks[i+1]&&chunks[i+1].cat==='land'?chunks[i+1]:null);
+          if(nb){ nb.km+=c.km; nb.rx++; chunks.splice(i,1); } } }
+    }
+    /* absorb slivers, then cap the stage count by merging the smallest run */
+    const minKm=Math.max(2,totalKm*0.015);
+    for(let i=chunks.length-1;i>=0;i--){ const c=chunks[i];
+      if(c.km<minKm&&chunks.length>1){ const nb=(i>0&&chunks[i-1].cat===c.cat)?chunks[i-1]:(i<chunks.length-1&&chunks[i+1].cat===c.cat)?chunks[i+1]:(i>0?chunks[i-1]:chunks[i+1]);
+        nb.km+=c.km; nb.rx=(nb.rx||0)+(c.rx||0); nb.gain+=c.gain; nb.loss+=c.loss; nb.i0=Math.min(nb.i0,c.i0); nb.i1=Math.max(nb.i1,c.i1); chunks.splice(i,1); } }
+    while(chunks.length>14){ let si=0; for(let i=1;i<chunks.length;i++) if(chunks[i].km<chunks[si].km) si=i;
+      const c=chunks[si], nb=si>0?chunks[si-1]:chunks[si+1];
+      nb.km+=c.km; nb.rx=(nb.rx||0)+(c.rx||0); nb.gain+=c.gain; nb.loss+=c.loss; nb.i0=Math.min(nb.i0,c.i0); nb.i1=Math.max(nb.i1,c.i1); chunks.splice(si,1); }
+    /* settlements near each stage → infrastructure tier (auto) + route condition resolution */
+    const settles=_jpSettlements(), R2=Math.pow(Math.max(6,GW/50),2);
+    for(const c of chunks){
+      const seen=new Set();
+      for(let k=c.i0;k<=c.i1;k+=4){ const px=pts[k][0],py=pts[k][1];
+        for(let s=0;s<settles.length;s++){ if(seen.has(s))continue; const p=settles[s];
+          if((p.x-px)*(p.x-px)+(p.y-py)*(p.y-py)<R2) seen.add(s); } }
+      c.settlements=seen.size;
+      const per100=c.km>0?(c.settlements/(c.km/100)):0;
+      c.infra=(plan.infra&&plan.infra!=='auto')?plan.infra:(JP_INFRA_TIERS.find(t=>per100>=t[0])||JP_INFRA_TIERS[4])[1];
+      if(c.cat==='land') c.routeCond=(plan.routeCond&&plan.routeCond!=='auto')?plan.routeCond:(c.cond||"None / Wild");
+      else c.routeCond="Neutral";
+      delete c.key; delete c._inRiv; delete c.cond;
+    }
+    return chunks;
+  }catch(e){ return []; }
+}
+
+/* ---- per-stage calculators (ports of V1.915 calcLand / calcWater) ---- */
+function jpCalcLand(st,plan){
+  const distance=st.km, terrain=st.terrain, route=st.routeCond, pace=plan.pace, infra=st.infra;
+  const biomeKey=st.biome, season=plan.season;
+  const group=Math.max(1,plan.groupSize|0);
+  const hours=Math.max(1,Math.min(16,+plan.hours||8));
+  const transport=JP_LAND_TRANSPORTS[plan.transport]!==undefined?plan.transport:"Walking";
+  const portage=JP_LAND_TRANSPORTS[plan.transport]===undefined;
+  const carts=plan.carts|0, wagons=plan.wagons|0, travois=plan.travois|0, sleds=plan.sleds|0;
+  const packAnimals=['donkey','mule','camel','horse'].reduce((t,k)=>t+(plan.animals[k]|0),0);
+  /* hard feasibility blocks */
+  if((wagons>0||carts>0)&&JP_WHEEL_BLOCKED.has(terrain))
+    return {blocked:`Wheeled vehicles cannot traverse ${terrain}. Remove carts/wagons or reroute.`,cat:'land',st};
+  if(transport==="Baggage Train"&&JP_WHEEL_BLOCKED.has(terrain)&&!(travois>0||packAnimals>0))
+    return {blocked:`A baggage train cannot operate on ${terrain}. Add travois or pack animals, or reroute.`,cat:'land',st};
+  if(transport==="Mounted Rider"&&JP_MOUNT_BLOCKED.has(terrain))
+    return {blocked:`Mounted travel is not viable in ${terrain}. Switch to Walking or reroute.`,cat:'land',st};
+  const mountKey=(transport==="Mounted Rider")?jpResolveMount(plan):null;
+  const mountAnim=mountKey?JP_ANIMALS[mountKey]:null;
+  const wW=jpWxWeighted(biomeKey,season,mountKey);
+  let tMod=(mountKey&&JP_ANIMAL_TERRAIN_OVERRIDE[mountKey]?.[terrain]!==undefined)?JP_ANIMAL_TERRAIN_OVERRIDE[mountKey][terrain]:(JP_TERRAIN.land[terrain]??1.0);
+  const sledOnSnow=sleds>0&&terrain==="Snow / Ice"; if(sledOnSnow) tMod=1.0;   /* runners glide where wheels lock */
+  const rMod=JP_ROUTE.land[route]??1.0, pMod=JP_PACE[pace]??1.0, iMod=JP_INFRA[infra]??1.0;
+  const isHaste=(pace==="Haste");
+  const cls=jpGroupClass(group);
+  const cMod=isHaste?1.0:cls.coordMod;
+  const fMod=isHaste?1.0:jpFatigue(hours);
+  const gMod=isHaste?1.0:(JP_GRAZING[plan.grazing]?.speedMod??1.0);
+  const biome=JP_BIOMES[biomeKey], isDesert=!!biome?.desertLike;
+  let desertSpeed=1, desertWaterGap=null, desertReserve=1, desertLabel=null;
+  if(isDesert){ const dw=JP_DESERT_WATER[plan.desertWater]||JP_DESERT_WATER["Established Caravan Route"];
+    desertSpeed=dw.speed; desertWaterGap=dw.gap; desertReserve=dw.reserve; desertLabel=plan.desertWater; }
+  const forage=isHaste?{move:1.0,reduction:0.0}:jpForaging(plan.foraging,biomeKey,terrain,season,group);
+  const baseSpeed=mountAnim?mountAnim.mountedSpeed:(JP_LAND_TRANSPORTS[transport]??4.0);
+  const cap=jpCapacity(plan,biomeKey,season);
+  const ratio0=cap.capacity>0?cap.totalMass/cap.capacity:0;
+  const pen0=jpLoadPenalty(ratio0);
+  const lMod=isHaste?1.0:(cap.capacity>0?pen0.mod:1.0);
+  const baseDaily=baseSpeed*hours*tMod*rMod*cMod*pMod*iMod*wW*fMod*gMod*forage.move*desertSpeed*lMod;
+  if(!baseDaily||baseDaily<=0) return {blocked:"Effective speed is zero.",cat:'land',st};
+  let dailyKm=baseDaily, days=distance/dailyKm, resupply=null, loadRatio=ratio0;
+  /* convergence loop: needed supplies for the ACTUAL trip length ↔ load penalty ↔ speed */
+  const waterGapDays=isDesert?desertWaterGap:1.5;
+  const settlementDays=isDesert?desertWaterGap:7;
+  const carryFood=!!plan.carryFood;
+  const gKey=plan.grazing, seasonMod=JP_SEASONS[season];
+  if(!isHaste&&cap.capacity>0){
+    for(let i=0;i<12;i++){
+      const effWaterGap=Math.min(waterGapDays,days), effSettlement=Math.min(settlementDays,days);
+      const humanFoodNet=group*JP_HUMAN_FOOD*(1-forage.reduction);
+      const animalFoodNet=(cap.animalFoodDaily+cap.draftFoodDaily)*(1-(isDesert?0:(biome?.grazing??0)*(seasonMod?.grazingMod??1)*(1-(JP_GRAZING[gKey]?.fodderFrac??1))));
+      const foodNeeded=carryFood?(humanFoodNet+animalFoodNet)*effSettlement:0;
+      const waterNeeded=(group*cap.humanWaterRate+cap.animalWaterDaily+cap.draftWaterDaily)*effWaterGap*(isDesert?desertReserve:1.1);
+      const totalMass=cap.breakdown.cargo+foodNeeded+waterNeeded;
+      loadRatio=totalMass/cap.capacity;
+      const pen=jpLoadPenalty(loadRatio).mod;
+      const next=baseDaily/lMod*pen, newDays=distance/next;
+      if(Math.abs(newDays-days)<0.01){ dailyKm=next; days=newDays;
+        resupply=jpAssessResupply(totalMass,cap.capacity,days,dailyKm,waterGapDays,settlementDays,carryFood); break; }
+      dailyKm=next; days=newDays;
+    }
+    if(!resupply) resupply=jpAssessResupply(cap.totalMass,cap.capacity,days,dailyKm,waterGapDays,settlementDays,carryFood);
+  } else if(cap.capacity>0){
+    resupply=jpAssessResupply(cap.totalMass,cap.capacity,days,dailyKm,waterGapDays,settlementDays,carryFood);
+  }
+  const p=(v,w=7)=>(typeof v==='number'?v:0).toFixed(3).padStart(w);
+  const baseLabel=mountAnim?`${transport} — ${mountAnim.label}`:transport;
+  let formula=`Speed Components${isHaste?"   ⚡ HASTE — coord/fatigue/grazing/foraging/load forced to 1.000":""}${portage?"\n  ⚠ portage — crew proceeds on foot":""}
+  ${p(baseSpeed)}  base speed       (${baseLabel}, km/h)
+× ${p(hours)}  hours/day
+× ${p(tMod)}  terrain          (${terrain}${sledOnSnow?" — sled runners":""})
+× ${p(rMod)}  road/route       (${route})
+× ${p(cMod)}  coordination     (${group} → ${cls.label})
+× ${p(pMod)}  pace             (${pace})
+× ${p(iMod)}  infrastructure   (${infra})
+× ${p(wW)}  weather          (weighted ${season}, ${biomeKey})
+× ${p(fMod)}  fatigue          (${hours}h)
+× ${p(gMod)}  grazing          (${gKey})
+× ${p(forage.move)}  foraging         (${plan.foraging})`;
+  if(isDesert) formula+=`\n× ${p(desertSpeed)}  desert route     (${desertLabel})`;
+  formula+=`\n× ${p(dailyKm/(baseDaily/lMod))}  load             (${(loadRatio*100).toFixed(0)}%${isHaste?" — bypassed":""})
+
+= ${p(dailyKm)}  km/day effective
+  ${distance.toFixed(1)} km / ${dailyKm.toFixed(2)} km/day = ${days.toFixed(2)} days`;
+  return {cat:'land',st,dailyKm,days,cap,loadRatio,resupply,formula,transportLabel:baseLabel,mountKey,isDesert};
+}
+function jpCalcWater(st,plan){
+  const distance=st.km, cat=st.cat, terrain=st.terrain, route=st.routeCond, pace=plan.pace, infra=st.infra;
+  const biomeKey=st.biome, season=plan.season;
+  const passengers=Math.max(0,plan.groupSize|0);
+  const cargo=Math.max(0,+plan.cargoKg||0);
+  const hours=Math.max(1,Math.min(16,+plan.hours||8));
+  const vesselName=plan.vessel, ship=JP_SHIPS[vesselName];
+  const isHaste=(pace==="Haste");
+  if(!ship) return {blocked:"No vessel selected for the water leg.",cat,st};
+  if(!ship.modes.includes(cat)) return {blocked:`${vesselName} cannot operate on ${cat==='river'?'rivers/lakes':'the open sea'}.`,cat,st};
+  if(cat==='sea'&&!ship.openSea&&(terrain==="Open Sea"||terrain==="Rough Open Sea"))
+    return {blocked:`${vesselName} is not rated for open-sea conditions on this leg.`,cat,st};
+  if(ship.invalidWater.includes(terrain)) return {blocked:`${vesselName} cannot navigate ${terrain}.`,cat,st};
+  const wW=jpWxWeighted(biomeKey,season,null);
+  const tMod=JP_TERRAIN[cat][terrain]??1.0, rMod=JP_ROUTE[cat][route]??1.0, pMod=JP_PACE[pace]??1.0, iMod=JP_INFRA[infra]??1.0;
+  const biome=JP_BIOMES[biomeKey];
+  const totalAboard=ship.crew+passengers;
+  const humanWaterRate=biome?(biome.water[0]+biome.water[1])/2:2.5;
+  const humanFoodDaily=totalAboard*JP_HUMAN_FOOD, humanWaterDaily=totalAboard*humanWaterRate;
+  const baseDaily0=ship.speed*hours*tMod*rMod*pMod*iMod*wW;
+  if(!baseDaily0||baseDaily0<=0) return {blocked:"Effective speed is zero.",cat,st};
+  let dailyKm=baseDaily0, tripDays=distance/dailyKm;
+  const riverSettlement=2, carryFood=!!plan.carryFood;
+  let foodNeeded=0, waterNeeded=0;
+  for(let i=0;i<6;i++){
+    foodNeeded=carryFood?(cat==='sea'?humanFoodDaily*tripDays*1.10:humanFoodDaily*Math.min(riverSettlement,tripDays)):0;
+    waterNeeded=cat==='sea'?humanWaterDaily*tripDays*1.10:humanWaterDaily*Math.min(riverSettlement,tripDays)*(biome?.desertLike?2.0:1.10);
+    const totalLoad=cargo+foodNeeded+waterNeeded;
+    if(totalLoad>ship.cargo) return {blocked:`Hold overloaded: ${jpFmtKg(totalLoad)} exceeds ${vesselName}'s ${jpFmtKg(ship.cargo)} capacity.`,cat,st};
+    const pen=isHaste?1.0:jpLoadPenalty(totalLoad/ship.cargo).mod;
+    const next=baseDaily0*pen, nd=distance/next;
+    if(Math.abs(nd-tripDays)<0.01){ dailyKm=next; tripDays=nd; break; }
+    dailyKm=next; tripDays=nd;
+  }
+  const totalLoad=cargo+foodNeeded+waterNeeded, loadRatio=totalLoad/ship.cargo;
+  const resupply=cat==='sea'
+    ?{feasible:true,stopsNeeded:0,verdict:`Loaded at port — no en-route resupply required (${(loadRatio*100).toFixed(0)}% hold).`,limitedBy:null}
+    :jpAssessResupply(totalLoad,ship.cargo,tripDays,dailyKm,riverSettlement,riverSettlement,carryFood);
+  const p=(v,w=7)=>(typeof v==='number'?v:0).toFixed(3).padStart(w);
+  const formula=`Speed Components${isHaste?"   ⚡ HASTE — load penalty forced to 1.000":""}
+  ${p(ship.speed)}  vessel speed     (${vesselName}, km/h)
+× ${p(hours)}  hours/day
+× ${p(tMod)}  water type       (${terrain})
+× ${p(rMod)}  current/wind     (${route})
+× ${p(pMod)}  pace             (${pace})
+× ${p(iMod)}  infrastructure   (${infra})
+× ${p(wW)}  weather          (weighted ${season}, ${biomeKey})
+× ${p(dailyKm/baseDaily0)}  load             (${(loadRatio*100).toFixed(0)}% hold)
+
+= ${p(dailyKm)}  km/day effective
+  ${distance.toFixed(1)} km / ${dailyKm.toFixed(2)} km/day = ${tripDays.toFixed(2)} days`;
+  return {cat,st,dailyKm,days:tripDays,loadRatio,resupply,formula,transportLabel:`${cat==='sea'?'Sea Faring':'River Transport'} — ${vesselName}`,crew:ship.crew,holdKg:ship.cargo,foodNeeded,waterNeeded};
+}
+
+/* ---- journey orchestrator: stages → per-stage calc → roll-up + timeline ---- */
+function _jpPlan(jn){
+  if(!jn||!jn.pts||jn.pts.length<2) return null;
+  const plan=_jpEnsurePlan(jn);
+  const stages=_jpDeriveStages(jn,plan);
+  if(!stages.length) return null;
+  const results=stages.map(st=>st.cat==='land'?jpCalcLand(st,plan):jpCalcWater(st,plan));
+  const blockedIdx=results.findIndex(r=>r.blocked);
+  const km=stages.reduce((t,s)=>t+s.km,0);
+  let days=0, okKm=0;
+  for(const r of results) if(!r.blocked){ days+=r.days; okKm+=r.st.km; }
+  const avgKmDay=days>0?okKm/days:0;
+  /* supply forecast: daily rates × per-stage days × Pandolf terrain/pace factors */
+  let foodKg=0, waterL=0, fodderKg=0;
+  const sh=JP_SEASONAL_HUMAN[plan.season]||{food:1,water:1};
+  for(const r of results){ if(r.blocked||!r.days) continue;
+    const cf=r.cat==='land'?jpConsumptionFactors(r.st.terrain,plan.pace):{food:1,water:1};
+    if(r.cat==='land'&&r.cap){
+      foodKg  +=plan.groupSize*JP_HUMAN_FOOD*sh.food*cf.food*r.days;
+      fodderKg+=(r.cap.animalFoodDaily+r.cap.draftFoodDaily)*cf.food*r.days;
+      waterL  +=(plan.groupSize*r.cap.humanWaterRate*sh.water+r.cap.animalWaterDaily+r.cap.draftWaterDaily)*cf.water*r.days;
+    } else if(r.cat!=='land'){
+      foodKg+=(r.crew+plan.groupSize)*JP_HUMAN_FOOD*r.days;
+      waterL+=(r.crew+plan.groupSize)*2.5*r.days;
+    }
+  }
+  /* hazards */
+  const rivX=stages.reduce((t,s)=>t+(s.rx||0),0);
+  const passKm=stages.reduce((t,s)=>t+((s.terrain==="Mountain Pass"||s.terrain==="Mountain Trails")?s.km:0),0);
+  const desertKm=stages.reduce((t,s)=>t+(JP_BIOMES[s.biome]?.desertLike&&s.cat==='land'?s.km:0),0);
+  let badWx=0; for(const s of stages){ const d=JP_BIOMES[s.biome]?.weather?.[plan.season];
+    if(d) badWx+=s.km*(((d.Storm||0)+(d.Snow||0)+(d.Sandstorm||0))/100); }
+  const badWxPct=km>0?badWx/km*100:0;
+  /* elevation profile + ascent/descent */
+  const sea=state.seaLevel||0.42, peakM=state.peakM||4000;
+  const profile=jn.pts.map(([x,y])=>{ const i=Math.max(0,Math.min(GH-1,Math.round(y)))*GW+Math.max(0,Math.min(GW-1,Math.round(x)));
+    return Math.max(0,(field[i]-sea)/(1-sea)); });
+  const ascent=stages.reduce((t,s)=>t+s.gain,0), descent=stages.reduce((t,s)=>t+s.loss,0);
+  let hiM=0,loM=Infinity; for(const h of profile){ const m=h*peakM; if(m>hiM)hiM=m; if(m<loM)loM=m; }
+  /* daily timeline: walk the stages, place camps at each day boundary */
+  const settles=_jpSettlements(), campR2=Math.pow(Math.max(5,GW/60),2);
+  const cellKm=(state.mapWidthKm||12000)/GW;
+  const timeline=[], dayFracs=[];
+  if(!results.some(r=>r.blocked)&&days>0&&days<1500){
+    /* fracUsed tracks the fraction of the travel day consumed, so a mid-day stage
+       transition correctly re-scales the remaining hours by the new stage's speed */
+    let dayNo=1, fracUsed=0, kmTotal=0;
+    for(const r of results){
+      const st=r.st, stageDaily=Math.max(1e-6,r.dailyKm);
+      let remaining=st.km;
+      while(remaining>1e-9){
+        const kmLeftToday=stageDaily*(1-fracUsed);
+        const step=Math.min(remaining,kmLeftToday);
+        remaining-=step; kmTotal+=step; fracUsed+=step/stageDaily;
+        if(fracUsed>=1-1e-9){ /* day ends — place a camp */
+          const stageFrac=1-remaining/Math.max(1e-9,st.km);
+          const pi=Math.max(0,Math.min(jn.pts.length-1,Math.round(st.i0+(st.i1-st.i0)*stageFrac)));
+          const px=jn.pts[pi][0], py=jn.pts[pi][1];
+          let camp=null,cd=campR2;
+          for(const p of settles){ const d=(p.x-px)*(p.x-px)+(p.y-py)*(p.y-py); if(d<cd){cd=d;camp=p;} }
+          timeline.push({day:dayNo,km:kmTotal,terrain:st.terrain,biome:st.biome,camp:camp?(camp.name||'settlement'):null});
+          dayFracs.push(kmTotal/km); dayNo++; fracUsed=0;
+          if(dayNo>400){ remaining=0; break; }
+        }
+      }
+      if(dayNo>400) break;
+    }
+  }
+  /* campaign-duration advisory (port of assessCampaignRisk tiers) */
+  const risk=days<=10?null:days<=30?"Long journey — schedule rest days; minor attrition expected."
+    :days<=90?"Extended campaign — significant fatigue/attrition risk; plan resupply depots.":"Season-scale expedition — attrition, weather windows and supply lines dominate planning.";
+  const worstLand=results.filter(r=>r.cat==='land'&&!r.blocked&&r.cap&&r.cap.capacity>0)
+    .sort((a,b)=>b.loadRatio-a.loadRatio)[0]||null;
+  return {plan,stages,results,km,days,avgKmDay,blocked:blockedIdx>=0,blockedMsg:blockedIdx>=0?results[blockedIdx].blocked:null,
+    blockedIdx,foodKg,waterL,fodderKg,rivX,passKm,desertKm,badWxPct,profile,dayFracs,timeline,ascent,descent,hiM,loM,risk,worstLand,
+    hasDesert:stages.some(s=>JP_BIOMES[s.biome]?.desertLike&&s.cat==='land'),
+    hasWater:stages.some(s=>s.cat!=='land'), hasLand:stages.some(s=>s.cat==='land')};
+}
+
+/* ---- elevation profile with day ticks ---- */
 function _civDrawProfile(plan){
   const cv=document.getElementById('civProfileCv'); if(!cv) return;
   const g=cv.getContext('2d'); const w=cv.width,h=cv.height;
   g.clearRect(0,0,w,h); g.fillStyle='#14110c'; g.fillRect(0,0,w,h);
-  if(!plan||!plan.profile.length) return;
+  if(!plan||!plan.profile||!plan.profile.length) return;
   const p=plan.profile,n=p.length;
   g.beginPath(); g.moveTo(0,h);
   for(let k=0;k<n;k++){ const x=k/(n-1)*w, y=h-Math.max(0,Math.min(1,p[k]))*(h-4)-2; k?g.lineTo(x,y):g.moveTo(x,y); }
@@ -8480,59 +9055,135 @@ function _civDrawProfile(plan){
   g.beginPath();
   for(let k=0;k<n;k++){ const x=k/(n-1)*w, y=h-Math.max(0,Math.min(1,p[k]))*(h-4)-2; k?g.lineTo(x,y):g.moveTo(x,y); }
   g.strokeStyle='#d8b878'; g.lineWidth=1.5; g.stroke();
+  if(plan.dayFracs&&plan.dayFracs.length<=90){ g.strokeStyle='rgba(220,200,160,.35)'; g.lineWidth=1;
+    for(const f of plan.dayFracs){ const x=f*w; g.beginPath(); g.moveTo(x,2); g.lineTo(x,h-2); g.stroke(); } }
 }
 
-function _civUpdateTerrainCondition(jn){
-  const modeKey=jn.mode||'Mounted';
-  const m=CIV_TRANSPORT_MODES.find(t=>t.key===modeKey)||CIV_TRANSPORT_MODES[1];
-  const cat=m.cat==='both'?(jn.sea?'sea':'land'):m.cat;
-  const terrEl=document.getElementById('civTerrainType'), condEl=document.getElementById('civCondition');
-  if(!terrEl||!condEl) return;
-  const terrOpts=CIV_TERRAIN_OPTS[cat]||CIV_TERRAIN_OPTS.land;
-  const condOpts=CIV_CONDITION_OPTS[cat]||CIV_CONDITION_OPTS.land;
-  terrEl.innerHTML=terrOpts.map(t=>`<option value="${t.key}">${t.label} ×${t.mod.toFixed(2)}</option>`).join('');
-  condEl.innerHTML=condOpts.map(c=>`<option value="${c.key}">${c.label} ×${c.mod.toFixed(2)}</option>`).join('');
-  const dTerr=cat==='sea'?'Coastal':cat==='river'?'Calm':'Dirt';
-  const dCond=cat==='land'?'Standard':'Neutral';
-  terrEl.value=jn.terrain||dTerr; if(!terrEl.value) terrEl.value=terrOpts[0].key;
-  condEl.value=jn.condition||dCond; if(!condEl.value) condEl.value=condOpts[0].key;
-  jn.terrain=terrEl.value; jn.condition=condEl.value;
-  terrEl.onchange=()=>{ if(_civSelectedJourneyIdx<0) return; civJourneys[_civSelectedJourneyIdx].terrain=terrEl.value; _civRefreshPlannerResult(civJourneys[_civSelectedJourneyIdx]); _civRenderJourneyList(); };
-  condEl.onchange=()=>{ if(_civSelectedJourneyIdx<0) return; civJourneys[_civSelectedJourneyIdx].condition=condEl.value; _civRefreshPlannerResult(civJourneys[_civSelectedJourneyIdx]); _civRenderJourneyList(); };
+/* ---- planner UI ---- */
+function _jpRefresh(structural){
+  if(_civSelectedJourneyIdx<0||_civSelectedJourneyIdx>=civJourneys.length) return;
+  const jn=civJourneys[_civSelectedJourneyIdx];
+  jn.groupSize=jn.plan?jn.plan.groupSize:jn.groupSize;   /* keep the legacy save field in sync */
+  if(structural) _jpRenderPartyForm(jn);
+  _jpRenderResults(jn);
+  _civRenderJourneyList();
 }
-
-function _civRefreshPlannerResult(jn){
-  const plan=_civPlanJourneyV2(jn); _civDrawProfile(plan);
-  const el=document.getElementById('civPlanner'); if(!el) return;
-  if(!plan){ el.innerHTML='<div class="hint">Select a journey above to plan it.</div>'; return; }
-  const dStr=plan.days<1?Math.round(plan.days*24)+' h':plan.days<60?plan.days.toFixed(1)+' days':(plan.days/30).toFixed(1)+' months';
-  const modStr=`×${plan.terrMod.toFixed(2)} terrain · ×${plan.condMod.toFixed(2)} cond${plan.coldMod<1?' · ×'+plan.coldMod.toFixed(2)+' cold':''}`;
-  const gs=+(document.getElementById('civGroupSize')||{}).value||1;
-  const supplies=gs>1?Math.ceil(plan.days*gs*2):0;
-  el.innerHTML=`
-    <div class="insp-row"><span class="k">Distance</span><span class="val">${plan.km.toFixed(0)} km</span></div>
-    <div class="insp-row"><span class="k">Travel time</span><span class="val">${dStr}</span></div>
-    <div class="insp-row"><span class="k">Speed</span><span class="val">${plan.speedKmDay.toFixed(0)} km/day (${plan.mode})</span></div>
-    <div class="insp-row"><span class="k">Climate</span><span class="val">${plan.tMin.toFixed(0)}…${plan.tMax.toFixed(0)} °C${plan.coldMod<1?' ❄':''}</span></div>
-    <div class="insp-row" style="font-size:.72rem;color:var(--muted)"><span class="k">Modifiers</span><span class="val">${modStr}</span></div>
-    ${supplies>0?`<div class="insp-row" style="font-size:.72rem;color:var(--muted)"><span class="k">Group of ${gs}</span><span class="val">~${supplies} kg supplies</span></div>`:''}`;
+function _jpRenderPartyForm(jn){
+  const host=document.getElementById('jpParty'); if(!host) return;
+  const p=_jpEnsurePlan(jn);
+  const opt=(list,cur)=>list.map(k=>`<option value="${k.replace(/"/g,'&quot;')}"${k===cur?' selected':''}>${k}</option>`).join('');
+  const isMounted=p.transport==="Mounted Rider";
+  const isWater=p.transport==="River Transport"||p.transport==="Sea Faring";
+  const vessels=Object.keys(JP_SHIPS).filter(v=>JP_SHIPS[v].modes.includes(p.transport==="Sea Faring"?"sea":"river"));
+  host.innerHTML=`
+    <div class="sublabel">Travelling party</div>
+    <div class="row"><label>Group size</label><input data-jp="groupSize" type="number" min="1" max="100000" value="${p.groupSize}" style="flex:1"><span style="padding-left:4px;color:var(--muted);font-size:.75rem">people</span></div>
+    <div class="row"><label>Transport</label><select data-jp="transport" data-structural="1" style="flex:1">${opt(JP_TOP_MODES,p.transport)}</select></div>
+    ${isMounted?`<div class="row"><label>Mount</label><select data-jp="mountAnimal" style="flex:1">${opt(Object.keys(JP_ANIMALS),p.mountAnimal)}</select></div>`:''}
+    ${isWater?`<div class="row"><label>Vessel</label><select data-jp="vessel" style="flex:1">${opt(vessels,vessels.includes(p.vessel)?p.vessel:vessels[0])}</select></div>`:''}
+    <div class="row"><label>Pace</label><select data-jp="pace" style="flex:1">${opt(Object.keys(JP_PACE),p.pace)}</select></div>
+    <div class="row"><label>Hours/day</label><input data-jp="hours" type="number" min="1" max="16" value="${p.hours}" style="flex:1"></div>
+    <div class="row"><label>Season</label><select data-jp="season" style="flex:1">${opt(Object.keys(JP_SEASONAL_HUMAN),p.season)}</select></div>
+    <div class="sublabel" style="margin-top:8px">Cargo &amp; supplies</div>
+    <div class="row"><label>Trade cargo</label><input data-jp="cargoKg" type="number" min="0" step="10" value="${p.cargoKg}" style="flex:1"><span style="padding-left:4px;color:var(--muted);font-size:.75rem">kg</span></div>
+    <div class="row"><label>Supplies carried</label><input data-jp="supplyDays" type="number" min="1" max="60" value="${p.supplyDays}" style="flex:1"><span style="padding-left:4px;color:var(--muted);font-size:.75rem">days</span></div>
+    <label class="chk"><input data-jp="carryFood" type="checkbox" ${p.carryFood?'checked':''}> Carry food (off = live off the land / buy en route)</label>
+    <div class="row"><label>Grazing</label><select data-jp="grazing" style="flex:1">${opt(Object.keys(JP_GRAZING),p.grazing)}</select></div>
+    <div class="row"><label>Foraging</label><select data-jp="foraging" style="flex:1">${opt(Object.keys(JP_FORAGING),p.foraging)}</select></div>
+    <div class="sublabel" style="margin-top:8px">Animals &amp; vehicles</div>
+    <div class="row" style="gap:4px"><label>Donkeys / Mules</label>
+      <input data-jp="animals.donkey" type="number" min="0" value="${p.animals.donkey}" style="flex:1;min-width:0">
+      <input data-jp="animals.mule" type="number" min="0" value="${p.animals.mule}" style="flex:1;min-width:0"></div>
+    <div class="row" style="gap:4px"><label>Camels / Horses</label>
+      <input data-jp="animals.camel" type="number" min="0" value="${p.animals.camel}" style="flex:1;min-width:0">
+      <input data-jp="animals.horse" type="number" min="0" value="${p.animals.horse}" style="flex:1;min-width:0"></div>
+    <div class="row" style="gap:4px"><label>Carts / Wagons</label>
+      <input data-jp="carts" type="number" min="0" value="${p.carts}" style="flex:1;min-width:0">
+      <input data-jp="wagons" type="number" min="0" value="${p.wagons}" style="flex:1;min-width:0"></div>
+    <div class="row" style="gap:4px"><label>Travois / Sleds</label>
+      <input data-jp="travois" type="number" min="0" value="${p.travois}" style="flex:1;min-width:0">
+      <input data-jp="sleds" type="number" min="0" value="${p.sleds}" style="flex:1;min-width:0"></div>
+    <div class="sublabel" style="margin-top:8px">Route conditions</div>
+    <div class="row"><label>Road quality</label><select data-jp="routeCond" style="flex:1">${opt(['auto',...Object.keys(JP_ROUTE.land)],p.routeCond)}</select></div>
+    <div class="row"><label>Infrastructure</label><select data-jp="infra" style="flex:1">${opt(['auto',...Object.keys(JP_INFRA)],p.infra)}</select></div>
+    <div class="row" data-jp-desert style="display:none"><label>Desert water</label><select data-jp="desertWater" style="flex:1">${opt(Object.keys(JP_DESERT_WATER),p.desertWater)}</select></div>
+    <div class="hint" style="font-size:.7rem">Road quality &amp; infrastructure default to <b>auto</b> — derived from ways/roads the route follows and settlement density along it. Coordination, fatigue, load, weather (biome × season), grazing/foraging and terrain modifiers follow the V1.915 model.</div>`;
+  host.querySelectorAll('[data-jp]').forEach(el=>{
+    const path=el.dataset.jp; if(!path) return;
+    const apply=()=>{
+      const pl=_jpEnsurePlan(jn);
+      let v; if(el.type==='checkbox') v=el.checked; else if(el.type==='number') v=Math.max(+el.min||0,+el.value||0); else v=el.value;
+      if(path.startsWith('animals.')) pl.animals[path.slice(8)]=v|0; else pl[path]=v;
+      _jpRefresh(el.dataset.structural==='1');
+    };
+    el.addEventListener('change',apply);
+  });
+  const pr=document.getElementById('jpPresetRow');
+  if(pr){ pr.innerHTML='';
+    for(const name in JP_PRESETS){ const b=document.createElement('button'); b.textContent=name; b.style.cssText='font-size:.72rem;padding:3px 8px';
+      b.onclick=()=>{ const pl=_jpEnsurePlan(jn); const pre=JP_PRESETS[name];
+        for(const k in pre){ if(k==='animals'){ Object.assign(pl.animals,pre.animals); } else pl[k]=pre[k]; }
+        _jpRefresh(true); };
+      pr.appendChild(b); } }
 }
-
+function _jpRenderResults(jn){
+  const host=document.getElementById('jpResults'); if(!host) return;
+  const plan=_jpPlan(jn);
+  _civDrawProfile(plan);
+  if(!plan){ host.innerHTML='<div class="hint">Draw a route with at least two points, then select it.</div>'; return; }
+  const dRow=document.querySelector('[data-jp-desert]'); if(dRow) dRow.style.display=plan.hasDesert?'':'none';
+  const catIco={land:'🏞',river:'⛵',sea:'🌊'};
+  let html='';
+  if(plan.blocked) html+=`<div style="border:1px solid var(--warn);border-radius:6px;padding:6px 9px;margin-bottom:6px;font-size:.78rem;color:var(--warn)">⛔ ${plan.blockedMsg}</div>`;
+  html+=`
+    <div class="insp-row"><span class="k">Distance</span><span class="val">${plan.km.toFixed(0)} km · ${plan.stages.length} stage${plan.stages.length>1?'s':''}</span></div>
+    <div class="insp-row"><span class="k">Travel time</span><span class="val"><b>${plan.blocked?'— (blocked)':jpFmtDays(plan.days)}</b></span></div>
+    <div class="insp-row"><span class="k">Average speed</span><span class="val">${plan.avgKmDay>0?plan.avgKmDay.toFixed(1)+' km/day':'—'}</span></div>
+    <div class="insp-row"><span class="k">Elevation</span><span class="val">↑${plan.ascent.toFixed(0)} m ↓${plan.descent.toFixed(0)} m · max ${plan.hiM.toFixed(0)} m</span></div>
+    <div class="insp-row"><span class="k">Hazards</span><span class="val">${plan.rivX} river crossing${plan.rivX===1?'':'s'}${plan.passKm>0?` · ${plan.passKm.toFixed(0)} km mountain`:''}${plan.desertKm>0?` · ${plan.desertKm.toFixed(0)} km desert`:''} · ${plan.badWxPct.toFixed(0)}% storm/snow odds</span></div>`;
+  if(plan.hasLand||plan.foodKg>0) html+=`
+    <div class="insp-row"><span class="k">Supply forecast</span><span class="val">${jpFmtKg(plan.foodKg)} food${plan.fodderKg>0?` · ${jpFmtKg(plan.fodderKg)} fodder`:''} · ${plan.waterL>=1000?(plan.waterL/1000).toFixed(1)+' m³':Math.round(plan.waterL)+' L'} water</span></div>`;
+  if(plan.worstLand){ const c=plan.worstLand.cap, r=plan.worstLand.loadRatio, pen=jpLoadPenalty(r);
+    const segs=[['cargo',c.breakdown.cargo,'#c08040'],['food',c.breakdown.humanFood,'#88a050'],['water',c.breakdown.humanWater+c.breakdown.animalWater,'#5080a8'],['fodder',c.breakdown.fodder,'#a09048']];
+    const capW=Math.max(1,c.capacity);
+    html+=`<div style="margin:5px 0 2px;font-size:.7rem;color:var(--muted)">Carrying capacity — worst stage (${(r*100).toFixed(0)}% · ${pen.label})</div>
+    <div style="display:flex;height:9px;border-radius:4px;overflow:hidden;border:1px solid var(--border);background:var(--panel-darker)">`+
+      segs.map(([n,v,col])=>`<div title="${n}: ${jpFmtKg(v)}" style="width:${Math.min(100,v/capW*100)}%;background:${col}"></div>`).join('')+
+    `</div><div style="font-size:.68rem;color:var(--muted);margin-bottom:4px">${jpFmtKg(c.capacity*r)} of ${jpFmtKg(c.capacity)} (incl. supplies for the actual trip length)${c.draftShortfall>0?` · ⚠ ${c.draftShortfall} draft animal${c.draftShortfall>1?'s':''} short for the vehicles`:''}</div>`; }
+  const resupplies=plan.results.filter(r=>r.resupply&&!r.blocked);
+  const worstRes=resupplies.find(r=>!r.resupply.feasible)||resupplies.sort((a,b)=>(b.resupply.stopsNeeded||0)-(a.resupply.stopsNeeded||0))[0];
+  if(worstRes) html+=`<div class="insp-row"><span class="k">Resupply</span><span class="val" style="font-size:.72rem">${worstRes.resupply.verdict}</span></div>`;
+  if(plan.risk) html+=`<div style="font-size:.72rem;color:var(--warn);margin:3px 0">${plan.risk}</div>`;
+  /* stage table */
+  html+=`<details style="margin-top:6px"><summary style="cursor:pointer;font-size:.75rem;color:var(--accent)">Stages (${plan.stages.length})</summary>
+    <table style="width:100%;border-collapse:collapse;font-size:.7rem;margin-top:4px">
+    <tr style="color:var(--muted);text-align:left"><th></th><th>terrain</th><th>biome</th><th style="text-align:right">km</th><th style="text-align:right">km/d</th><th style="text-align:right">days</th></tr>`;
+  plan.results.forEach((r,i)=>{ const s=r.st;
+    html+=`<tr style="border-top:1px solid var(--border)${r.blocked?';color:var(--warn)':''}">
+      <td>${catIco[s.cat]||''}</td><td>${s.terrain}${s.routeCond&&s.routeCond!=='None / Wild'&&s.routeCond!=='Neutral'?` <span style="color:var(--muted)">(${s.routeCond})</span>`:''}</td>
+      <td style="color:var(--muted)">${s.biome}</td><td style="text-align:right">${s.km.toFixed(0)}</td>
+      <td style="text-align:right">${r.blocked?'⛔':r.dailyKm.toFixed(0)}</td><td style="text-align:right">${r.blocked?'—':r.days.toFixed(1)}</td></tr>`; });
+  html+=`</table></details>`;
+  /* daily timeline */
+  if(plan.timeline.length){ const tl=plan.timeline, shown=tl.slice(0,40);
+    html+=`<details style="margin-top:4px"><summary style="cursor:pointer;font-size:.75rem;color:var(--accent)">Daily stages (${tl.length} day${tl.length>1?'s':''})</summary>
+      <div style="font-size:.7rem;margin-top:4px;max-height:180px;overflow-y:auto">`+
+      shown.map(d=>`<div style="display:flex;gap:6px;border-top:1px solid var(--border);padding:2px 0"><span style="color:var(--accent);width:44px;flex-shrink:0">Day ${d.day}</span><span style="flex:1">${d.terrain}, ${d.biome}</span><span style="color:var(--muted)">${d.km.toFixed(0)} km</span><span style="width:86px;flex-shrink:0;text-align:right;color:${d.camp?'var(--text)':'var(--muted)'}">${d.camp?'🏠 '+d.camp:'⛺ wild camp'}</span></div>`).join('')+
+      (tl.length>shown.length?`<div style="color:var(--muted);padding:3px 0">… ${tl.length-shown.length} more days</div>`:'')+`</div></details>`; }
+  /* formula trace */
+  html+=`<details style="margin-top:4px"><summary style="cursor:pointer;font-size:.75rem;color:var(--accent)">Calculation trace</summary>
+    <pre style="font-size:9px;line-height:1.45;overflow-x:auto;background:var(--panel-darker);border:1px solid var(--border);border-radius:5px;padding:6px;margin-top:4px">${
+    plan.results.map((r,i)=>`── Stage ${i+1} · ${r.transportLabel||''} ──\n`+(r.blocked?`⛔ ${r.blocked}`:r.formula)).join('\n\n')}</pre></details>`;
+  host.innerHTML=html;
+}
 function _civUpdatePlannerPanel(){
   const sec=document.getElementById('civPlannerSec'); if(!sec) return;
   if(_civSelectedJourneyIdx<0||_civSelectedJourneyIdx>=civJourneys.length){ sec.style.display='none'; return; }
   sec.style.display='';
   const jn=civJourneys[_civSelectedJourneyIdx];
-  const modeEl=document.getElementById('civTransportMode');
-  if(modeEl){
-    modeEl.innerHTML=CIV_TRANSPORT_MODES.map(m=>`<option value="${m.key}">${m.label} (${(m.kmh*m.hoursDay).toFixed(0)} km/day base)</option>`).join('');
-    modeEl.value=jn.mode||'Mounted';
-    modeEl.onchange=()=>{ if(_civSelectedJourneyIdx<0) return; civJourneys[_civSelectedJourneyIdx].mode=modeEl.value; _civUpdateTerrainCondition(civJourneys[_civSelectedJourneyIdx]); _civRefreshPlannerResult(civJourneys[_civSelectedJourneyIdx]); _civRenderJourneyList(); };
-  }
-  _civUpdateTerrainCondition(jn);
-  _civRefreshPlannerResult(jn);
-  const gs=document.getElementById('civGroupSize');
-  if(gs) gs.onchange=gs.oninput=()=>{ if(_civSelectedJourneyIdx>=0) _civRefreshPlannerResult(civJourneys[_civSelectedJourneyIdx]); };
+  _jpEnsurePlan(jn);
+  _jpRenderPartyForm(jn);
+  _jpRenderResults(jn);
 }
 
 /* ---- info tool ---- */
@@ -9664,7 +10315,7 @@ function _civSyncToState(){
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
     ways:civWays.map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''})),
-    journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10})),
+    journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):null})),
     year:civYear,
     factionNames:[...civFactionNames],
   };
@@ -9679,7 +10330,7 @@ function _civSyncFromState(){
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
   // backwards compat: old saves used c.routes — treat them as ways
   civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,sea:!!r.sea,type:r.type||'road',manual:!!r.manual,name:r.name||''}));
-  civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10}));
+  civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):undefined}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];
   // A saved project may have had factions added beyond the default 7 — extend CIV_FACTIONS

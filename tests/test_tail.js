@@ -3263,6 +3263,71 @@ if (typeof carveRiverValleys === 'function') {
     } else { console.log('skip - CompressionStream/DecompressionStream unavailable'); }
   }
 
+  /* ---------- R5: terrain rendering modernization (SVF · cast shadows · curvature · geology · wetness · landforms · contour-m) ---------- */
+  {
+    // buildSVFField — flat ground sees the whole sky; a pit floor sees less than open ground
+    const W = 24, H = 24, flat = new Float32Array(W * H).fill(0.5);
+    const svfFlat = buildSVFField(flat, W, H, 1);
+    check('SVF: flat terrain ⇒ multiplier 1 everywhere', svfFlat.every(v => Math.abs(v - 1) < 1e-9));
+    const pit = new Float32Array(W * H).fill(0.8);
+    for (let y = 9; y <= 15; y++) for (let x = 9; x <= 15; x++) pit[y * W + x] = 0.2;   // deep square pit
+    const svfPit = buildSVFField(pit, W, H, 1);
+    const ctr = svfPit[12 * W + 12], open = svfPit[2 * W + 2];
+    check('SVF: pit floor darker than open ground', ctr < open - 0.02);
+    check('SVF: multipliers within [1−SVF_MAX, 1]', svfPit.every(v => v >= 1 - SVF_MAX - 1e-9 && v <= 1 + 1e-9));
+    const svfPit2 = buildSVFField(pit, W, H, 1);
+    check('SVF: deterministic', svfPit.every((v, i) => v === svfPit2[i]));
+    check('SVF: strength scales the darkening', buildSVFField(pit, W, H, 0.3)[12 * W + 12] > ctr);
+
+    // buildSunShadowField — a wall shadows the cells on its anti-sun side only
+    const shFlat = buildSunShadowField(flat, W, H, 90, 20, 1);
+    check('Shadows: flat terrain ⇒ fully lit', shFlat.every(v => Math.abs(v - 1) < 1e-9));
+    const wall = new Float32Array(W * H).fill(0.1);
+    for (let y = 0; y < H; y++) for (let x = 14; x <= 17; x++) wall[y * W + x] = 0.9;    // tall N–S wall band x=14–17 (wide enough for the log-spaced samples)
+    const sh = buildSunShadowField(wall, W, H, 90, 20, 1);                               // sun due east → march +x
+    check('Shadows: west of the wall is shadowed', sh[12 * W + 12] < 1 - 0.05);
+    check('Shadows: east of the wall stays lit', Math.abs(sh[12 * W + 20] - 1) < 1e-9);
+    check('Shadows: within [1−SHADOW_MAX, 1]', sh.every(v => v >= 1 - SHADOW_MAX - 1e-9 && v <= 1 + 1e-9));
+
+    // buildLandformField — synthetic cliff / floodplain / dune classification
+    const LW = 16, LH = 16, sea = 0.05;
+    const tmpT = new Float32Array(LW * LH).fill(15), tmpR = new Float32Array(LW * LH).fill(0.4), noFlow = new Float32Array(LW * LH);
+    const cliff = new Float32Array(LW * LH);
+    for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) cliff[y * LW + x] = x < 8 ? 0.1 : 0.9;
+    const lfC = buildLandformField(cliff, tmpT, tmpR, noFlow, LW, LH, sea);
+    check('Landform: steep face classifies as cliff', (() => { for (let y = 2; y < LH - 2; y++) if (lfC[y * LW + 8] === 1 || lfC[y * LW + 7] === 1) return true; return false; })());
+    const flatLow = new Float32Array(LW * LH).fill(0.1), fl2 = new Float32Array(LW * LH);
+    fl2[8 * LW + 8] = LW * LH * 0.001;                                                   // trunk channel cell
+    const lfF = buildLandformField(flatLow, tmpT, tmpR, fl2, LW, LH, sea);
+    check('Landform: flat low cell beside a trunk channel = floodplain', lfF[8 * LW + 7] === 6 && lfF[7 * LW + 8] === 6);
+    const duneF = new Float32Array(LW * LH), hotT = new Float32Array(LW * LH).fill(28), dryR = new Float32Array(LW * LH).fill(0.05);
+    for (let y = 0; y < LH; y++) for (let x = 0; x < LW; x++) duneF[y * LW + x] = 0.2 + 0.05 * Math.sin(x * 2);
+    const lfD = buildLandformField(duneF, hotT, dryR, noFlow, LW, LH, sea);
+    check('Landform: hot arid rolling sand classifies dunes', (() => { let n = 0; for (let i = 0; i < lfD.length; i++) if (lfD[i] === 4) n++; return n > 3; })());
+    check('Landform: classes stay within the frozen vocabulary', lfC.every(v => v <= 6) && lfF.every(v => v <= 6) && lfD.every(v => v <= 6));
+    const lfD2 = buildLandformField(duneF, hotT, dryR, noFlow, LW, LH, sea);
+    check('Landform: deterministic', lfD.every((v, i) => v === lfD2[i]));
+
+    // render gating — each new slider changes land pixels when on, and off ⇒ bit-identical.
+    // Sample the HIGHEST-DISCHARGE land cells so wet valley floors (twi>1) are in the set.
+    const land = (() => { const all = []; for (let i = 0; i < GW * GH; i++) if (field[i] > state.seaLevel + 0.08) all.push(i);
+      all.sort((a, b) => flowField[b] - flowField[a]); return all.slice(0, 400); })();
+    const row = () => land.map(i => surfaceColor(i % GW, (i / GW) | 0, i, field[i]).map(v => Math.round(v * 100) / 100).join(',')).join('|');
+    const base = row();
+    state.viz.curveShade = 0.8; const cvOn = row(); state.viz.curveShade = 0;
+    check('curvature shading changes land pixels when on', cvOn !== base);
+    state.viz.wetness = 0.9; const wtOn = row(); state.viz.wetness = 0;
+    check('wetness changes land pixels when on', wtOn !== base);
+    _geoLith = currentLithology(); state.viz.geology = 0.9; const geOn = row(); state.viz.geology = 0; _geoLith = null;
+    check('geology materials change land pixels when on', geOn !== base);
+    state.viz.contours = 0.7; const cA = row(); state.viz.contourM = 25; const cB = row(); state.viz.contourM = 0; const cA2 = row(); state.viz.contours = 0;
+    check('metre contour interval reshapes the isolines', cB !== cA);
+    check('contourM=0 reproduces the legacy interval exactly', cA2 === cA);
+    check('all R5 sliders off ⇒ land pixels bit-identical', row() === base);
+    check('R5 viz defaults are off', state.viz.svf === 0 && state.viz.shadows === 0 && state.viz.curveShade === 0 && state.viz.geology === 0 && state.viz.wetness === 0 && state.viz.season === 0 && state.viz.contourM === 0);
+    check('_seasonK stays 0 by default (annual fields untouched)', _seasonK === 0);
+  }
+
   console.log('\n' + __pass + ' passed, ' + __fail + ' failed');
   process.exit(__fail ? 1 : 0);
 })();

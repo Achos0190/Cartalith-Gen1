@@ -5459,7 +5459,8 @@ function drawRoadsOverlay(){
   }
   const rr=Math.max(2.5,GW/280);
   vctx.save();
-  for(const p of state.places){ vctx.beginPath(); vctx.arc(p.x,p.y,rr,0,6.283); vctx.fillStyle='#1c1410'; vctx.fill(); vctx.beginPath(); vctx.arc(p.x,p.y,rr*0.62,0,6.283); vctx.fillStyle=_placeMode?'#ffd24a':'#e8c060'; vctx.fill(); }
+  /* plain (kind-less) markers only — civ settlements draw their own icons in drawCivLayer */
+  for(const p of state.places){ if(p.kind) continue; vctx.beginPath(); vctx.arc(p.x,p.y,rr,0,6.283); vctx.fillStyle='#1c1410'; vctx.fill(); vctx.beginPath(); vctx.arc(p.x,p.y,rr*0.62,0,6.283); vctx.fillStyle=_placeMode?'#ffd24a':'#e8c060'; vctx.fill(); }
   vctx.restore();
 }
 function drawExportTileGrid(){
@@ -7864,6 +7865,10 @@ const CIV_POI_TYPES=[
   {key:'cave',         label:'Cave',           glyph:'◐'},
   {key:'other',        label:'Other',          glyph:'◆'},
 ];
+/* Traits = map-glyph ATTRIBUTES (a place can have several; drawn beside the marker).
+   Deliberately overlaps CIV_SPECIALISATIONS below on mining/trade_hub — a specialisation
+   is the ONE economic focus (V1.915 economy model, feeds trade volume), while the same
+   word as a trait is just a badge. Keep both vocabularies; don't merge. */
 const CIV_TRAITS=[
   {key:'fortified',   label:'Fortified',    glyph:'⬢'},
   {key:'mining',      label:'Mining',       glyph:'⚒'},
@@ -7895,72 +7900,12 @@ const CIV_WAY_TYPES=[
   {key:'ancient', label:'Ancient route'},
   {key:'sea-lane',label:'Sea lane'},
 ];
-const CIV_WAY_CONDITIONS=['Maintained','Standard','Deteriorated','Broken','None / Wild'];
-const CIV_TRANSPORT_MODES=[
-  {key:'Walking',    label:'Walking',       kmh:4.0,  hoursDay:10, cat:'land'},
-  {key:'Mounted',    label:'Mounted Rider', kmh:6.5,  hoursDay:10, cat:'land'},
-  {key:'Baggage',    label:'Baggage Train', kmh:3.0,  hoursDay:10, cat:'land'},
-  {key:'RiverBarge', label:'River Barge',   kmh:2.0,  hoursDay:24, cat:'river'},
-  {key:'Keelboat',   label:'Keelboat',      kmh:4.0,  hoursDay:24, cat:'river'},
-  {key:'Longship',   label:'Longship',      kmh:11.0, hoursDay:24, cat:'both'},
-  {key:'Cog',        label:'Cog',           kmh:10.0, hoursDay:24, cat:'sea'},
-  {key:'Caravel',    label:'Caravel',       kmh:13.0, hoursDay:24, cat:'sea'},
-];
-const CIV_TERRAIN_OPTS={
-  land:[
-    {key:'Paved',    label:'Paved Road',    mod:1.20},
-    {key:'Dirt',     label:'Dirt Track',    mod:1.00},
-    {key:'Plains',   label:'Open Plains',   mod:0.95},
-    {key:'Forest',   label:'Forest Path',   mod:0.75},
-    {key:'Hills',    label:'Hills',         mod:0.70},
-    {key:'MtnPass',  label:'Mountain Pass', mod:0.65},
-    {key:'MtnTrail', label:'Mountain Trail',mod:0.45},
-    {key:'Swamp',    label:'Swamp / Marsh', mod:0.40},
-    {key:'Snow',     label:'Snow / Ice',    mod:0.55},
-  ],
-  river:[
-    {key:'Calm',     label:'Calm River',    mod:1.00},
-    {key:'Moderate', label:'Moderate River',mod:0.90},
-    {key:'Delta',    label:'River Delta',   mod:0.65},
-    {key:'Rapids',   label:'Rapids',        mod:0.50},
-  ],
-  sea:[
-    {key:'Sheltered',label:'Sheltered Bay', mod:1.10},
-    {key:'Coastal',  label:'Coastal Waters',mod:1.00},
-    {key:'OpenSea',  label:'Open Sea',      mod:0.85},
-    {key:'Rough',    label:'Rough Open Sea',mod:0.60},
-  ],
-};
-const CIV_CONDITION_OPTS={
-  land:[
-    {key:'Maintained',  label:'Maintained',   mod:1.20},
-    {key:'Standard',    label:'Standard',     mod:1.00},
-    {key:'Deteriorated',label:'Deteriorated', mod:0.75},
-    {key:'Broken',      label:'Broken',       mod:0.55},
-    {key:'Wild',        label:'None / Wild',  mod:0.85},
-  ],
-  river:[
-    {key:'StrongDown',label:'Strong Downstream', mod:1.40},
-    {key:'MildDown',  label:'Mild Downstream',   mod:1.30},
-    {key:'Neutral',   label:'Neutral',           mod:1.00},
-    {key:'MildUp',    label:'Mild Upstream',     mod:0.80},
-    {key:'StrongUp',  label:'Strong Upstream',   mod:0.55},
-  ],
-  sea:[
-    {key:'FavWindCur',label:'Favorable Wind & Current', mod:1.40},
-    {key:'FavWind',   label:'Favorable Wind',           mod:1.20},
-    {key:'Neutral',   label:'Neutral',                  mod:1.00},
-    {key:'Headwind',  label:'Headwind',                 mod:0.75},
-    {key:'StrongHead',label:'Strong Headwind',          mod:0.50},
-  ],
-};
-
 /* ---- civ state (transient — NOT in EF state, patched into exportZip/loadZip) ---- */
 let civTerritory = null;        // Uint8Array(GW*GH) — faction index per cell
 let civTimeline  = [];          // [{year, data:[i,fid,...]}]
 let civYear      = 0;
 let civWays      = [];          // auto-generated road/sea network [{pts,km,sea,name}]
-let civJourneys  = [];          // user-planned routes [{pts,km,sea,name,mode,terrain,condition,groupSize}]
+let civJourneys  = [];          // user-planned routes [{pts,km,brks?,sea,name,groupSize,plan?}]
 let civFactionNames = CIV_FACTIONS.map(f=>f[0]);
 let _civWaypoints = [];         // in-progress route waypoints [x,y]
 let _civWayWaypoints = [];      // in-progress manual way (infrastructure) waypoints [x,y]
@@ -8623,6 +8568,9 @@ const JP_ROUTE={
   river:{ "Strong Downstream":1.40,"Mild Downstream":1.30,"Neutral":1.00,"Mild Upstream":0.80,"Strong Upstream":0.55 },
   sea:{ "Favorable Wind & Current":1.40,"Favorable Wind":1.20,"Neutral":1.00,"Headwind":0.75,"Strong Headwind":0.50 }
 };
+/* Way-condition vocabulary = the planner's land route-quality table (single source of
+   truth — a way's `condition` is fed straight into jpCalcLand's rMod lookup). */
+const CIV_WAY_CONDITIONS=Object.keys(JP_ROUTE.land);
 const JP_WHEEL_BLOCKED=new Set(["Mountain Trails","Swamp / Marsh","Deep Sand","Forest Path","Ruins / Debris"]);
 const JP_MOUNT_BLOCKED=new Set(["Swamp / Marsh"]);
 
@@ -8817,7 +8765,11 @@ function _jpEnsurePlan(jn){
   return p;
 }
 
-/* ---- world sampling: cart biome index → legacy planner biome key ---- */
+/* ---- world sampling: cart biome index → legacy planner biome key ----
+   NOTE: the climate-key→name map below intentionally parallels ELEV_TO_CART (the EF
+   climate-biome→Cartalith-index table) — it exists because JP_BIOMES is keyed by the
+   LEGACY V1.915 biome NAMES, not Cartalith indices. If ELEV_TO_CART's mapping changes,
+   keep this fallback consistent. */
 function jpLegacyBiomeOf(bIdx,i){
   const name=CART_BIOMES[bIdx-1];
   if(JP_BIOMES[name]) return name;                      /* 12 legacy biomes match by name */
@@ -9521,6 +9473,41 @@ function _civSnapLand(gx,gy,maxR){
   return null;
 }
 
+/* Coastal snap: if (gx,gy) sits within maxR cells of the OCEAN (water-body class 1),
+   relocate it to the best SHORE cell — dry land 4-adjacent to ocean — picking the highest
+   suitability (nearest wins ties). Historical harbour towns sit ON the water, not a few
+   cells inland; the suitability field's harbour bonus already makes near-coast optima
+   score high, this makes the placement literal so ports hug the sea. `used` (optional
+   Set) prevents two seeds converging on the same shore cell. Returns [x,y] or null when
+   no ocean is within reach (leave the seed where it is). */
+function _civSnapCoast(gx,gy,maxR,suit,used){
+  let wb=null; try{ if(typeof currentWaterBodies==='function') wb=currentWaterBodies(); }catch(e){}
+  if(!wb) return null;
+  const sea=state.seaLevel||0.42, wrapX=!!state.world;
+  let best=null,bs=-Infinity,bd=Infinity;
+  for(let dy=-maxR;dy<=maxR;dy++){
+    const ny=gy+dy; if(ny<0||ny>=GH) continue;
+    for(let dx=-maxR;dx<=maxR;dx++){
+      let nx=gx+dx; if(wrapX) nx=(nx+GW)%GW; else if(nx<0||nx>=GW) continue;
+      const ni=ny*GW+nx;
+      if(field[ni]<sea||wb[ni]!==0) continue;            /* must be dry land */
+      let shore=false;                                    /* …4-adjacent to ocean */
+      for(let d=0;d<4&&!shore;d++){
+        let qx=nx+[1,-1,0,0][d]; const qy=ny+[0,0,1,-1][d];
+        if(wrapX) qx=(qx+GW)%GW; else if(qx<0||qx>=GW) continue;
+        if(qy<0||qy>=GH) continue;
+        if(wb[qy*GW+qx]===1) shore=true;
+      }
+      if(!shore||(used&&used.has(ni))) continue;
+      const sv=suit?suit[ni]:0, d=Math.hypot(dx,dy);
+      if(sv>bs+1e-9||(Math.abs(sv-bs)<=1e-9&&d<bd)){ bs=sv; bd=d; best=[nx,ny,ni]; }
+    }
+  }
+  if(!best) return null;
+  if(used) used.add(best[2]);
+  return [best[0],best[1]];
+}
+
 /* Check if a full-res cell is within R cells of water */
 function _civIsCoastal(gx,gy,R,oceanOnly){
   const sea=state.seaLevel||0.42;
@@ -9700,87 +9687,32 @@ function _civExtendedSuitability(){
 
 /* Auto-place settlements using EF engine's settlement suitability — matches the Settlement debug view.
  * findSettlementSeeds returns the same local-maxima the debug layer marks with gold dots. */
-function _civAutoPopulate(){
+/* Shared downsampled routing grid (≤384px wide): the field resampled for pathfinding.
+   Every civ router builds its grid through this helper so paths, road-discount masks
+   and place snapping all agree cell-for-cell. */
+function _civRoutingGrid(){
+  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+  const dfld=new Float32Array(RW*RH);
+  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+    dfld[y*RW+x]=field[fy*GW+fx];
+  }
+  return {dfld,RW,RH,sc};
+}
+
+/* Land travel cost on the shared routing grid: terrain slope cost with ALL water
+   impassable — the sea (below sea level) via buildTravelCost, above-sea lakes via
+   the water-body overlay. */
+function _civLandCostGrid(){
+  const {dfld,RW,RH,sc}=_civRoutingGrid();
   const sea=state.seaLevel||0.42;
-  const rng=_civRng((state.seed||12345)*31337+999);
-
-  // Use the EF engine's affordance-based suitability field (soil × water × carry-cap × slope × trade).
-  // More permissive threshold + tighter suppR gives good coverage across continents.
-  const suit=currentSettlementSuitability();
-  const maxPlaces=Math.min(40,Math.max(8,(GW*GH/65536*20)|0));
-  const seeds=findSettlementSeeds(suit,GW,GH,{thresh:0.45,suppR:Math.max(6,(GW/22)|0)});
-  if(!seeds.length){
-    alert('No suitable settlement sites found. Generate a world first.');
-    return;
-  }
-
-  // Full-resolution DFS for land-component labelling — no downsampling = no coast-rounding errors.
-  const wrapX=!!state.world;
-  const comp=new Int32Array(GW*GH).fill(-1);
-  const dx4=[1,-1,0,0],dy4=[0,0,1,-1];
-  let nComp=0;
-  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
-    if(field[y*GW+x]<sea||comp[y*GW+x]>=0) continue;
-    const id=nComp++;
-    const q=[y*GW+x]; comp[y*GW+x]=id;
-    while(q.length){
-      const ci=q.pop(),cx=ci%GW,cy=(ci/GW)|0;
-      for(let d=0;d<4;d++){
-        let nx=cx+dx4[d],ny=cy+dy4[d];
-        if(wrapX) nx=(nx+GW)%GW; else if(nx<0||nx>=GW) continue;
-        if(ny<0||ny>=GH) continue;
-        const ni=ny*GW+nx;
-        if(field[ni]<sea||comp[ni]>=0) continue;
-        comp[ni]=id; q.push(ni);
-      }
-    }
-  }
-
-  // Build candidates from EF seeds (already sorted by score desc, full-res coords).
-  const _autoWb=currentWaterBodies ? currentWaterBodies() : null;
-  const candidates=seeds.slice(0,maxPlaces).map(s=>({
-    x:s.x,y:s.y,suit:s.score,contId:comp[s.y*GW+s.x]
-  })).filter(c=>c.contId>=0 && (!_autoWb || _autoWb[c.y*GW+c.x]===0));
-
-  // Classify: first per continent = capital; global top-4 = city; top-12 = town; rest hamlet/village
-  const contFirst={};
-  for(const c of candidates) if(contFirst[c.contId]===undefined) contFirst[c.contId]=c;
-
-  const factionCount=CIV_FACTIONS.length-1;
-  const contFaction={};
-  let fi=1;
-  for(const cid in contFirst){ contFaction[cid]=fi; fi=fi%factionCount+1; }
-
-  const coastR=Math.max(6,(GW/60)|0);
-  const newPlaces=[];
-  candidates.forEach((c,rank)=>{
-    const isCapital=contFirst[c.contId]===c;
-    const isCity=!isCapital&&rank<4;
-    const isTown=!isCapital&&!isCity&&rank<12;
-    const isVillage=!isCapital&&!isCity&&!isTown&&rank<24;
-    const kind=isCapital?'capital':isCity?'city':isTown?'town':isVillage?'village':'hamlet';
-    const h=(field[c.y*GW+c.x]-sea)/(1-sea);
-    const coastal=_civIsCoastal(c.x,c.y,coastR,true);   /* ocean ports only — inland-sea/lake shores are not sea-lane ports */
-    const traits=[];
-    if(coastal) traits.push('port');
-    if(h>0.55) traits.push('mining');
-    if(h>0.62) traits.push('fortified');
-    if(isCapital||isCity) traits.push('trade_hub');
-    const faction=contFaction[c.contId]||1;
-    const basePop=isCapital?15000:isCity?6000:isTown?1500:isVillage?400:120;
-    const pop=Math.round(basePop*(0.7+c.suit*0.8)*(0.8+rng()*0.4));
-    newPlaces.push({
-      x:c.x,y:c.y,
-      name:_civSettleName(rng),
-      kind,klass:kind,category:'settlement',
-      faction,pop,traits,
-    });
-  });
-
-  state.places=newPlaces;
-  _civSelectedPlace=null;
-  _civRenderPlaceEditor();
-  renderNow();
+  const cost=buildTravelCost(dfld,RW,RH,sea);
+  try{ if(typeof currentWaterBodies==='function'){ const wb=currentWaterBodies();
+    for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
+      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
+      if(wb[fy*GW+fx]!==0) cost[y*RW+x]=Infinity;
+    } } }catch(e){}
+  return {cost,dfld,RW,RH,sc};
 }
 
 /* Prim's MST routes over a list of places using a pre-built cost grid.
@@ -9798,9 +9730,9 @@ function _civMstRoutes(places, isSea){
   // land to Infinity keeps the path strictly on water; snapToFinite (below) is what makes
   // a land-based port reachable at all.
   // If no sea path exists (disconnected ports), dist stays Infinity → no MST edge → correct.
-  let wb=null; try{ if(typeof currentWaterBodies==='function') wb=currentWaterBodies(); }catch(e){}
   let cost;
   if(isSea){
+    let wb=null; try{ if(typeof currentWaterBodies==='function') wb=currentWaterBodies(); }catch(e){}
     cost=new Float32Array(RW*RH);
     for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
       const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0), fi=fy*GW+fx;
@@ -9811,17 +9743,7 @@ function _civMstRoutes(places, isSea){
       cost[y*RW+x]=water?1:Infinity;
     }
   } else {
-    const dfld=new Float32Array(RW*RH);
-    for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-      dfld[y*RW+x]=field[fy*GW+fx];
-    }
-    cost=buildTravelCost(dfld,RW,RH,sea);
-    /* land roads must not cross above-sea lakes either */
-    if(wb) for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-      if(wb[fy*GW+fx]!==0) cost[y*RW+x]=Infinity;
-    }
+    cost=_civLandCostGrid().cost;   /* terrain cost, sea + above-sea lakes impassable */
   }
 
   // Snap a downsampled (rx,ry) to the nearest cell with finite cost — e.g. a coastal
@@ -9891,48 +9813,17 @@ function _civMstRoutes(places, isSea){
   return routes;
 }
 
-/* Generate land routes (per continent MST) + sea routes (port MST) */
+/* Generate land routes (hierarchical network: MST + min-degree + shortcuts + corridor
+   consolidation — the same builder the one-click world uses, so a standalone "Auto routes"
+   gets road classes, road-reuse and junction consolidation instead of a bare MST) + sea
+   routes (port MST). Settlements on secondary landmasses are connected by the network's
+   PASS-2 min-degree fill; unreachable pairs simply get no edge. */
 function _civAutoRoutes(){
   if(!state.places.length){ alert('Auto-populate the world first.'); return; }
   civWays=[];
-  const sea=state.seaLevel||0.42;
-
-  // Full-resolution DFS for continental grouping — no downsampling avoids coastal rounding
-  // where a settlement on land at GW×GH resolution maps to a water cell at 256px.
-  const wrapX=!!state.world;
-  const comp=new Int32Array(GW*GH).fill(-1);
-  const dx4=[1,-1,0,0],dy4=[0,0,1,-1];
-  let nComp=0;
-  for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
-    if(field[y*GW+x]<sea||comp[y*GW+x]>=0) continue;
-    const id=nComp++;
-    const q=[y*GW+x]; comp[y*GW+x]=id;
-    while(q.length){
-      const ci=q.pop(),cx=ci%GW,cy=(ci/GW)|0;
-      for(let d=0;d<4;d++){
-        let nx=cx+dx4[d],ny=cy+dy4[d];
-        if(wrapX) nx=(nx+GW)%GW; else if(nx<0||nx>=GW) continue;
-        if(ny<0||ny>=GH) continue;
-        const ni=ny*GW+nx;
-        if(field[ni]<sea||comp[ni]>=0) continue;
-        comp[ni]=id; q.push(ni);
-      }
-    }
-  }
-
-  // Group land settlements by continent using full-res indices
-  const byCont={};
-  for(const p of state.places){
-    const i=p.y*GW+p.x;
-    if(field[i]<sea) continue;
-    const cid=comp[i]; if(cid<0) continue;
-    if(!byCont[cid]) byCont[cid]=[];
-    byCont[cid].push(p);
-  }
-  for(const cid in byCont){
-    const grp=byCont[cid]; if(grp.length<2) continue;
-    civWays.push(..._civMstRoutes(grp,false));
-  }
+  /* same filter as _civNetworkMetrics consumers — way aIdx/bIdx must index this list */
+  const settles=state.places.filter(p=>p.kind&&CIV_SETTLE_KEYS.has(p.kind));
+  if(settles.length>=2) civWays.push(..._civHierarchicalNetwork(settles,{}).ways);
 
   // Sea routes: port settlements only (coastal trait assigned in auto-populate)
   const ports=state.places.filter(p=>p.traits&&p.traits.includes('port'));
@@ -9954,16 +9845,9 @@ function _civHierarchicalNetwork(places, opts){
   opts=opts||{};
   const n=places.length; if(n<2) return {ways:[],usageCount:null,degreeOf:new Array(n).fill(0),RW:0,RH:0,sc:1};
   const sea=state.seaLevel||0.42;
-  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
+  const {dfld,RW,RH,sc}=_civRoutingGrid();
   const wrapX=!!state.world;
   const minDeg={capital:5,city:4,town:3,village:2,hamlet:1};
-
-  // Build downsampled field
-  const dfld=new Float32Array(RW*RH);
-  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-    dfld[y*RW+x]=field[fy*GW+fx];
-  }
 
   function snapFinite(cost,rx,ry){
     if(cost[ry*RW+rx]<Infinity) return ry*RW+rx;
@@ -10144,12 +10028,7 @@ function _civWalkWayCells(w,cb){
    merges onto the network instead of paralleling it. */
 function _civConnectPlaceToNetwork(p){
   const sea=state.seaLevel||0.42;
-  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
-  const dfld=new Float32Array(RW*RH);
-  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-    dfld[y*RW+x]=field[fy*GW+fx];
-  }
+  const {dfld,RW,RH,sc}=_civRoutingGrid();
   const cost=_civEnhancedTravelCost(dfld,RW,RH,sea,null,{});   /* lake-safe, terrain-aware */
   const roadCells=new Set();
   for(const w of civWays){ if(!w.pts||w.hidden||w.sea||w.type==='sea-lane') continue;
@@ -10323,7 +10202,7 @@ function _civIterativeAutoWorld(passes){
   if(wantCounts&&seeds.length<wantTotal)
     console.warn(`auto-populate: only ${seeds.length} viable sites found for ${wantTotal} requested settlements`);
 
-  // DFS land-component labelling (identical to _civAutoPopulate)
+  // Full-resolution DFS land-component labelling (no downsampling ⇒ no coast-rounding errors)
   const wrapX=!!state.world;
   const comp=new Int32Array(GW*GH).fill(-1);
   const dx4=[1,-1,0,0],dy4=[0,0,1,-1];
@@ -10346,10 +10225,16 @@ function _civIterativeAutoWorld(passes){
   }
 
   /* snap each seed onto dry land (a shore-hugging suitability maximum can round into a
-     lake at full res) instead of silently dropping it */
+     lake at full res) instead of silently dropping it — then, when the optimal site is
+     close to the sea, snap it onto the shore so harbour towns sit ON the water */
+  const coastSnapR=Math.max(4,(GW/160)|0);
+  const usedShore=new Set();
   const candidates=seeds.slice(0,maxPlaces).map(s=>{
     const sn=_civSnapLand(s.x,s.y,6);
-    return sn?{x:sn[0],y:sn[1],suit:s.score,contId:comp[sn[1]*GW+sn[0]]}:null;
+    if(!sn) return null;
+    const cs=_civSnapCoast(sn[0],sn[1],coastSnapR,suit,usedShore);
+    const fx=cs?cs[0]:sn[0], fy=cs?cs[1]:sn[1];
+    return {x:fx,y:fy,suit:s.score,contId:comp[fy*GW+fx]};
   }).filter(c=>c&&c.contId>=0);
   if(!candidates.length){ alert('No candidates after filtering. Try regenerating the world.'); return; }
 
@@ -10555,20 +10440,7 @@ view.addEventListener('pointerup',e=>{
  * Mirrors buildRoadsOp: downsample cost grid to ≤384px so pathfinding
  * stays fast at any working resolution, then scale the path back up. */
 function _civDijkstraPath(sx,sy,ex,ey){
-  const sea=state.seaLevel||0.42;
-  const RW=Math.min(GW,384), sc=RW/GW, RH=Math.max(2,Math.round(GH*sc));
-  const dfld=new Float32Array(RW*RH);
-  for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-    const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-    dfld[y*RW+x]=field[fy*GW+fx];
-  }
-  const cost=buildTravelCost(dfld,RW,RH,sea);
-  /* above-sea lakes are water too — impassable for the click-routed path */
-  try{ if(typeof currentWaterBodies==='function'){ const wb=currentWaterBodies();
-    for(let y=0;y<RH;y++) for(let x=0;x<RW;x++){
-      const fx=Math.min(GW-1,(x/sc)|0), fy=Math.min(GH-1,(y/sc)|0);
-      if(wb[fy*GW+fx]!==0) cost[y*RW+x]=Infinity;
-    } } }catch(e){}
+  const {cost,RW,RH,sc}=_civLandCostGrid();   /* terrain cost, sea + lakes impassable */
   /* Ride the existing infrastructure: cells on land ways cost ×0.25 (routes strongly
      prefer roads), and cells on sea lanes become traversable corridors over open water
      (a ferry/coaster leg along the lane) — so a route between two way-connected
@@ -10603,25 +10475,20 @@ function _civDijkstraPath(sx,sy,ex,ey){
   }
   raw.push({x:sx,y:sy}); raw.reverse();
   if(raw.length<2||(raw[raw.length-1].x!==ex||raw[raw.length-1].y!==ey)) raw.push({x:ex,y:ey});
-  // Smooth: RDP simplify then Catmull-Rom resample for natural curves
-  const simplified=rdpSimplify(raw,1.5);
-  const smooth=catmullRomSample(simplified,3);
-  return smooth.map(p=>[Math.round(p.x),Math.round(p.y)]);
+  /* Wrap-aware smoothing (shared with auto-routes): splits runs at X-seam jumps so
+     world-mode routes never interpolate phantom points across the map. */
+  const sm=_civSmoothPath(raw);
+  if(sm) return sm;
+  const fp=[[Math.round(sx),Math.round(sy)],[Math.round(ex),Math.round(ey)]];
+  const adx=Math.abs(fp[1][0]-fp[0][0]);
+  return {pts:fp,brks:[],km:Math.hypot(Math.min(adx,GW-adx),fp[1][1]-fp[0][1])*(state.mapWidthKm||12000)/GW};
 }
 
 /* Commit route on Esc or tool switch — Dijkstra-paths between consecutive waypoints */
 function _civCommitRoute(){
   if(_civWaypoints.length>=2){
-    const pts=[];
-    for(let k=0;k<_civWaypoints.length-1;k++){
-      const[sx,sy]=_civWaypoints[k],[ex,ey]=_civWaypoints[k+1];
-      const seg=_civDijkstraPath(sx,sy,ex,ey);
-      if(k>0) seg.shift(); // avoid duplicate junction point
-      pts.push(...seg);
-    }
-    const km=pts.reduce((s,[x,y],k)=>{ if(!k)return 0; const adx=Math.abs(x-pts[k-1][0]);
-      return s+Math.hypot(Math.min(adx,GW-adx),y-pts[k-1][1])*(state.mapWidthKm||12000)/GW; },0);   /* wrap-aware (cylinder) */
-    civJourneys.push({pts,km,name:'',sea:false,mode:'Mounted',terrain:'Dirt',condition:'Standard',groupSize:10});
+    const j=_civJoinDijkstraSegs(_civWaypoints);
+    civJourneys.push({pts:j.pts,km:j.km,brks:j.brks.length?j.brks:undefined,name:'',sea:false,groupSize:10});
     _civSelectedJourneyIdx=civJourneys.length-1;
     _civRenderJourneyList();
     _civUpdatePlannerPanel();
@@ -10630,21 +10497,33 @@ function _civCommitRoute(){
   drawCivLayer();
 }
 
+/* Chain Dijkstra segments between consecutive waypoints into one path, offsetting each
+   segment's seam-break indices and dropping duplicated junction points. */
+function _civJoinDijkstraSegs(wps){
+  const pts=[], brks=[]; let km=0;
+  for(let k=0;k<wps.length-1;k++){
+    const[sx,sy]=wps[k],[ex,ey]=wps[k+1];
+    const sm=_civDijkstraPath(sx,sy,ex,ey);
+    if(!sm||!sm.pts.length) continue;
+    const seg=sm.pts.slice();
+    let dropped=0;
+    if(pts.length&&seg.length&&pts[pts.length-1][0]===seg[0][0]&&pts[pts.length-1][1]===seg[0][1]){ seg.shift(); dropped=1; }
+    else if(pts.length) brks.push(pts.length);   /* disjoint join (unreachable leg) — lift the pen */
+    const off=pts.length;
+    for(const b of sm.brks){ const bb=off+b-dropped; if(bb>0&&bb<off+seg.length) brks.push(bb); }
+    pts.push(...seg);
+    km+=sm.km;
+  }
+  return {pts,brks,km};
+}
+
 /* Commit an in-progress manual way (Infrastructure) */
 function _civCommitWay(){
   if(_civWayWaypoints.length>=2){
-    const pts=[];
-    for(let k=0;k<_civWayWaypoints.length-1;k++){
-      const[sx,sy]=_civWayWaypoints[k],[ex,ey]=_civWayWaypoints[k+1];
-      const seg=_civDijkstraPath(sx,sy,ex,ey);
-      if(k>0) seg.shift();
-      pts.push(...seg);
-    }
-    const km=pts.reduce((s,[x,y],k)=>{ if(!k)return 0; const adx=Math.abs(x-pts[k-1][0]);
-      return s+Math.hypot(Math.min(adx,GW-adx),y-pts[k-1][1])*(state.mapWidthKm||12000)/GW; },0);   /* wrap-aware (cylinder) */
+    const j=_civJoinDijkstraSegs(_civWayWaypoints);
     const wayType=document.getElementById('civWayType')?.value||'road';
     const sea=(wayType==='sea-lane');
-    civWays.push({pts,km,sea,type:wayType,manual:true,name:''});
+    civWays.push({pts:j.pts,km:j.km,brks:j.brks.length?j.brks:undefined,sea,type:wayType,manual:true,name:''});
     _civRenderWayList();
   }
   _civWayWaypoints=[];
@@ -10672,7 +10551,7 @@ function _civSyncToState(){
     territory:terrData,
     timeline:civTimeline.map(s=>({year:s.year,data:[...s.data]})),
     ways:civWays.map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,aIdx:r.aIdx,bIdx:r.bIdx,hidden:r.hidden||undefined,manual:!!r.manual,name:r.name||''})),
-    journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):null})),
+    journeys:civJourneys.map(j=>({pts:j.pts,km:j.km,brks:j.brks&&j.brks.length?j.brks:undefined,sea:!!j.sea,name:j.name||'',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):null})),
     year:civYear,
     factionNames:[...civFactionNames],
   };
@@ -10687,7 +10566,7 @@ function _civSyncFromState(){
   civTimeline=(c.timeline||[]).map(s=>({year:s.year,data:[...s.data]}));
   // backwards compat: old saves used c.routes — treat them as ways
   civWays=(c.ways||c.routes||[]).map(r=>({pts:r.pts,km:r.km,brks:r.brks||undefined,sea:!!r.sea,type:r.type||'road',condition:r.condition||undefined,aIdx:r.aIdx,bIdx:r.bIdx,hidden:r.hidden||undefined,manual:!!r.manual,name:r.name||''}));
-  civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,sea:!!j.sea,name:j.name||'',mode:j.mode||'Mounted',terrain:j.terrain||'Dirt',condition:j.condition||'Standard',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):undefined}));
+  civJourneys=(c.journeys||[]).map(j=>({pts:j.pts,km:j.km,brks:j.brks&&j.brks.length?j.brks:undefined,sea:!!j.sea,name:j.name||'',groupSize:j.groupSize||10,plan:j.plan?JSON.parse(JSON.stringify(j.plan)):undefined}));
   civYear=c.year||0;
   if(c.factionNames&&c.factionNames.length) civFactionNames=[...c.factionNames];
   // A saved project may have had factions added beyond the default 7 — extend CIV_FACTIONS

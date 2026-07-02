@@ -18,22 +18,33 @@
   header .tag{font-family:ui-monospace,monospace;font-size:11px;color:var(--faint)}
   .stage{flex:1;display:flex;min-height:0;gap:0;overflow:auto}
   .view2d-wrap,.view3d-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    padding:16px;min-width:280px;position:relative}
+    padding:16px;min-width:280px;position:relative;overflow:hidden}
   .view3d-wrap{border-left:1px solid var(--line)}
-  .canvas-stack{position:relative;line-height:0;max-width:100%}
+  .canvas-stack{position:relative;line-height:0;max-width:100%;transform-origin:0 0}
   #view2d,#overlay2d{width:100%;height:auto;max-width:640px;display:block;border:1px solid var(--line)}
-  #view2d{background:#000}
+  #view2d{background:#000;touch-action:none}
   #overlay2d{position:absolute;top:0;left:0;pointer-events:none;border-color:transparent}
-  #view3d{width:100%;max-width:640px;height:auto;aspect-ratio:4/3;display:block;background:#0b0d12;border:1px solid var(--line);cursor:grab}
+  #view3d{width:100%;max-width:640px;height:auto;aspect-ratio:4/3;display:block;background:#0b0d12;border:1px solid var(--line);cursor:grab;touch-action:none}
   #view3d:active{cursor:grabbing}
   .pane-label{font-family:ui-monospace,monospace;font-size:10px;color:var(--faint);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
-  .view3d-controls{position:absolute;top:26px;right:26px;display:flex;gap:6px}
+  /* ---- on-screen touch/tablet controls: zoom +/-, center, pan-mode toggle, joystick — one cluster per pane ---- */
+  .pane-controls{position:absolute;right:22px;bottom:16px;display:flex;flex-direction:column;align-items:center;gap:10px;z-index:5}
+  .pc-zoom{display:flex;flex-direction:column;gap:6px;background:rgba(10,12,17,.55);border:1px solid var(--line);border-radius:10px;padding:6px}
+  .pc-btn{width:38px;height:38px;padding:0;font-size:17px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;
+    background:rgba(23,26,34,.92);border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  .pc-btn:active{background:var(--accent);color:#1a1206}
+  .pc-btn.on{background:var(--accent);border-color:var(--accent);color:#1a1206}
+  .pc-joy-base{width:76px;height:76px;border-radius:50%;background:rgba(10,12,17,.55);border:1px solid var(--line);position:relative;
+    touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  .pc-joy-knob{position:absolute;left:50%;top:50%;width:32px;height:32px;margin:-16px 0 0 -16px;border-radius:50%;
+    background:rgba(217,164,91,.85);border:1px solid var(--accent);pointer-events:none}
   aside{width:260px;flex-shrink:0;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto}
   .sec{padding:12px 14px;border-bottom:1px solid var(--line)}
   .sec h2{font-family:ui-monospace,monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0 0 9px}
   .row{display:flex;align-items:center;gap:8px;margin:8px 0}
   .row label{flex:0 0 62px;color:var(--dim);font-size:11.5px}
-  .row input[type=range]{flex:1;accent-color:var(--accent)}
+  .row input[type=range]{flex:1;accent-color:var(--accent);touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   .row .val{flex:0 0 42px;text-align:right;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ink)}
   input[type=number],input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
     border-radius:5px;padding:5px 7px;font-family:ui-monospace,monospace;font-size:12px}
@@ -50,6 +61,19 @@
   .hint{font-size:10.5px;color:var(--faint);line-height:1.5;margin-top:6px}
   #status{position:absolute;left:0;bottom:-20px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--dim);
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  /* ---- tablet / narrow-viewport: stack panes vertically, bigger touch targets ---- */
+  @media (max-width:1000px){
+    .stage{flex-direction:column;overflow-y:auto;overflow-x:hidden}
+    .view2d-wrap,.view3d-wrap{min-width:0;width:100%}
+    .view3d-wrap{border-left:0;border-top:1px solid var(--line)}
+    aside{width:100%;border-left:0;border-top:1px solid var(--line)}
+    button{padding:10px 13px;font-size:13px}
+    .seg button{padding:10px 4px}
+    .row input[type=range]{height:30px}
+    .pc-btn{width:44px;height:44px;font-size:19px}
+    .pc-joy-base{width:88px;height:88px}
+    .pc-joy-knob{width:38px;height:38px;margin:-19px 0 0 -19px}
+  }
 </style>
 </head>
 <body>
@@ -66,11 +90,27 @@
       <canvas id="overlay2d"></canvas>
       <div id="status"></div>
     </div>
+    <div class="pane-controls">
+      <div class="pc-zoom">
+        <button class="pc-btn" id="zoom2dIn" title="Zoom in">+</button>
+        <button class="pc-btn" id="zoom2dOut" title="Zoom out">−</button>
+        <button class="pc-btn" id="center2dBtn" title="Center view">⟳</button>
+        <button class="pc-btn" id="pan2dToggle" title="Pan mode (drag to move the view instead of sculpting)">✋</button>
+      </div>
+      <div class="pc-joy-base" id="joy2dBase" title="Drag to pan"><div class="pc-joy-knob" id="joy2dKnob"></div></div>
+    </div>
   </div>
   <div class="view3d-wrap">
-    <div class="pane-label">3D preview — drag orbit · shift-drag pan · wheel zoom</div>
+    <div class="pane-label">3D preview — drag to orbit · wheel to zoom</div>
     <canvas id="view3d" width="640" height="480"></canvas>
-    <div class="view3d-controls"><button id="resetCamBtn">Reset camera</button></div>
+    <div class="pane-controls">
+      <div class="pc-zoom">
+        <button class="pc-btn" id="zoom3dIn" title="Zoom in">+</button>
+        <button class="pc-btn" id="zoom3dOut" title="Zoom out">−</button>
+        <button class="pc-btn" id="center3dBtn" title="Center view">⟳</button>
+      </div>
+      <div class="pc-joy-base" id="joy3dBase" title="Drag to pan"><div class="pc-joy-knob" id="joy3dKnob"></div></div>
+    </div>
   </div>
   <aside>
     <div class="sec">
@@ -166,8 +206,17 @@ let cam3d = { az: 0.9, el: 0.55, dist: 3.2, target: { x: 0, y: 0, z: 0 } };
 const CAM3D_DEFAULT = { az: 0.9, el: 0.55, dist: 3.2, target: { x: 0, y: 0, z: 0 } };
 let cam3dDragging = null, cam3dLastPt = null;
 
+/* touch/tablet on-screen controls: 2D pan/zoom transform (CSS transform on .canvas-stack) + pan-mode
+   toggle (single-finger drag sculpts by default; toggled ✋ makes it pan instead) + one joystick per
+   pane (continuous pan while held — the touch-friendly alternative to a drag gesture). */
+let view2dT = { scale: 1, panX: 0, panY: 0 };
+let panMode = false, panDragging = false, panLast = null;
+const joy2D = { dx: 0, dy: 0 }, joy3D = { dx: 0, dy: 0 };
+const JOY_SPEED_2D = 9, JOY_SPEED_3D = 11;
+
 const view2d = document.getElementById('view2d'), overlay2d = document.getElementById('overlay2d');
 const view3d = document.getElementById('view3d');
+const canvasStack = document.querySelector('.canvas-stack');
 const statusEl = document.getElementById('status');
 
 /* ---------------------------------------------------------------- small utilities */
@@ -427,7 +476,93 @@ function evtToGrid(e) {
 function updateApplyBtn() { document.getElementById('applyGuideBtn').disabled = guidePts.length < 2; }
 function newSeed() { return (Math.random() * 1e9) | 0; }
 
+/* ---------------------------------------------------------------- 2D pan/zoom (CSS transform on
+   .canvas-stack; evtToGrid stays correct unchanged since getBoundingClientRect() already reports the
+   post-transform on-screen rect — same trick Cartalith Gen1 uses for its own pan/zoom viewport). */
+function applyView2D() {
+  canvasStack.style.transform = 'translate(' + view2dT.panX + 'px,' + view2dT.panY + 'px) scale(' + view2dT.scale + ')';
+}
+function clampPan2D() {
+  const maxPan = 640 * view2dT.scale;
+  view2dT.panX = Math.max(-maxPan, Math.min(maxPan, view2dT.panX));
+  view2dT.panY = Math.max(-maxPan, Math.min(maxPan, view2dT.panY));
+}
+/* zoom anchored at a client-space point (ax,ay) — defaults to the pane's current on-screen center */
+function zoomView2D(factor, ax, ay) {
+  const rect = canvasStack.getBoundingClientRect();
+  if (ax == null) { ax = rect.left + rect.width / 2; ay = rect.top + rect.height / 2; }
+  const newScale = Math.max(1, Math.min(6, view2dT.scale * factor));
+  const k = newScale / view2dT.scale;
+  view2dT.panX += (ax - rect.left) * (1 - k);
+  view2dT.panY += (ay - rect.top) * (1 - k);
+  view2dT.scale = newScale;
+  clampPan2D();
+  applyView2D();
+}
+function centerView2D() { view2dT = { scale: 1, panX: 0, panY: 0 }; applyView2D(); }
+
+/* ---------------------------------------------------------------- 3D pan helper (shared by shift-drag
+   and the joystick) — translate the orbit target along the camera's own right/up plane. */
+function pan3D(dx, dy) {
+  const basis = cameraBasis(), panScale = cam3d.dist * 0.0018;
+  cam3d.target.x -= dx * basis.right.x * panScale - dy * basis.up.x * panScale;
+  cam3d.target.y -= dx * basis.right.y * panScale - dy * basis.up.y * panScale;
+  cam3d.target.z -= dx * basis.right.z * panScale - dy * basis.up.z * panScale;
+  dirty3d = true;
+}
+
+/* ---------------------------------------------------------------- virtual joystick (touch/tablet
+   continuous-pan control) — a small reusable wiring fn: drag the knob, state.dx/dy report -1..1,
+   consumed once per animation frame in tick(). Release snaps the knob back to center. */
+function wireJoystick(baseEl, knobEl, state) {
+  const JOY_R = 26;
+  let active = false, pid = null;
+  function update(clientX, clientY) {
+    const r = baseEl.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let dx = clientX - cx, dy = clientY - cy;
+    const d = Math.hypot(dx, dy);
+    if (d > JOY_R) { dx = dx / d * JOY_R; dy = dy / d * JOY_R; }
+    knobEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    state.dx = dx / JOY_R; state.dy = dy / JOY_R;
+  }
+  function end() { active = false; pid = null; knobEl.style.transform = ''; state.dx = 0; state.dy = 0; }
+  baseEl.addEventListener('pointerdown', e => {
+    active = true; pid = e.pointerId; baseEl.setPointerCapture(e.pointerId);
+    update(e.clientX, e.clientY); e.preventDefault();
+  });
+  baseEl.addEventListener('pointermove', e => { if (active && e.pointerId === pid) update(e.clientX, e.clientY); });
+  baseEl.addEventListener('pointerup', end);
+  baseEl.addEventListener('pointercancel', end);
+}
+wireJoystick(document.getElementById('joy2dBase'), document.getElementById('joy2dKnob'), joy2D);
+wireJoystick(document.getElementById('joy3dBase'), document.getElementById('joy3dKnob'), joy3D);
+
+/* ---------------------------------------------------------------- pane control buttons */
+document.getElementById('zoom2dIn').addEventListener('click', () => zoomView2D(1.35));
+document.getElementById('zoom2dOut').addEventListener('click', () => zoomView2D(1 / 1.35));
+document.getElementById('center2dBtn').addEventListener('click', centerView2D);
+document.getElementById('pan2dToggle').addEventListener('click', e => {
+  panMode = !panMode;
+  e.currentTarget.classList.toggle('on', panMode);
+  setStatus(panMode ? 'Pan mode — drag the 2D view to move it' : '');
+});
+document.getElementById('zoom3dIn').addEventListener('click', () => { cam3d.dist = Math.max(0.8, Math.min(14, cam3d.dist / 1.2)); dirty3d = true; });
+document.getElementById('zoom3dOut').addEventListener('click', () => { cam3d.dist = Math.max(0.8, Math.min(14, cam3d.dist * 1.2)); dirty3d = true; });
+document.getElementById('center3dBtn').addEventListener('click', () => {
+  cam3d = { az: CAM3D_DEFAULT.az, el: CAM3D_DEFAULT.el, dist: CAM3D_DEFAULT.dist, target: { x: 0, y: 0, z: 0 } };
+  dirty3d = true;
+});
+view2d.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoomView2D(e.deltaY > 0 ? 1 / 1.12 : 1.12, e.clientX, e.clientY);
+}, { passive: false });
+
 view2d.addEventListener('pointerdown', e => {
+  if (panMode) {
+    panDragging = true; panLast = { x: e.clientX, y: e.clientY };
+    view2d.setPointerCapture(e.pointerId);
+    return;
+  }
   const p = evtToGrid(e);
   if (mode === 'trace') {
     guideCapturing = true; guideRaw = [p]; guidePts = [];
@@ -446,6 +581,13 @@ view2d.addEventListener('pointerdown', e => {
   view2d.setPointerCapture(e.pointerId);
 });
 view2d.addEventListener('pointermove', e => {
+  if (panDragging) {
+    const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
+    panLast = { x: e.clientX, y: e.clientY };
+    view2dT.panX += dx; view2dT.panY += dy;
+    clampPan2D(); applyView2D();
+    return;
+  }
   const p = evtToGrid(e);
   hoverPt = p;
   if (guideCapturing) {
@@ -464,6 +606,7 @@ view2d.addEventListener('pointermove', e => {
   renderOverlay();
 });
 function endBrushDrag(e) {
+  if (panDragging) { panDragging = false; return; }
   const p = evtToGrid(e);
   if (guideCapturing) {
     guideCapturing = false;
@@ -581,13 +724,10 @@ view3d.addEventListener('pointermove', e => {
   if (cam3dDragging === 'orbit') {
     cam3d.az -= dx * 0.008;
     cam3d.el = Math.max(-1.4, Math.min(1.4, cam3d.el + dy * 0.008));
+    dirty3d = true;
   } else {
-    const basis = cameraBasis(), panScale = cam3d.dist * 0.0018;
-    cam3d.target.x -= dx * basis.right.x * panScale - dy * basis.up.x * panScale;
-    cam3d.target.y -= dx * basis.right.y * panScale - dy * basis.up.y * panScale;
-    cam3d.target.z -= dx * basis.right.z * panScale - dy * basis.up.z * panScale;
+    pan3D(dx, dy);
   }
-  dirty3d = true;
 });
 view3d.addEventListener('pointerup', () => { cam3dDragging = null; });
 view3d.addEventListener('pointercancel', () => { cam3dDragging = null; });
@@ -596,10 +736,6 @@ view3d.addEventListener('wheel', e => {
   cam3d.dist = Math.max(0.8, Math.min(14, cam3d.dist * (e.deltaY > 0 ? 1.1 : 1 / 1.1)));
   dirty3d = true;
 }, { passive: false });
-document.getElementById('resetCamBtn').addEventListener('click', () => {
-  cam3d = { az: CAM3D_DEFAULT.az, el: CAM3D_DEFAULT.el, dist: CAM3D_DEFAULT.dist, target: { x: 0, y: 0, z: 0 } };
-  dirty3d = true;
-});
 
 /* ---------------------------------------------------------------- resolution / regenerate */
 const RES_OPTS = [[256, 160], [384, 240], [512, 320]];
@@ -694,6 +830,13 @@ document.getElementById('exportRawBtn').addEventListener('click', () => {
 
 /* ---------------------------------------------------------------- main loop */
 function tick() {
+  if (Math.abs(joy2D.dx) > 0.02 || Math.abs(joy2D.dy) > 0.02) {
+    view2dT.panX += joy2D.dx * JOY_SPEED_2D; view2dT.panY += joy2D.dy * JOY_SPEED_2D;
+    clampPan2D(); applyView2D();
+  }
+  if (Math.abs(joy3D.dx) > 0.02 || Math.abs(joy3D.dy) > 0.02) {
+    pan3D(joy3D.dx * JOY_SPEED_3D, joy3D.dy * JOY_SPEED_3D);
+  }
   if (dirty) { renderNow(); dirty = false; }
   if (dirty3d) { decimatePreview(); render3D(); dirty3d = false; }
   requestAnimationFrame(tick);
